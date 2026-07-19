@@ -25,7 +25,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
 
                     Frame::new()
                         .fill(bg_color)
-                        .corner_radius(CornerRadius::same(8))
+                        .corner_radius(CornerRadius::same(0))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
                                 ui.add_space(12.0);

@@ -19,7 +19,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                 )
                 .fill(colors::BG_CARD)
                 .min_size(egui::Vec2::new(40.0, 40.0))
-                .corner_radius(CornerRadius::same(6));
+                .corner_radius(CornerRadius::same(0));
                 if ui.add(toggle_btn).clicked() {
                     app.sidebar_open = !app.sidebar_open;
                 }
@@ -35,7 +35,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                     )
                     .fill(colors::BG_CARD)
                     .min_size(egui::Vec2::new(40.0, 40.0))
-                    .corner_radius(CornerRadius::same(6));
+                    .corner_radius(CornerRadius::same(0));
                     if ui.add(back_btn).clicked() {
                         app.go_back();
                     }
@@ -63,7 +63,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                             // 头像占位
                             egui::Frame::new()
                                 .fill(colors::PRIMARY)
-                                .corner_radius(CornerRadius::same(16))
+                                .corner_radius(CornerRadius::same(0))
                                 .show(ui, |ui| {
                                     ui.allocate_space(egui::Vec2::new(32.0, 32.0));
                                     ui.allocate_ui_at_rect(ui.max_rect(), |ui| {

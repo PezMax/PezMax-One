@@ -54,7 +54,7 @@ pub fn render(_app: &mut PezMaxApp, ui: &mut egui::Ui) {
 
             for (name, icon) in &categories {
                 let response = egui::Frame::new()
-                    .corner_radius(CornerRadius::same(6))
+                    .corner_radius(CornerRadius::same(0))
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
                             ui.add_space(8.0);
@@ -100,7 +100,7 @@ pub fn render(_app: &mut PezMaxApp, ui: &mut egui::Ui) {
                 for (name, subject, year, size, uploader) in &sample_files {
                     let response = egui::Frame::new()
                         .fill(colors::BG_CARD)
-                        .corner_radius(CornerRadius::same(10))
+                        .corner_radius(CornerRadius::same(0))
                         .stroke(egui::Stroke::new(1.0, colors::BORDER))
                         .show(ui, |ui| {
                             ui.set_min_size(egui::Vec2::new(240.0, 140.0));
@@ -110,7 +110,7 @@ pub fn render(_app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                 // 文件图标
                                 egui::Frame::new()
                                     .fill(colors::PRIMARY_LIGHT)
-                                    .corner_radius(CornerRadius::same(8))
+                                    .corner_radius(CornerRadius::same(0))
                                     .show(ui, |ui| {
                                         ui.allocate_space(egui::Vec2::new(40.0, 48.0));
                                         ui.allocate_ui_at_rect(ui.max_rect(), |ui| {
@@ -151,7 +151,7 @@ pub fn render(_app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                         .font(FontId::new(12.0, egui::FontFamily::Proportional)),
                                 )
                                 .fill(colors::PRIMARY)
-                                .corner_radius(CornerRadius::same(4));
+                                .corner_radius(CornerRadius::same(0));
                                 if ui.add(dl_btn).clicked() {
                                     // 下载
                                 }
@@ -161,7 +161,7 @@ pub fn render(_app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                         .font(FontId::new(12.0, egui::FontFamily::Proportional)),
                                 )
                                 .fill(colors::BG_CARD)
-                                .corner_radius(CornerRadius::same(4));
+                                .corner_radius(CornerRadius::same(0));
                                 if ui.add(fav_btn).clicked() {
                                     // 收藏
                                 }

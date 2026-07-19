@@ -37,7 +37,7 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
         for (icon, label, value, color) in &stats {
             egui::Frame::new()
                 .fill(*color)
-                .corner_radius(CornerRadius::same(12))
+                .corner_radius(CornerRadius::same(0))
                 .show(ui, |ui| {
                     ui.set_min_size(Vec2::new(180.0, 120.0));
                     ui.add_space(16.0);
@@ -90,7 +90,7 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
         for (icon, title, desc, page) in &shortcuts {
             let response = egui::Frame::new()
                 .fill(colors::BG_CARD)
-                .corner_radius(CornerRadius::same(10))
+                .corner_radius(CornerRadius::same(0))
                 .stroke(egui::Stroke::new(1.0, colors::BORDER))
                 .show(ui, |ui| {
                     ui.set_min_size(Vec2::new(200.0, 80.0));

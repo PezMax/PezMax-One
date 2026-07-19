@@ -19,7 +19,7 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
             // 头像区域
             egui::Frame::new()
                 .fill(colors::PRIMARY)
-                .corner_radius(CornerRadius::same(40))
+                .corner_radius(CornerRadius::same(0))
                 .show(ui, |ui| {
                     ui.allocate_space(Vec2::new(80.0, 80.0));
                     ui.allocate_ui_at_rect(ui.max_rect(), |ui| {
@@ -59,7 +59,7 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     // 信息编辑区
     egui::Frame::new()
         .fill(colors::BG_CARD)
-        .corner_radius(CornerRadius::same(10))
+        .corner_radius(CornerRadius::same(0))
         .stroke(egui::Stroke::new(1.0, colors::BORDER))
         .show(ui, |ui| {
             ui.add_space(16.0);

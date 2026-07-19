@@ -16,7 +16,7 @@ pub fn render(_app: &mut PezMaxApp, ui: &mut egui::Ui) {
     // 修改密码
     egui::Frame::new()
         .fill(colors::BG_CARD)
-        .corner_radius(CornerRadius::same(10))
+        .corner_radius(CornerRadius::same(0))
         .stroke(egui::Stroke::new(1.0, colors::BORDER))
         .show(ui, |ui| {
             ui.add_space(16.0);
@@ -35,7 +35,7 @@ pub fn render(_app: &mut PezMaxApp, ui: &mut egui::Ui) {
     // 密保设置
     egui::Frame::new()
         .fill(colors::BG_CARD)
-        .corner_radius(CornerRadius::same(10))
+        .corner_radius(CornerRadius::same(0))
         .stroke(egui::Stroke::new(1.0, colors::BORDER))
         .show(ui, |ui| {
             ui.add_space(16.0);

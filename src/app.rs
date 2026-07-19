@@ -73,6 +73,7 @@ pub struct PezMaxApp {
 
 impl PezMaxApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        theme::setup_fonts(&cc.egui_ctx);
         theme::apply_metro_theme(&cc.egui_ctx);
 
         let api = ApiClient::new(None);

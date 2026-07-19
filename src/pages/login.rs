@@ -35,7 +35,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                 // 登录卡片
                 egui::Frame::new()
                     .fill(colors::BG_CARD)
-                    .corner_radius(CornerRadius::same(12))
+                    .corner_radius(CornerRadius::same(0))
                     .stroke(egui::Stroke::new(1.0, colors::BORDER))
                     .show(ui, |ui| {
                         ui.set_max_width(380.0);
@@ -85,7 +85,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                         )
                         .fill(colors::PRIMARY)
                         .min_size(egui::Vec2::new(280.0, 44.0))
-                        .corner_radius(CornerRadius::same(8));
+                        .corner_radius(CornerRadius::same(0));
 
                         if ui.add(btn).clicked() {
                             // 模拟登录

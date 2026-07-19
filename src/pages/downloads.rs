@@ -23,7 +23,7 @@ pub fn render(_app: &mut PezMaxApp, ui: &mut egui::Ui) {
     for (name, date, subject, size) in &records {
         egui::Frame::new()
             .fill(colors::BG_CARD)
-            .corner_radius(CornerRadius::same(8))
+            .corner_radius(CornerRadius::same(0))
             .stroke(egui::Stroke::new(1.0, colors::BORDER))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {

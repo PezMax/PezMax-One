@@ -67,7 +67,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                         let avatar_size = 40.0;
                         egui::Frame::new()
                             .fill(colors::PRIMARY)
-                            .corner_radius(CornerRadius::same(20))
+                            .corner_radius(CornerRadius::same(0))
                             .show(ui, |ui| {
                                 ui.allocate_space(Vec2::new(avatar_size, avatar_size));
                                 ui.allocate_ui_at_rect(
@@ -114,7 +114,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
 
                 let response = egui::Frame::new()
                     .fill(bg)
-                    .corner_radius(CornerRadius::same(6))
+                    .corner_radius(CornerRadius::same(0))
                     .show(ui, |ui| {
                         ui.add_space(2.0);
                         ui.horizontal(|ui| {
@@ -137,7 +137,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                             egui::Frame::new()
                                                 .fill(colors::ERROR)
-                                                .corner_radius(CornerRadius::same(10))
+                                                .corner_radius(CornerRadius::same(0))
                                                 .show(ui, |ui| {
                                                     ui.add_space(4.0);
                                                     ui.label(
@@ -171,7 +171,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                 ui.add_space(8.0);
                 let logout_btn = egui::Frame::new()
-                    .corner_radius(CornerRadius::same(6))
+                    .corner_radius(CornerRadius::same(0))
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
                             ui.add_space(if app.sidebar_open { 12.0 } else { 8.0 });

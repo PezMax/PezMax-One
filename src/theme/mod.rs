@@ -2,6 +2,7 @@
 // Metro Design 风格：扁平、大字体、内容优先、色块分区
 
 use egui::{FontFamily, FontId, CornerRadius, TextStyle, Vec2};
+use std::sync::Arc;
 
 /// Metro Design 调色板
 pub mod colors {
@@ -59,6 +60,53 @@ pub fn metro_text_styles() -> std::collections::BTreeMap<TextStyle, FontId> {
     .into()
 }
 
+/// 加载系统 CJK 字体作为 fallback，修复中文方框乱码
+pub fn setup_fonts(ctx: &egui::Context) {
+    let mut fonts = egui::FontDefinitions::default();
+
+    // 按平台优先级尝试常见 CJK 字体路径
+    let candidates: &[&str] = &[
+        // Linux — Noto CJK（首选，字形最全）
+        "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        // Linux — WenQuanYi
+        "/usr/share/fonts/wenquanyi/wqy-microhei/wqy-microhei.ttc",
+        "/usr/share/fonts/wqy-microhei/wqy-microhei.ttc",
+        "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+        // Windows — 微软雅黑
+        "C:\\Windows\\Fonts\\msyh.ttc",
+        "C:\\Windows\\Fonts\\simsun.ttc",
+        "C:\\Windows\\Fonts\\simhei.ttf",
+        // macOS
+        "/System/Library/Fonts/PingFang.ttc",
+        "/Library/Fonts/Arial Unicode.ttf",
+    ];
+
+    for path in candidates {
+        if let Ok(bytes) = std::fs::read(path) {
+            fonts
+                .font_data
+                .insert("system_cjk".to_owned(), Arc::new(egui::FontData::from_owned(bytes)));
+            // 追加到末尾作为 fallback：Latin 字符用默认字体，CJK 字符降级到此字体
+            fonts
+                .families
+                .entry(FontFamily::Proportional)
+                .or_default()
+                .push("system_cjk".to_owned());
+            fonts
+                .families
+                .entry(FontFamily::Monospace)
+                .or_default()
+                .push("system_cjk".to_owned());
+            log::info!("Loaded CJK font from: {}", path);
+            break;
+        }
+    }
+
+    ctx.set_fonts(fonts);
+}
+
 /// 应用 Metro Design 主题到 egui 上下文
 pub fn apply_metro_theme(ctx: &egui::Context) {
     let mut style = (*ctx.style()).clone();
@@ -68,16 +116,23 @@ pub fn apply_metro_theme(ctx: &egui::Context) {
     style.spacing.button_padding = Vec2::new(16.0, 8.0);
     style.spacing.indent = 24.0;
 
-    // 全局圆角
-    style.visuals.window_corner_radius = CornerRadius::same(8);
-    style.visuals.menu_corner_radius = CornerRadius::same(6);
+    // Metro Design: 全局直角，无圆角
+    let zero = CornerRadius::same(0);
+    style.visuals.window_corner_radius = zero;
+    style.visuals.menu_corner_radius = zero;
+    style.visuals.widgets.noninteractive.corner_radius = zero;
+    style.visuals.widgets.inactive.corner_radius = zero;
+    style.visuals.widgets.hovered.corner_radius = zero;
+    style.visuals.widgets.active.corner_radius = zero;
+    style.visuals.widgets.open.corner_radius = zero;
 
     // 颜色
     style.visuals.override_text_color = Some(colors::TEXT_PRIMARY);
     style.visuals.window_fill = colors::BG_WHITE;
     style.visuals.panel_fill = colors::BG_WHITE;
     style.visuals.faint_bg_color = colors::BG_CARD;
-    style.visuals.extreme_bg_color = colors::BG_SIDEBAR;
+    // TextEdit/ComboBox 背景：白色（避免用深色侧边栏色导致输入框黑底）
+    style.visuals.extreme_bg_color = colors::BG_CARD;
 
     // 超链接
     style.visuals.hyperlink_color = colors::PRIMARY;

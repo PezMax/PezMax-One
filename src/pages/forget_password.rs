@@ -27,7 +27,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
 
                 egui::Frame::new()
                     .fill(colors::BG_CARD)
-                    .corner_radius(CornerRadius::same(12))
+                    .corner_radius(CornerRadius::same(0))
                     .stroke(egui::Stroke::new(1.0, colors::BORDER))
                     .show(ui, |ui| {
                         ui.set_max_width(400.0);

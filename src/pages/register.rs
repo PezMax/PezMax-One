@@ -37,7 +37,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
 
                         egui::Frame::new()
                             .fill(color)
-                            .corner_radius(CornerRadius::same(12))
+                            .corner_radius(CornerRadius::same(0))
                             .show(ui, |ui| {
                                 ui.allocate_space(egui::Vec2::new(24.0, 24.0));
                                 ui.allocate_ui_at_rect(ui.max_rect(), |ui| {
@@ -62,7 +62,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                 // 注册表单卡片
                 egui::Frame::new()
                     .fill(colors::BG_CARD)
-                    .corner_radius(CornerRadius::same(12))
+                    .corner_radius(CornerRadius::same(0))
                     .stroke(egui::Stroke::new(1.0, colors::BORDER))
                     .show(ui, |ui| {
                         ui.set_max_width(400.0);
@@ -111,7 +111,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                             )
                             .fill(colors::PRIMARY)
                             .min_size(egui::Vec2::new(120.0, 40.0))
-                            .corner_radius(CornerRadius::same(8));
+                            .corner_radius(CornerRadius::same(0));
 
                             if ui.add(btn).clicked() {
                                 if step < 3 {
