@@ -1,202 +1,159 @@
-// Metro Design 侧边栏
-// 深色背景，大图标+文字导航，类似 Windows 11 开始菜单风格
+// 可折叠汉堡菜单侧边栏
+// SpringAnim 驱动宽度 48↔200px，sidebar_indicator_anim 驱动左侧高亮滑块
 
-use crate::app::{Page, PezMaxApp};
+use crate::app::{PezMaxApp, Section};
+use crate::sokuou::map_range;
 use crate::theme::colors;
-use egui::{Color32, Frame, CornerRadius, Vec2};
-
-/// 导航项定义
-struct NavItem {
-    label: &'static str,
-    icon: &'static str, // Unicode 图标
-    page: Page,
-    badge: Option<i32>, // 通知角标
-}
-
-const NAV_ITEMS: &[NavItem] = &[
-    NavItem { label: "首页", icon: "🏠", page: Page::Home, badge: None },
-    NavItem { label: "试卷浏览", icon: "📁", page: Page::FileExplorer, badge: None },
-    NavItem { label: "书签管理", icon: "🔖", page: Page::Bookmarks, badge: None },
-    NavItem { label: "我的收藏", icon: "⭐", page: Page::Favorites, badge: None },
-    NavItem { label: "下载记录", icon: "📥", page: Page::Downloads, badge: None },
-    NavItem { label: "通知中心", icon: "🔔", page: Page::Notifications, badge: Some(0) },
-    NavItem { label: "个人中心", icon: "👤", page: Page::Profile, badge: None },
-    NavItem { label: "安全设置", icon: "🔒", page: Page::Security, badge: None },
-    NavItem { label: "举报中心", icon: "🚩", page: Page::Report, badge: None },
-    NavItem { label: "系统设置", icon: "⚙️", page: Page::Settings, badge: None },
-];
+use egui::{Color32, CornerRadius, Frame, Rect, pos2};
 
 pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
-    let sidebar_width = if app.sidebar_open { 220.0 } else { 60.0 };
+    let anim_val = app.sidebar_anim.value();
+    let width = map_range(anim_val, 48.0, 200.0) as f32;
+    let show_labels = anim_val > 0.5;
 
     egui::SidePanel::left("sidebar")
         .resizable(false)
-        .default_width(sidebar_width)
-        .min_width(sidebar_width)
-        .max_width(sidebar_width)
+        .min_width(width)
+        .max_width(width)
         .frame(Frame::new().fill(colors::BG_SIDEBAR))
         .show(ctx, |ui| {
-            // 间距
-            ui.add_space(16.0);
+            ui.add_space(8.0);
 
-            // Logo / 标题区域
+            // ☰ 汉堡按钮
             ui.horizontal(|ui| {
-                ui.add_space(if app.sidebar_open { 16.0 } else { 12.0 });
-                ui.label(
-                    egui::RichText::new("P")
-                        .font(egui::FontId::new(28.0, egui::FontFamily::Proportional))
-                        .color(colors::ACCENT_ORANGE),
-                );
-                if app.sidebar_open {
-                    ui.label(
-                        egui::RichText::new("ezMax")
-                            .font(egui::FontId::new(20.0, egui::FontFamily::Proportional))
-                            .color(colors::TEXT_ON_PRIMARY),
-                    );
+                ui.add_space(13.0);
+                let burger = egui::Button::new(
+                    egui::RichText::new("☰")
+                        .font(egui::FontId::new(20.0, egui::FontFamily::Proportional))
+                        .color(Color32::from_gray(200)),
+                )
+                .fill(Color32::TRANSPARENT)
+                .corner_radius(CornerRadius::same(0));
+
+                if ui.add(burger).clicked() {
+                    app.sidebar_open = !app.sidebar_open;
+                    app.sidebar_anim
+                        .set_target(if app.sidebar_open { 1.0 } else { 0.0 });
                 }
             });
 
-            ui.add_space(24.0);
+            ui.add_space(20.0);
 
-            // 用户信息摘要
-            if app.sidebar_open {
-                if let Some(ref user) = app.current_user {
-                    ui.horizontal(|ui| {
-                        ui.add_space(12.0);
-                        // 头像占位
-                        let avatar_size = 40.0;
-                        egui::Frame::new()
-                            .fill(colors::PRIMARY)
-                            .corner_radius(CornerRadius::same(0))
-                            .show(ui, |ui| {
-                                ui.allocate_space(Vec2::new(avatar_size, avatar_size));
-                                ui.allocate_ui_at_rect(
-                                    ui.max_rect(),
-                                    |ui| {
-                                        ui.vertical_centered(|ui| {
-                                            ui.label(
-                                                egui::RichText::new(
-                                                    &user.nick_name.chars().next().unwrap_or('?').to_string(),
-                                                )
-                                                .color(colors::TEXT_ON_PRIMARY)
-                                                .font(egui::FontId::new(18.0, egui::FontFamily::Proportional)),
-                                            );
-                                        });
-                                    },
-                                );
-                            });
-                        ui.add_space(8.0);
-                        ui.vertical(|ui| {
-                            ui.label(
-                                egui::RichText::new(&user.nick_name)
-                                    .color(colors::TEXT_ON_PRIMARY)
-                                    .font(egui::FontId::new(14.0, egui::FontFamily::Proportional)),
-                            );
-                            ui.label(
-                                egui::RichText::new(&user.user_name)
-                                    .color(Color32::from_gray(160))
-                                    .font(egui::FontId::new(11.0, egui::FontFamily::Proportional)),
-                            );
-                        });
-                    });
-                    ui.add_space(20.0);
-                }
-            }
+            // ── 4 个导航项：收集 rect 以便绘制滑块 ──────────────
+            let sections = [
+                Section::Home,
+                Section::Browse,
+                Section::Community,
+                Section::Profile,
+            ];
 
-            // 导航项
-            for item in NAV_ITEMS {
-                let is_active = app.current_page == item.page;
-                let bg = if is_active {
-                    colors::PRIMARY
-                } else {
-                    Color32::TRANSPARENT
-                };
+            let mut item_rects: [Option<Rect>; 4] = [None; 4];
 
-                let response = egui::Frame::new()
-                    .fill(bg)
+            for (i, section) in sections.iter().enumerate() {
+                let is_active = app.current_section == *section;
+
+                let resp = Frame::new()
+                    .fill(Color32::TRANSPARENT)
                     .corner_radius(CornerRadius::same(0))
                     .show(ui, |ui| {
-                        ui.add_space(2.0);
+                        ui.set_min_width(width - 1.0);
+                        ui.add_space(6.0);
                         ui.horizontal(|ui| {
-                            ui.add_space(if app.sidebar_open { 12.0 } else { 8.0 });
-                            // 图标
+                            // 留出 3px 宽度给滑块指示器
+                            ui.add_space(3.0);
+                            ui.add_space(10.0);
                             ui.label(
-                                egui::RichText::new(item.icon)
-                                    .font(egui::FontId::new(18.0, egui::FontFamily::Proportional)),
+                                egui::RichText::new(section.icon())
+                                    .font(egui::FontId::new(22.0, egui::FontFamily::Proportional)),
                             );
-                            if app.sidebar_open {
-                                ui.add_space(8.0);
+                            if show_labels {
+                                ui.add_space(10.0);
                                 ui.label(
-                                    egui::RichText::new(item.label)
-                                        .color(colors::TEXT_ON_PRIMARY)
-                                        .font(egui::FontId::new(14.0, egui::FontFamily::Proportional)),
+                                    egui::RichText::new(section.title())
+                                        .font(egui::FontId::new(
+                                            16.0,
+                                            egui::FontFamily::Proportional,
+                                        ))
+                                        .color(if is_active {
+                                            Color32::WHITE
+                                        } else {
+                                            Color32::from_gray(180)
+                                        }),
                                 );
-                                // 角标
-                                if let Some(count) = item.badge {
-                                    if count > 0 {
-                                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                            egui::Frame::new()
-                                                .fill(colors::ERROR)
-                                                .corner_radius(CornerRadius::same(0))
-                                                .show(ui, |ui| {
-                                                    ui.add_space(4.0);
-                                                    ui.label(
-                                                        egui::RichText::new(count.to_string())
-                                                            .color(colors::TEXT_ON_PRIMARY)
-                                                            .font(egui::FontId::new(11.0, egui::FontFamily::Proportional)),
-                                                    );
-                                                    ui.add_space(4.0);
-                                                });
-                                        });
-                                    }
-                                }
                             }
                         });
-                        ui.add_space(2.0);
+                        ui.add_space(6.0);
                     })
                     .response
                     .interact(egui::Sense::click());
 
-                if response.clicked() && app.current_page != item.page {
-                    app.navigate(item.page.clone());
+                // Save what we need before on_hover_text consumes resp
+                let nav_clicked = resp.clicked();
+                let nav_rect = resp.rect;
+                item_rects[i] = Some(nav_rect);
+
+                // Tooltip 在折叠态显示功能名（on_hover_text consumes resp）
+                if !show_labels {
+                    resp.on_hover_text(section.title());
                 }
 
-                // hover 效果
-                if response.hovered() && !is_active {
-                    // 简化为交互反馈 (egui 的 interact 自带 hover 高亮)
+                if nav_clicked && !is_active {
+                    app.navigate_section(*section);
                 }
             }
 
-            // 底部：登出按钮
+            // ── 滑块指示器（弹簧插值 y 位置）────────────────────
+            let idx_f = app.sidebar_indicator_anim.value(); // 0.0 – 3.0
+            let lo = idx_f.floor() as usize;
+            let hi = (idx_f.ceil() as usize).min(3);
+            let t = idx_f.fract() as f32;
+
+            if let (Some(r_lo), Some(r_hi)) = (item_rects[lo], item_rects[hi]) {
+                let y_top = egui::lerp(r_lo.top()..=r_hi.top(), t);
+                let y_bot = egui::lerp(r_lo.bottom()..=r_hi.bottom(), t);
+                let bar = Rect::from_min_max(pos2(r_lo.left(), y_top), pos2(r_lo.left() + 3.0, y_bot));
+                ui.painter().rect_filled(bar, egui::CornerRadius::ZERO, colors::PRIMARY);
+            }
+
+            // ── 底部：退出登录 ────────────────────────────────────
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                 ui.add_space(8.0);
-                let logout_btn = egui::Frame::new()
+                let logout = Frame::new()
                     .corner_radius(CornerRadius::same(0))
                     .show(ui, |ui| {
+                        ui.set_min_width(width - 1.0);
                         ui.horizontal(|ui| {
-                            ui.add_space(if app.sidebar_open { 12.0 } else { 8.0 });
+                            ui.add_space(13.0);
                             ui.label(
                                 egui::RichText::new("🚪")
-                                    .font(egui::FontId::new(18.0, egui::FontFamily::Proportional)),
+                                    .font(egui::FontId::new(20.0, egui::FontFamily::Proportional)),
                             );
-                            if app.sidebar_open {
-                                ui.add_space(8.0);
+                            if show_labels {
+                                ui.add_space(10.0);
                                 ui.label(
                                     egui::RichText::new("退出登录")
-                                        .color(Color32::from_gray(180))
-                                        .font(egui::FontId::new(14.0, egui::FontFamily::Proportional)),
+                                        .font(egui::FontId::new(
+                                            14.0,
+                                            egui::FontFamily::Proportional,
+                                        ))
+                                        .color(Color32::from_gray(180)),
                                 );
                             }
                         });
+                        ui.add_space(4.0);
                     })
                     .response
                     .interact(egui::Sense::click());
 
-                if logout_btn.clicked() {
+                let logout_clicked = logout.clicked();
+                if !show_labels {
+                    logout.on_hover_text("退出登录");
+                }
+
+                if logout_clicked {
                     app.is_logged_in = false;
                     app.token = None;
                     app.current_user = None;
-                    app.navigate(Page::Login);
                 }
             });
         });

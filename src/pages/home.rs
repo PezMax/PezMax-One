@@ -1,128 +1,268 @@
 // 首页/仪表盘
-// Metro Design tile 布局：统计卡片、快捷入口、最近文件
+// 三段布局：统计卡片 / 快速操作 / 最近更新
 
-use crate::app::{Page, PezMaxApp};
+use crate::app::{PezMaxApp, Section, Subsection};
 use crate::theme::colors;
-use egui::{FontId, CornerRadius, Vec2};
+use egui::{CornerRadius, FontId, Vec2};
 
 pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
-    ui.add_space(24.0);
+    egui::ScrollArea::vertical()
+        .id_salt("home_scroll")
+        .show(ui, |ui| {
+            ui.add_space(24.0);
 
-    // 欢迎标题
-    let default_name = "用户".to_string();
-    let nickname = app.current_user.as_ref().map(|u| &u.nick_name).unwrap_or(&default_name);
-    ui.label(
-        egui::RichText::new(format!("你好，{} 👋", nickname))
-            .font(FontId::new(28.0, egui::FontFamily::Proportional))
-            .color(colors::TEXT_PRIMARY),
-    );
-    ui.add_space(4.0);
-    ui.label(
-        egui::RichText::new("欢迎使用 PezMax 试卷资源管理系统")
-            .font(FontId::new(14.0, egui::FontFamily::Proportional))
-            .color(colors::TEXT_SECONDARY),
-    );
+            // ── 欢迎标题 ───────────────────────────────────────────
+            let default_name = "用户".to_string();
+            let nickname = app
+                .current_user
+                .as_ref()
+                .map(|u| &u.nick_name)
+                .unwrap_or(&default_name);
 
-    ui.add_space(32.0);
+            let hour = {
+                use std::time::{SystemTime, UNIX_EPOCH};
+                let secs = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs();
+                ((secs % 86400) / 3600 + 8) % 24 // UTC+8 近似
+            };
+            let greeting = if hour < 6 {
+                "深夜好"
+            } else if hour < 12 {
+                "早上好"
+            } else if hour < 18 {
+                "下午好"
+            } else {
+                "晚上好"
+            };
 
-    // 统计卡片（Metro Tile 风格）
-    let stats = [
-        ("📄", "试卷总数", "1,234", colors::PRIMARY),
-        ("⭐", "我的收藏", "56", colors::ACCENT_ORANGE),
-        ("📥", "下载次数", "189", colors::ACCENT_GREEN),
-        ("🔖", "书签", "23", colors::ACCENT_PURPLE),
-    ];
+            ui.label(
+                egui::RichText::new(format!("{}，{}", greeting, nickname))
+                    .font(FontId::new(28.0, egui::FontFamily::Proportional))
+                    .color(colors::TEXT_PRIMARY),
+            );
+            ui.add_space(4.0);
+            ui.label(
+                egui::RichText::new("欢迎使用 PezMax 试卷资源管理系统")
+                    .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                    .color(colors::TEXT_SECONDARY),
+            );
 
-    ui.horizontal_wrapped(|ui| {
-        for (icon, label, value, color) in &stats {
-            egui::Frame::new()
-                .fill(*color)
-                .corner_radius(CornerRadius::same(0))
-                .show(ui, |ui| {
-                    ui.set_min_size(Vec2::new(180.0, 120.0));
-                    ui.add_space(16.0);
-                    ui.horizontal(|ui| {
-                        ui.add_space(16.0);
-                        ui.label(
-                            egui::RichText::new(*icon)
-                                .font(FontId::new(32.0, egui::FontFamily::Proportional)),
-                        );
-                    });
-                    ui.add_space(8.0);
-                    ui.horizontal(|ui| {
-                        ui.add_space(16.0);
-                        ui.vertical(|ui| {
-                            ui.label(
-                                egui::RichText::new(*value)
-                                    .font(FontId::new(28.0, egui::FontFamily::Proportional))
-                                    .color(colors::TEXT_ON_PRIMARY),
-                            );
-                            ui.label(
-                                egui::RichText::new(*label)
-                                    .font(FontId::new(13.0, egui::FontFamily::Proportional))
-                                    .color(colors::TEXT_ON_PRIMARY),
-                            );
+            ui.add_space(28.0);
+
+            // ── 第一段：统计卡片 ────────────────────────────────────
+            let (fav, dl, ul) = if let Some(ref s) = app.user_stats {
+                (s.favorite_count, s.download_count, s.upload_count)
+            } else {
+                (0, 0, 0)
+            };
+
+            let stat_tiles = [
+                ("⭐", "我的收藏", fav, colors::ACCENT_ORANGE),
+                ("📥", "下载次数", dl, colors::PRIMARY),
+                ("📤", "上传贡献", ul, colors::ACCENT_GREEN),
+            ];
+
+            ui.horizontal_wrapped(|ui| {
+                for (icon, label, value, color) in &stat_tiles {
+                    egui::Frame::new()
+                        .fill(*color)
+                        .corner_radius(CornerRadius::same(0))
+                        .show(ui, |ui| {
+                            ui.set_min_size(Vec2::new(160.0, 110.0));
+                            ui.add_space(16.0);
+                            ui.horizontal(|ui| {
+                                ui.add_space(16.0);
+                                ui.label(
+                                    egui::RichText::new(*icon)
+                                        .font(FontId::new(28.0, egui::FontFamily::Proportional)),
+                                );
+                            });
+                            ui.add_space(6.0);
+                            ui.horizontal(|ui| {
+                                ui.add_space(16.0);
+                                ui.vertical(|ui| {
+                                    ui.label(
+                                        egui::RichText::new(value.to_string())
+                                            .font(FontId::new(
+                                                26.0,
+                                                egui::FontFamily::Proportional,
+                                            ))
+                                            .color(colors::TEXT_ON_PRIMARY),
+                                    );
+                                    ui.label(
+                                        egui::RichText::new(*label)
+                                            .font(FontId::new(
+                                                13.0,
+                                                egui::FontFamily::Proportional,
+                                            ))
+                                            .color(colors::TEXT_ON_PRIMARY),
+                                    );
+                                });
+                            });
                         });
-                    });
-                });
-            ui.add_space(12.0);
-        }
-    });
-
-    ui.add_space(32.0);
-
-    // 快捷入口（第二行 tile）
-    ui.label(
-        egui::RichText::new("快捷入口")
-            .font(FontId::new(18.0, egui::FontFamily::Proportional))
-            .color(colors::TEXT_PRIMARY),
-    );
-    ui.add_space(12.0);
-
-    let shortcuts = [
-        ("📁", "浏览试卷", "查看所有试卷资源", Page::FileExplorer),
-        ("⭐", "我的收藏", "管理收藏的试卷", Page::Favorites),
-        ("📥", "下载记录", "查看下载历史", Page::Downloads),
-        ("🔔", "通知中心", "查看系统通知", Page::Notifications),
-    ];
-
-    ui.horizontal_wrapped(|ui| {
-        for (icon, title, desc, page) in &shortcuts {
-            let response = egui::Frame::new()
-                .fill(colors::BG_CARD)
-                .corner_radius(CornerRadius::same(0))
-                .stroke(egui::Stroke::new(1.0, colors::BORDER))
-                .show(ui, |ui| {
-                    ui.set_min_size(Vec2::new(200.0, 80.0));
                     ui.add_space(12.0);
-                    ui.horizontal(|ui| {
-                        ui.add_space(12.0);
-                        ui.label(
-                            egui::RichText::new(*icon)
-                                .font(FontId::new(28.0, egui::FontFamily::Proportional)),
-                        );
-                        ui.add_space(12.0);
-                        ui.vertical(|ui| {
+                }
+            });
+
+            ui.add_space(28.0);
+
+            // ── 第二段：快速操作 ────────────────────────────────────
+            ui.label(
+                egui::RichText::new("快速操作")
+                    .font(FontId::new(16.0, egui::FontFamily::Proportional))
+                    .color(colors::TEXT_SECONDARY),
+            );
+            ui.add_space(8.0);
+
+            let mut nav_to: Option<(Section, Subsection)> = None;
+
+            ui.horizontal_wrapped(|ui| {
+                let quick_actions = [
+                    (
+                        "📁",
+                        "浏览试卷",
+                        "查看并下载试卷资源",
+                        Section::Browse,
+                        Subsection::ResourceManager,
+                        colors::PRIMARY,
+                    ),
+                    (
+                        "📤",
+                        "贡献文件",
+                        "上传你的试卷，帮助大家",
+                        Section::Community,
+                        Subsection::ContributeFile,
+                        colors::ACCENT_GREEN,
+                    ),
+                ];
+
+                for (icon, title, desc, section, sub, color) in quick_actions {
+                    let resp = egui::Frame::new()
+                        .fill(colors::BG_CARD)
+                        .corner_radius(CornerRadius::same(0))
+                        .stroke(egui::Stroke::new(1.5, color))
+                        .show(ui, |ui| {
+                            ui.set_min_size(Vec2::new(220.0, 72.0));
+                            ui.add_space(12.0);
+                            ui.horizontal(|ui| {
+                                ui.add_space(14.0);
+                                egui::Frame::new()
+                                    .fill(color)
+                                    .corner_radius(CornerRadius::same(0))
+                                    .show(ui, |ui| {
+                                        ui.set_min_size(Vec2::new(40.0, 40.0));
+                                        ui.set_max_size(Vec2::new(40.0, 40.0));
+                                        ui.vertical_centered(|ui| {
+                                            ui.add_space(4.0);
+                                            ui.label(
+                                                egui::RichText::new(icon).font(FontId::new(
+                                                    22.0,
+                                                    egui::FontFamily::Proportional,
+                                                )),
+                                            );
+                                        });
+                                    });
+                                ui.add_space(12.0);
+                                ui.vertical(|ui| {
+                                    ui.add_space(4.0);
+                                    ui.label(
+                                        egui::RichText::new(title)
+                                            .font(FontId::new(
+                                                15.0,
+                                                egui::FontFamily::Proportional,
+                                            ))
+                                            .color(colors::TEXT_PRIMARY),
+                                    );
+                                    ui.label(
+                                        egui::RichText::new(desc)
+                                            .font(FontId::new(
+                                                12.0,
+                                                egui::FontFamily::Proportional,
+                                            ))
+                                            .color(colors::TEXT_SECONDARY),
+                                    );
+                                });
+                            });
+                        })
+                        .response
+                        .interact(egui::Sense::click());
+
+                    if resp.clicked() {
+                        nav_to = Some((section, sub));
+                    }
+                    ui.add_space(12.0);
+                }
+            });
+
+            if let Some((s, sub)) = nav_to {
+                app.navigate_to(s, sub);
+            }
+
+            ui.add_space(28.0);
+
+            // ── 第三段：最近更新 ────────────────────────────────────
+            ui.label(
+                egui::RichText::new("最近更新")
+                    .font(FontId::new(16.0, egui::FontFamily::Proportional))
+                    .color(colors::TEXT_SECONDARY),
+            );
+            ui.add_space(8.0);
+
+            let recent = [
+                ("2024高考数学真题", "数学", "2024-06-15", "张三"),
+                ("2024高考语文真题", "语文", "2024-06-14", "李四"),
+                ("2024高考英语真题", "英语", "2024-06-13", "王五"),
+                ("2023高考物理真题", "物理", "2024-06-10", "赵六"),
+            ];
+
+            for (name, subject, date, uploader) in &recent {
+                egui::Frame::new()
+                    .fill(colors::BG_CARD)
+                    .corner_radius(CornerRadius::same(0))
+                    .stroke(egui::Stroke::new(1.0, colors::BORDER))
+                    .show(ui, |ui| {
+                        ui.set_min_width(ui.available_width());
+                        ui.horizontal(|ui| {
+                            ui.add_space(12.0);
                             ui.label(
-                                egui::RichText::new(*title)
-                                    .font(FontId::new(15.0, egui::FontFamily::Proportional))
-                                    .color(colors::TEXT_PRIMARY),
+                                egui::RichText::new("📄")
+                                    .font(FontId::new(20.0, egui::FontFamily::Proportional)),
                             );
-                            ui.label(
-                                egui::RichText::new(*desc)
+                            ui.add_space(10.0);
+                            ui.vertical(|ui| {
+                                ui.add_space(8.0);
+                                ui.label(
+                                    egui::RichText::new(*name)
+                                        .font(FontId::new(
+                                            14.0,
+                                            egui::FontFamily::Proportional,
+                                        ))
+                                        .color(colors::TEXT_PRIMARY),
+                                );
+                                ui.label(
+                                    egui::RichText::new(format!(
+                                        "{} · {} · by {}",
+                                        subject, date, uploader
+                                    ))
                                     .font(FontId::new(12.0, egui::FontFamily::Proportional))
                                     .color(colors::TEXT_SECONDARY),
+                                );
+                                ui.add_space(8.0);
+                            });
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    ui.add_space(12.0);
+                                    if ui.small_button("📥 下载").clicked() {}
+                                },
                             );
                         });
                     });
-                })
-                .response
-                .interact(egui::Sense::click());
-
-            if response.clicked() {
-                app.navigate(page.clone());
+                ui.add_space(4.0);
             }
-            ui.add_space(12.0);
-        }
-    });
+
+            ui.add_space(16.0);
+        });
 }

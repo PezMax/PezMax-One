@@ -1,7 +1,7 @@
 // 登录页面
 // Metro Design 风格：居中卡片、大标题、扁平输入框
 
-use crate::app::{Page, PezMaxApp, ToastLevel};
+use crate::app::{AuthPage, PezMaxApp, ToastLevel};
 use crate::theme::colors;
 use egui::{FontId, CornerRadius};
 
@@ -90,7 +90,6 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                         if ui.add(btn).clicked() {
                             // 模拟登录
                             if !username.is_empty() && !password.is_empty() {
-                                app.is_logged_in = true;
                                 app.token = Some("mock_token".to_string());
                                 app.current_user = Some(crate::api::UserInfo {
                                     user_id: 1,
@@ -101,7 +100,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                                     phonenumber: String::new(),
                                     sex: String::new(),
                                 });
-                                app.navigate(Page::Home);
+                                app.login_success();
                                 app.add_toast("登录成功，欢迎回来！", ToastLevel::Success);
                             } else {
                                 app.add_toast("请输入用户名和密码", ToastLevel::Warning);
@@ -115,12 +114,12 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                             ui.add_space(40.0);
                             let register_link = egui::Link::new("注册账号");
                             if ui.add(register_link).clicked() {
-                                app.navigate(Page::Register);
+                                app.set_auth_page(AuthPage::Register);
                             }
                             ui.add_space(40.0);
                             let forget_link = egui::Link::new("忘记密码");
                             if ui.add(forget_link).clicked() {
-                                app.navigate(Page::ForgetPassword);
+                                app.set_auth_page(AuthPage::ForgetPassword);
                             }
                         });
 

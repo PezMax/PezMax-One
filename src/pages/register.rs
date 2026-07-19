@@ -1,7 +1,7 @@
 // 注册页面
 // 带密保问题的三步注册流程
 
-use crate::app::{Page, PezMaxApp, ToastLevel};
+use crate::app::{AuthPage, PezMaxApp, ToastLevel};
 use crate::theme::colors;
 use egui::{FontId, CornerRadius};
 
@@ -118,7 +118,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                                     step += 1;
                                 } else {
                                     app.add_toast("注册成功！请登录", ToastLevel::Success);
-                                    app.navigate(Page::Login);
+                                    app.set_auth_page(AuthPage::Login);
                                 }
                             }
                         });
@@ -128,7 +128,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
 
                 ui.add_space(16.0);
                 if ui.link("已有账号？去登录").clicked() {
-                    app.navigate(Page::Login);
+                    app.set_auth_page(AuthPage::Login);
                 }
             });
         });

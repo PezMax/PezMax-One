@@ -1,6 +1,6 @@
 // 找回密码页面
 
-use crate::app::{Page, PezMaxApp};
+use crate::app::{AuthPage, PezMaxApp};
 use crate::theme::colors;
 use egui::{FontId, CornerRadius};
 
@@ -41,7 +41,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
 
                 ui.add_space(16.0);
                 if ui.link("返回登录").clicked() {
-                    app.navigate(Page::Login);
+                    app.set_auth_page(AuthPage::Login);
                 }
             });
         });
