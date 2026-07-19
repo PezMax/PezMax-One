@@ -1,0 +1,6 @@
+[submodule "PezMax-Backend"]
+	path = PezMax-Backend
+	url = git@github.com:Torchman005/PezMax-Backend.git
+[submodule "PezMax-Java"]
+	path = PezMax-Java
+	url = git@github.com:PezMax/PezMax-Java.git

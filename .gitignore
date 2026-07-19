@@ -2,4 +2,5 @@ PezMax-Desktop/
 target/
 node_modules/
 .qoder/
-repowiki/
+**/*.rs.bk
+Cargo.lock
