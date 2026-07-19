@@ -173,7 +173,7 @@ impl eframe::App for PezMaxApp {
                 crate::components::topbar::render(self, ctx);
 
                 egui::CentralPanel::default()
-                    .frame(egui::Frame::none().fill(theme::colors::BG_WHITE))
+                    .frame(egui::Frame::new().fill(theme::colors::BG_WHITE))
                     .show(ctx, |ui| {
                         match self.current_page {
                             Page::Home => crate::pages::home::render(self, ui),

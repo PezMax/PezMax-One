@@ -3,13 +3,14 @@
 
 use crate::app::{Page, PezMaxApp};
 use crate::theme::colors;
-use egui::{FontId, Rounding, Vec2};
+use egui::{FontId, CornerRadius, Vec2};
 
 pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     ui.add_space(24.0);
 
     // 欢迎标题
-    let nickname = app.current_user.as_ref().map(|u| &u.nick_name).unwrap_or(&"用户".to_string());
+    let default_name = "用户".to_string();
+    let nickname = app.current_user.as_ref().map(|u| &u.nick_name).unwrap_or(&default_name);
     ui.label(
         egui::RichText::new(format!("你好，{} 👋", nickname))
             .font(FontId::new(28.0, egui::FontFamily::Proportional))
@@ -34,9 +35,9 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 
     ui.horizontal_wrapped(|ui| {
         for (icon, label, value, color) in &stats {
-            egui::Frame::none()
+            egui::Frame::new()
                 .fill(*color)
-                .rounding(Rounding::same(12.0))
+                .corner_radius(CornerRadius::same(12))
                 .show(ui, |ui| {
                     ui.set_min_size(Vec2::new(180.0, 120.0));
                     ui.add_space(16.0);
@@ -87,9 +88,9 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 
     ui.horizontal_wrapped(|ui| {
         for (icon, title, desc, page) in &shortcuts {
-            let response = egui::Frame::none()
+            let response = egui::Frame::new()
                 .fill(colors::BG_CARD)
-                .rounding(Rounding::same(10.0))
+                .corner_radius(CornerRadius::same(10))
                 .stroke(egui::Stroke::new(1.0, colors::BORDER))
                 .show(ui, |ui| {
                     ui.set_min_size(Vec2::new(200.0, 80.0));

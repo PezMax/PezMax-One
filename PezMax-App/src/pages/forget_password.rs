@@ -2,11 +2,11 @@
 
 use crate::app::{Page, PezMaxApp};
 use crate::theme::colors;
-use egui::{FontId, Rounding};
+use egui::{FontId, CornerRadius};
 
 pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
     egui::CentralPanel::default()
-        .frame(egui::Frame::none().fill(colors::BG_WHITE))
+        .frame(egui::Frame::new().fill(colors::BG_WHITE))
         .show(ctx, |ui| {
             ui.vertical_centered(|ui| {
                 ui.add_space(ui.available_height() * 0.2);
@@ -25,9 +25,9 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
 
                 ui.add_space(32.0);
 
-                egui::Frame::none()
+                egui::Frame::new()
                     .fill(colors::BG_CARD)
-                    .rounding(Rounding::same(12.0))
+                    .corner_radius(CornerRadius::same(12))
                     .stroke(egui::Stroke::new(1.0, colors::BORDER))
                     .show(ui, |ui| {
                         ui.set_max_width(400.0);

@@ -3,7 +3,7 @@
 
 use crate::app::{Page, PezMaxApp};
 use crate::theme::colors;
-use egui::{Color32, Frame, Margin, Rounding, Vec2};
+use egui::{Color32, Frame, CornerRadius, Vec2};
 
 /// 导航项定义
 struct NavItem {
@@ -34,7 +34,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
         .default_width(sidebar_width)
         .min_width(sidebar_width)
         .max_width(sidebar_width)
-        .frame(Frame::none().fill(colors::BG_SIDEBAR))
+        .frame(Frame::new().fill(colors::BG_SIDEBAR))
         .show(ctx, |ui| {
             // 间距
             ui.add_space(16.0);
@@ -65,9 +65,9 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                         ui.add_space(12.0);
                         // 头像占位
                         let avatar_size = 40.0;
-                        egui::Frame::none()
+                        egui::Frame::new()
                             .fill(colors::PRIMARY)
-                            .rounding(Rounding::same(20.0))
+                            .corner_radius(CornerRadius::same(20))
                             .show(ui, |ui| {
                                 ui.allocate_space(Vec2::new(avatar_size, avatar_size));
                                 ui.allocate_ui_at_rect(
@@ -112,9 +112,9 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                     Color32::TRANSPARENT
                 };
 
-                let response = egui::Frame::none()
+                let response = egui::Frame::new()
                     .fill(bg)
-                    .rounding(Rounding::same(6.0))
+                    .corner_radius(CornerRadius::same(6))
                     .show(ui, |ui| {
                         ui.add_space(2.0);
                         ui.horizontal(|ui| {
@@ -135,9 +135,9 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                                 if let Some(count) = item.badge {
                                     if count > 0 {
                                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                            egui::Frame::none()
+                                            egui::Frame::new()
                                                 .fill(colors::ERROR)
-                                                .rounding(Rounding::same(10.0))
+                                                .corner_radius(CornerRadius::same(10))
                                                 .show(ui, |ui| {
                                                     ui.add_space(4.0);
                                                     ui.label(
@@ -170,8 +170,8 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
             // 底部：登出按钮
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                 ui.add_space(8.0);
-                let logout_btn = egui::Frame::none()
-                    .rounding(Rounding::same(6.0))
+                let logout_btn = egui::Frame::new()
+                    .corner_radius(CornerRadius::same(6))
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
                             ui.add_space(if app.sidebar_open { 12.0 } else { 8.0 });

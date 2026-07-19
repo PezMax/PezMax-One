@@ -3,7 +3,7 @@
 
 use crate::app::{Page, PezMaxApp, ToastLevel};
 use crate::theme::colors;
-use egui::{Color32, FontId, Rounding};
+use egui::{FontId, CornerRadius};
 
 pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
     // 登录状态
@@ -11,7 +11,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
     let mut password = String::new();
 
     egui::CentralPanel::default()
-        .frame(egui::Frame::none().fill(colors::BG_WHITE))
+        .frame(egui::Frame::new().fill(colors::BG_WHITE))
         .show(ctx, |ui| {
             // 垂直居中
             ui.vertical_centered(|ui| {
@@ -33,9 +33,9 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                 ui.add_space(40.0);
 
                 // 登录卡片
-                egui::Frame::none()
+                egui::Frame::new()
                     .fill(colors::BG_CARD)
-                    .rounding(Rounding::same(12.0))
+                    .corner_radius(CornerRadius::same(12))
                     .stroke(egui::Stroke::new(1.0, colors::BORDER))
                     .show(ui, |ui| {
                         ui.set_max_width(380.0);
@@ -85,7 +85,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                         )
                         .fill(colors::PRIMARY)
                         .min_size(egui::Vec2::new(280.0, 44.0))
-                        .rounding(Rounding::same(8.0));
+                        .corner_radius(CornerRadius::same(8));
 
                         if ui.add(btn).clicked() {
                             // 模拟登录

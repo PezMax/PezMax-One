@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 /// 后端统一响应格式 (AjaxResult)
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound(deserialize = "T: Deserialize<'de>"))]
 pub struct ApiResponse<T> {
     pub code: i32,
     pub msg: String,
@@ -14,6 +15,7 @@ pub struct ApiResponse<T> {
 
 /// 分页响应格式 (TableDataInfo)
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound(deserialize = "T: Deserialize<'de>"))]
 pub struct PageResponse<T> {
     pub code: i32,
     pub msg: String,
@@ -190,7 +192,7 @@ pub struct Notification {
 }
 
 /// 下载记录
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DownloadRecord {
     #[serde(default)]
     pub download_id: i64,
@@ -207,7 +209,7 @@ pub struct DownloadRecord {
 }
 
 /// 收藏记录
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct FavoriteRecord {
     #[serde(default)]
     pub file_id: i64,

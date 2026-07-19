@@ -2,7 +2,7 @@
 
 use crate::app::PezMaxApp;
 use crate::theme::colors;
-use egui::{FontId, Rounding, Vec2};
+use egui::{FontId, CornerRadius, Vec2};
 
 pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     ui.add_space(16.0);
@@ -17,9 +17,9 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     if let Some(ref user) = app.current_user {
         ui.horizontal(|ui| {
             // 头像区域
-            egui::Frame::none()
+            egui::Frame::new()
                 .fill(colors::PRIMARY)
-                .rounding(Rounding::same(40.0))
+                .corner_radius(CornerRadius::same(40))
                 .show(ui, |ui| {
                     ui.allocate_space(Vec2::new(80.0, 80.0));
                     ui.allocate_ui_at_rect(ui.max_rect(), |ui| {
@@ -57,9 +57,9 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     ui.add_space(24.0);
 
     // 信息编辑区
-    egui::Frame::none()
+    egui::Frame::new()
         .fill(colors::BG_CARD)
-        .rounding(Rounding::same(10.0))
+        .corner_radius(CornerRadius::same(10))
         .stroke(egui::Stroke::new(1.0, colors::BORDER))
         .show(ui, |ui| {
             ui.add_space(16.0);

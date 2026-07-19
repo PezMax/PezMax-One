@@ -13,5 +13,4 @@ pub mod report;
 pub mod download;
 pub mod favorite;
 
-pub use client::ApiClient;
 pub use models::*;

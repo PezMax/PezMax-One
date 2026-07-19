@@ -2,9 +2,9 @@
 
 use crate::app::PezMaxApp;
 use crate::theme::colors;
-use egui::{FontId, Rounding};
+use egui::FontId;
 
-pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui, file_id: i64) {
+pub fn render(_app: &mut PezMaxApp, ui: &mut egui::Ui, file_id: i64) {
     ui.add_space(16.0);
     ui.label(
         egui::RichText::new(format!("文件详情 #{}", file_id))

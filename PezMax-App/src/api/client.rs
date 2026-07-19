@@ -1,9 +1,8 @@
 // API 客户端核心
 // 封装 reqwest，提供统一的鉴权头、超时、错误处理
 
-use crate::api::models::*;
 use anyhow::Result;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 

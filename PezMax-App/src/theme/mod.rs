@@ -1,7 +1,7 @@
 // PezMax egui Desktop — 主题系统
 // Metro Design 风格：扁平、大字体、内容优先、色块分区
 
-use egui::{Color32, FontFamily, FontId, Stroke, Style, TextStyle, Vec2};
+use egui::{FontFamily, FontId, CornerRadius, TextStyle, Vec2};
 
 /// Metro Design 调色板
 pub mod colors {
@@ -40,7 +40,7 @@ pub mod colors {
     pub const INFO: Color32 = Color32::from_rgb(0x00, 0x78, 0xD4);
 
     // 半透明叠加
-    pub const OVERLAY: Color32 = Color32::from_black_alpha(128);
+    pub const OVERLAY: Color32 = Color32::from_rgba_premultiplied(0, 0, 0, 128);
 }
 
 /// 获取 Metro Design 风格的字体大小体系
@@ -68,12 +68,9 @@ pub fn apply_metro_theme(ctx: &egui::Context) {
     style.spacing.button_padding = Vec2::new(16.0, 8.0);
     style.spacing.indent = 24.0;
 
-    // 圆角
-    style.visuals.window_rounding = 8.0.into();
-    style.visuals.widgets.noninteractive.rounding = 6.0.into();
-    style.visuals.widgets.inactive.rounding = 6.0.into();
-    style.visuals.widgets.hovered.rounding = 6.0.into();
-    style.visuals.widgets.active.rounding = 6.0.into();
+    // 全局圆角
+    style.visuals.window_corner_radius = CornerRadius::same(8);
+    style.visuals.menu_corner_radius = CornerRadius::same(6);
 
     // 颜色
     style.visuals.override_text_color = Some(colors::TEXT_PRIMARY);
@@ -82,19 +79,12 @@ pub fn apply_metro_theme(ctx: &egui::Context) {
     style.visuals.faint_bg_color = colors::BG_CARD;
     style.visuals.extreme_bg_color = colors::BG_SIDEBAR;
 
-    // 按钮
-    style.visuals.widgets.inactive.bg_fill = colors::PRIMARY;
-    style.visuals.widgets.inactive.weak_bg_fill = colors::BG_CARD;
-    style.visuals.widgets.inactive.fg_stroke = Stroke::new(1.0, colors::BORDER);
-    style.visuals.widgets.hovered.bg_fill = colors::PRIMARY_LIGHT;
-    style.visuals.widgets.active.bg_fill = colors::PRIMARY_DARK;
-
-    // 选择
-    style.visuals.selection.stroke = Stroke::new(1.0, colors::PRIMARY);
-    style.visuals.selection.bg_fill = colors::BG_SELECTED;
-
     // 超链接
     style.visuals.hyperlink_color = colors::PRIMARY;
+
+    // 选择色
+    style.visuals.selection.stroke = egui::Stroke { width: 1.0, color: colors::PRIMARY };
+    style.visuals.selection.bg_fill = colors::BG_SELECTED;
 
     ctx.set_style(style);
 }

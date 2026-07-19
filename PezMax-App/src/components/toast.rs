@@ -3,7 +3,7 @@
 
 use crate::app::{PezMaxApp, ToastLevel};
 use crate::theme::colors;
-use egui::{Color32, Frame, Margin, Rounding};
+use egui::{Frame, Id, CornerRadius};
 
 pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
     if app.toasts.is_empty() {
@@ -11,7 +11,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
     }
 
     // 在右下角叠加显示
-    egui::Area::new("toast_area")
+    egui::Area::new(Id::new("toast_area"))
         .anchor(egui::Align2::RIGHT_BOTTOM, egui::Vec2::new(-20.0, -20.0))
         .show(ctx, |ui| {
             ui.with_layout(egui::Layout::top_down_justified(egui::Align::RIGHT), |ui| {
@@ -23,9 +23,9 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                         ToastLevel::Info => (colors::INFO, "ℹ"),
                     };
 
-                    Frame::none()
+                    Frame::new()
                         .fill(bg_color)
-                        .rounding(Rounding::same(8.0))
+                        .corner_radius(CornerRadius::same(8))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
                                 ui.add_space(12.0);

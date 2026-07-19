@@ -2,9 +2,9 @@
 
 use crate::app::PezMaxApp;
 use crate::theme::colors;
-use egui::{FontId, Rounding};
+use egui::{FontId, CornerRadius};
 
-pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
+pub fn render(_app: &mut PezMaxApp, ui: &mut egui::Ui) {
     ui.add_space(16.0);
     ui.label(
         egui::RichText::new("🔒 安全设置")
@@ -14,9 +14,9 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     ui.add_space(24.0);
 
     // 修改密码
-    egui::Frame::none()
+    egui::Frame::new()
         .fill(colors::BG_CARD)
-        .rounding(Rounding::same(10.0))
+        .corner_radius(CornerRadius::same(10))
         .stroke(egui::Stroke::new(1.0, colors::BORDER))
         .show(ui, |ui| {
             ui.add_space(16.0);
@@ -33,9 +33,9 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     ui.add_space(12.0);
 
     // 密保设置
-    egui::Frame::none()
+    egui::Frame::new()
         .fill(colors::BG_CARD)
-        .rounding(Rounding::same(10.0))
+        .corner_radius(CornerRadius::same(10))
         .stroke(egui::Stroke::new(1.0, colors::BORDER))
         .show(ui, |ui| {
             ui.add_space(16.0);

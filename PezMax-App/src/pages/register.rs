@@ -3,13 +3,13 @@
 
 use crate::app::{Page, PezMaxApp, ToastLevel};
 use crate::theme::colors;
-use egui::{FontId, Rounding};
+use egui::{FontId, CornerRadius};
 
 pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
     let mut step = 1;
 
     egui::CentralPanel::default()
-        .frame(egui::Frame::none().fill(colors::BG_WHITE))
+        .frame(egui::Frame::new().fill(colors::BG_WHITE))
         .show(ctx, |ui| {
             ui.vertical_centered(|ui| {
                 ui.add_space(ui.available_height() * 0.1);
@@ -35,15 +35,16 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                         let is_done = i < step;
                         let color = if is_done { colors::SUCCESS } else if is_active { colors::PRIMARY } else { colors::BORDER };
 
-                        egui::Frame::none()
+                        egui::Frame::new()
                             .fill(color)
-                            .rounding(Rounding::same(12.0))
+                            .corner_radius(CornerRadius::same(12))
                             .show(ui, |ui| {
                                 ui.allocate_space(egui::Vec2::new(24.0, 24.0));
                                 ui.allocate_ui_at_rect(ui.max_rect(), |ui| {
                                     ui.vertical_centered(|ui| {
+                                        let step_text = if is_done { "✓".to_string() } else { i.to_string() };
                                         ui.label(
-                                            egui::RichText::new(if is_done { "✓" } else { &i.to_string() })
+                                            egui::RichText::new(step_text)
                                                 .color(colors::TEXT_ON_PRIMARY)
                                                 .font(FontId::new(12.0, egui::FontFamily::Proportional)),
                                         );
@@ -59,9 +60,9 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                 ui.add_space(32.0);
 
                 // 注册表单卡片
-                egui::Frame::none()
+                egui::Frame::new()
                     .fill(colors::BG_CARD)
-                    .rounding(Rounding::same(12.0))
+                    .corner_radius(CornerRadius::same(12))
                     .stroke(egui::Stroke::new(1.0, colors::BORDER))
                     .show(ui, |ui| {
                         ui.set_max_width(400.0);
@@ -110,7 +111,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                             )
                             .fill(colors::PRIMARY)
                             .min_size(egui::Vec2::new(120.0, 40.0))
-                            .rounding(Rounding::same(8.0));
+                            .corner_radius(CornerRadius::same(8));
 
                             if ui.add(btn).clicked() {
                                 if step < 3 {

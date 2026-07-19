@@ -1,11 +1,11 @@
 // 试卷浏览页面
 // 文件树 + 列表视图，类似资源管理器
 
-use crate::app::{Page, PezMaxApp};
+use crate::app::PezMaxApp;
 use crate::theme::colors;
-use egui::{FontId, Rounding};
+use egui::{FontId, CornerRadius};
 
-pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
+pub fn render(_app: &mut PezMaxApp, ui: &mut egui::Ui) {
     ui.add_space(16.0);
 
     // 当前路径指示
@@ -29,7 +29,7 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
         .resizable(true)
         .default_width(220.0)
         .min_width(160.0)
-        .frame(egui::Frame::none().fill(colors::BG_CARD))
+        .frame(egui::Frame::new().fill(colors::BG_CARD))
         .show_inside(ui, |ui| {
             ui.add_space(12.0);
             ui.label(
@@ -53,8 +53,8 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
             ];
 
             for (name, icon) in &categories {
-                let response = egui::Frame::none()
-                    .rounding(Rounding::same(6.0))
+                let response = egui::Frame::new()
+                    .corner_radius(CornerRadius::same(6))
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
                             ui.add_space(8.0);
@@ -81,7 +81,7 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
         });
 
     // 右侧文件列表
-    egui::Frame::none()
+    egui::Frame::new()
         .fill(colors::BG_WHITE)
         .show(ui, |ui| {
             ui.add_space(8.0);
@@ -98,9 +98,9 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                 ];
 
                 for (name, subject, year, size, uploader) in &sample_files {
-                    let response = egui::Frame::none()
+                    let response = egui::Frame::new()
                         .fill(colors::BG_CARD)
-                        .rounding(Rounding::same(10.0))
+                        .corner_radius(CornerRadius::same(10))
                         .stroke(egui::Stroke::new(1.0, colors::BORDER))
                         .show(ui, |ui| {
                             ui.set_min_size(egui::Vec2::new(240.0, 140.0));
@@ -108,9 +108,9 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                             ui.horizontal(|ui| {
                                 ui.add_space(12.0);
                                 // 文件图标
-                                egui::Frame::none()
+                                egui::Frame::new()
                                     .fill(colors::PRIMARY_LIGHT)
-                                    .rounding(Rounding::same(8.0))
+                                    .corner_radius(CornerRadius::same(8))
                                     .show(ui, |ui| {
                                         ui.allocate_space(egui::Vec2::new(40.0, 48.0));
                                         ui.allocate_ui_at_rect(ui.max_rect(), |ui| {
@@ -151,7 +151,7 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                         .font(FontId::new(12.0, egui::FontFamily::Proportional)),
                                 )
                                 .fill(colors::PRIMARY)
-                                .rounding(Rounding::same(4.0));
+                                .corner_radius(CornerRadius::same(4));
                                 if ui.add(dl_btn).clicked() {
                                     // 下载
                                 }
@@ -161,7 +161,7 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                         .font(FontId::new(12.0, egui::FontFamily::Proportional)),
                                 )
                                 .fill(colors::BG_CARD)
-                                .rounding(Rounding::same(4.0));
+                                .corner_radius(CornerRadius::same(4));
                                 if ui.add(fav_btn).clicked() {
                                     // 收藏
                                 }

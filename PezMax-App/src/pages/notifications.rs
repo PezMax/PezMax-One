@@ -2,9 +2,9 @@
 
 use crate::app::PezMaxApp;
 use crate::theme::colors;
-use egui::{FontId, Rounding};
+use egui::{FontId, CornerRadius};
 
-pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
+pub fn render(_app: &mut PezMaxApp, ui: &mut egui::Ui) {
     ui.add_space(16.0);
     ui.label(
         egui::RichText::new("🔔 通知中心")
@@ -21,9 +21,9 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 
     for (title, content, time, is_read) in &notifications {
         let bg = if *is_read { colors::BG_CARD } else { colors::BG_SELECTED };
-        egui::Frame::none()
+        egui::Frame::new()
             .fill(bg)
-            .rounding(Rounding::same(8.0))
+            .corner_radius(CornerRadius::same(8))
             .stroke(egui::Stroke::new(1.0, colors::BORDER))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
