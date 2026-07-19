@@ -87,15 +87,36 @@ pub struct UserInfo {
     pub phonenumber: String,
     #[serde(default)]
     pub sex: String,
+    #[serde(default)]
+    pub status: String,
+}
+
+/// getInfo 响应结构（用户信息嵌套在 data.user 中）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserInfoResponse {
+    pub user: UserInfo,
+    #[serde(default)]
+    pub roles: Vec<String>,
+    #[serde(default)]
+    pub permissions: Vec<String>,
+    #[serde(default)]
+    pub is_default_modify_pwd: bool,
+    #[serde(default)]
+    pub is_password_expired: bool,
 }
 
 /// 验证码响应
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CaptchaResponse {
+    #[serde(default = "default_true", alias = "captchaEnabled")]
     pub captcha_enabled: bool,
+    #[serde(default)]
     pub uuid: String,
+    #[serde(default)]
     pub img: String, // base64
 }
+
+fn default_true() -> bool { true }
 
 /// 注册请求
 #[derive(Debug, Clone, Serialize, Deserialize)]

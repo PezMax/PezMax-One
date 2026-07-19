@@ -2,7 +2,26 @@ use crate::api::client::ApiClient;
 use crate::api::models::*;
 use crate::sokuou::{map_range, Easing, Progress, SpringAnim};
 use crate::theme;
+use anyhow;
+use base64::Engine;
 use egui::Context;
+use tokio::sync::oneshot;
+
+/// 将 base64 图片（JPEG 格式）解码为 egui 纹理
+fn decode_base64_image(b64: &str, ctx: &egui::Context) -> Option<egui::TextureHandle> {
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(b64)
+        .ok()?;
+    let img = image::load_from_memory(&bytes).ok()?;
+    let rgba = img.to_rgba8();
+    let (w, h) = rgba.dimensions();
+    let pixels = rgba.into_raw();
+    let color_image = egui::ColorImage::from_rgba_unmultiplied(
+        [w as usize, h as usize],
+        &pixels,
+    );
+    Some(ctx.load_texture("captcha", color_image, egui::TextureOptions::LINEAR))
+}
 
 /// 认证阶段的子页面（is_logged_in == false 时使用）
 #[derive(Debug, Clone, PartialEq)]
@@ -143,9 +162,31 @@ pub struct FilterState {
     pub year: Option<i32>,
 }
 
+/// 登录异步结果
+pub struct LoginResult {
+    pub token: String,
+    pub user: UserInfo,
+}
+
 /// 应用主状态
 pub struct PezMaxApp {
     pub api: ApiClient,
+
+    // 登录表单状态
+    pub login_username: String,
+    pub login_password: String,
+    pub login_captcha: String,
+    pub login_captcha_uuid: String,
+    pub login_captcha_img: String,
+    pub login_captcha_texture: Option<egui::TextureHandle>,
+    pub login_captcha_enabled: bool,
+    pub login_loading: bool,
+    pub login_error: String,
+    pub captcha_loaded: bool,
+
+    // 异步结果接收器
+    pub captcha_rx: Option<oneshot::Receiver<anyhow::Result<CaptchaResponse>>>,
+    pub login_rx: Option<oneshot::Receiver<anyhow::Result<LoginResult>>>,
 
     // 认证
     pub is_logged_in: bool,
@@ -205,6 +246,21 @@ impl PezMaxApp {
 
         Self {
             api: ApiClient::new(None),
+
+            // 登录表单
+            login_username: String::new(),
+            login_password: String::new(),
+            login_captcha: String::new(),
+            login_captcha_uuid: String::new(),
+            login_captcha_img: String::new(),
+            login_captcha_texture: None,
+            login_captcha_enabled: true,
+            login_loading: false,
+            login_error: String::new(),
+            captcha_loaded: false,
+            captcha_rx: None,
+            login_rx: None,
+
             is_logged_in: false,
             auth_page: AuthPage::Login,
             token: None,
@@ -245,6 +301,96 @@ impl PezMaxApp {
         self.current_subsection = Subsection::None;
         self.page_enter_anim = SpringAnim::with_target(0.4, 0.8, 0.0, 0.0, 1.0);
         self.sidebar_indicator_anim.set_target(0.0); // Home
+        // 清空登录表单
+        self.login_username.clear();
+        self.login_password.clear();
+        self.login_captcha.clear();
+        self.login_captcha_uuid.clear();
+        self.login_captcha_img.clear();
+        self.login_captcha_texture = None;
+        self.login_error.clear();
+        self.captcha_loaded = false;
+    }
+
+    /// 异步加载验证码
+    pub fn trigger_captcha_load(&mut self) {
+        if self.captcha_rx.is_some() {
+            return; // 已有请求进行中
+        }
+        let api = self.api.clone();
+        let (tx, rx) = oneshot::channel();
+        self.captcha_rx = Some(rx);
+        tokio::spawn(async move {
+            let result = api.get_captcha().await;
+            let result = match result {
+                Ok(api_resp) => {
+                    if let Some(data) = api_resp.data {
+                        Ok(data)
+                    } else {
+                        Err(anyhow::anyhow!("验证码响应为空: {} {}", api_resp.code, api_resp.msg))
+                    }
+                }
+                Err(e) => Err(e),
+            };
+            tx.send(result).ok();
+        });
+    }
+
+    /// 异步执行登录
+    pub fn trigger_login(&mut self) {
+        if self.login_loading || self.login_rx.is_some() {
+            return;
+        }
+        self.login_loading = true;
+        self.login_error.clear();
+
+        let api = self.api.clone();
+        let username = self.login_username.clone();
+        let password = self.login_password.clone();
+        let code = if self.login_captcha_enabled {
+            Some(self.login_captcha.clone())
+        } else {
+            None
+        };
+        let uuid = if self.login_captcha_enabled {
+            Some(self.login_captcha_uuid.clone())
+        } else {
+            None
+        };
+
+        let (tx, rx) = oneshot::channel();
+        self.login_rx = Some(rx);
+
+        tokio::spawn(async move {
+            let result = async {
+                // 1. 登录获取 token
+                let login_resp = api.desktop_login(&username, &password, code, uuid).await?;
+                let token = login_resp.data.as_ref()
+                    .map(|d| d.token.clone())
+                    .unwrap_or_default();
+                if token.is_empty() {
+                    anyhow::bail!("登录响应缺少 token");
+                }
+                api.set_token(token.clone()).await;
+
+                // 2. 获取用户信息（含封禁检查）
+                let info_resp = api.get_user_info().await?;
+                let info_data = info_resp.data.ok_or_else(|| anyhow::anyhow!("获取用户信息失败"))?;
+
+                // 检查账号状态
+                if info_data.user.status == "0" {
+                    api.clear_token().await;
+                    anyhow::bail!("账号已被封禁，无法登录");
+                }
+
+                Ok(LoginResult {
+                    token,
+                    user: info_data.user,
+                })
+            }.await;
+
+            tx.send(result).ok();
+        });
     }
 
     /// 切换顶级 Section（默认跳到该 Section 的第一个子标签）
@@ -322,6 +468,55 @@ impl eframe::App for PezMaxApp {
         }
 
         self.cleanup_toasts();
+
+        // 轮询异步结果
+
+        // 验证码加载结果
+        if let Some(rx) = &mut self.captcha_rx {
+            if let Ok(result) = rx.try_recv() {
+                match result {
+                    Ok(captcha) => {
+                        self.login_captcha_enabled = captcha.captcha_enabled;
+                        self.login_captcha_uuid = captcha.uuid;
+                        self.login_captcha_img = captcha.img;
+                        self.captcha_loaded = true;
+                        // 解码验证码图片
+                        if !self.login_captcha_img.is_empty() {
+                            if let Some(texture) = decode_base64_image(&self.login_captcha_img, ctx) {
+                                self.login_captcha_texture = Some(texture);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        self.login_error = format!("验证码加载失败: {}", e);
+                        self.captcha_loaded = true;
+                    }
+                }
+                self.captcha_rx = None;
+            }
+        }
+
+        // 登录结果
+        if let Some(rx) = &mut self.login_rx {
+            if let Ok(result) = rx.try_recv() {
+                self.login_loading = false;
+                match result {
+                    Ok(login_result) => {
+                        self.token = Some(login_result.token.clone());
+                        self.current_user = Some(login_result.user);
+                        self.login_success();
+                        self.add_toast("登录成功，欢迎回来！", crate::app::ToastLevel::Success);
+                    }
+                    Err(e) => {
+                        self.login_error = e.to_string();
+                        // 刷新验证码
+                        self.captcha_loaded = false;
+                        ctx.request_repaint();
+                    }
+                }
+                self.login_rx = None;
+            }
+        }
 
         // 未登录：全屏认证页面
         if !self.is_logged_in {

@@ -19,6 +19,10 @@ fn main() -> Result<(), eframe::Error> {
         .filter_level(log::LevelFilter::Info)
         .init();
 
+    // 创建 Tokio 运行时，使 API 层可以使用 tokio::spawn
+    let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
+    let _guard = rt.enter(); // 将运行时设为当前线程的默认运行时
+
     let icon = eframe::icon_data::from_png_bytes(include_bytes!("../resources/icon.png").as_slice())
         .unwrap_or_default();
 

@@ -1,5 +1,7 @@
 PezMax-Desktop/
 target/
+build/
+dist/
 node_modules/
 .qoder/
 **/*.rs.bk
