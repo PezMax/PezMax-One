@@ -1,0 +1,46 @@
+[package]
+name = "pezmax-egui"
+version = "0.1.0"
+description = "PezMax - 高性能试卷资源管理桌面客户端 (egui + Metro Design)"
+edition = "2021"
+
+[dependencies]
+# GUI framework
+egui = "0.31"
+eframe = "0.31"
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json", "multipart"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Image loading
+image = "0.25"
+
+# Date/time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Logging
+log = "0.4"
+env_logger = "0.11"
+
+# Error handling
+anyhow = "1"
+thiserror = "2"
+
+# URL parsing
+url = "2"
+
+# Clipboard
+arboard = "3"
+
+# Base64
+base64 = "0.22"
+
+# File dialog
+rfd = "0.15"

@@ -1,0 +1,14 @@
+pub mod login;
+pub mod register;
+pub mod forget_password;
+pub mod home;
+pub mod file_explorer;
+pub mod file_detail;
+pub mod bookmarks;
+pub mod downloads;
+pub mod favorites;
+pub mod notifications;
+pub mod profile;
+pub mod security;
+pub mod report;
+pub mod settings;
