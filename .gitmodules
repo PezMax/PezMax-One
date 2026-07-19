@@ -1,0 +1,3 @@
+[submodule "PezMax-Backend"]
+	path = PezMax-Backend
+	url = git@github.com:Torchman005/PezMax-Backend.git
