@@ -7,6 +7,7 @@ mod api;
 mod app;
 mod components;
 mod pages;
+mod sokuou;
 mod theme;
 
 use app::PezMaxApp;

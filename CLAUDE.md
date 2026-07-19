@@ -64,10 +64,19 @@ PezMax-One/                  ← product root, Rust crate root
 │       ├── security.rs      ← password + security questions
 │       ├── report.rs
 │       └── settings.rs
+│   └── sokuou/              ← Sokuou Engine（动画系统）
+│       ├── mod.rs           ← 公共 API re-exports + map_range 工具函数
+│       ├── progress.rs      ← Progress：时长驱动线性插值（可中断）
+│       ├── spring.rs        ← SpringAnim：阻尼振荡器解析解
+│       ├── easing.rs        ← 缓动函数（Linear/EaseOutCubic 等）
+│       ├── animator.rs      ← Animation trait + Animator（预留存根）
+│       └── NOTE.md          ← PezMax-One 使用发现记录
 ├── PezMax-Java/             ← git submodule (Java Spring Boot backend)
 ├── PezMax-Desktop/          ← reference: old Electron+Vue3 frontend (gitignored)
 ├── repowiki/                ← knowledge base (tracked for reference)
 ├── resources/icon.png       ← app icon
+├── SOKUOU_ENGINE.md         ← Sokuou Engine 完整设计书
+├── SOKUOU_USAGE.md          ← Sokuou Engine 调用手册（开发者必读）
 └── 后端接口列表.md           ← full API contract for all 34 backend controllers
 ```
 
@@ -102,6 +111,42 @@ Navigation is push-history: `navigate(page)` pushes current page, `go_back()` po
 ### Theme System
 
 `theme/colors` module provides ~20 constants. `apply_metro_theme()` sets egui's `Style`: text sizes, spacing, corner radius, colors. All pages import `colors::*` for consistency.
+
+### Animation System — Sokuou Engine
+
+**All animations and visual transitions MUST use Sokuou Engine** (`src/sokuou/`). Do not implement ad-hoc animations with raw timers, Lerp calls, or egui's built-in animation helpers.
+
+Core API:
+```rust
+use crate::sokuou::{SpringAnim, Progress, Easing, map_range};
+
+// Physical spring — for position, size, panel slides, page transitions
+let mut anim = SpringAnim::new(0.5, 0.825, 0.0); // response=0.5s, damping=0.825
+anim.set_target(1.0);                              // interrupt-safe
+
+// Duration-driven — for opacity, color
+let mut fade = Progress::with_easing(0.2, Easing::EaseOutCubic);
+fade.set_target(1.0);
+
+// Per-frame update (in eframe::App::update)
+let dt = ctx.input(|i| i.stable_dt) as f64;
+anim.update(dt);
+fade.update(dt);
+if !anim.is_steady() { ctx.request_repaint(); }
+
+// Render: read value(), never modify animation state in render
+let alpha = map_range(anim.value(), 0.0, 1.0) as f32;
+let slide = map_range(anim.value(), 40.0, 0.0) as f32;
+```
+
+Full usage guide: **`SOKUOU_USAGE.md`** — read before adding any animation.
+Design spec: `SOKUOU_ENGINE.md`.
+
+Rules:
+- Animation instances live as fields on `PezMaxApp` (or future per-page state structs)
+- Render functions only **read** `.value()` — never call `.set_target()` inside a render function
+- Always call `ctx.request_repaint()` while any animation `!is_steady()`
+- `Animator` in `animator.rs` is a **reserved stub** — do not use until validated
 
 ### Current State
 
