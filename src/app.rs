@@ -168,6 +168,75 @@ pub struct LoginResult {
     pub user: UserInfo,
 }
 
+/// 通用异步数据加载器
+pub struct AsyncData<T> {
+    rx: Option<oneshot::Receiver<anyhow::Result<T>>>,
+    pub data: Option<T>,
+    pub error: Option<String>,
+    pub loading: bool,
+    loaded: bool,
+}
+
+impl<T: Send + 'static> AsyncData<T> {
+    pub fn new() -> Self {
+        Self {
+            rx: None,
+            data: None,
+            error: None,
+            loading: false,
+            loaded: false,
+        }
+    }
+
+    /// 启动异步加载（重复调用不会重复启动）
+    pub fn load<F, Fut>(&mut self, f: F)
+    where
+        F: FnOnce() -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = anyhow::Result<T>> + Send,
+    {
+        if self.loading || self.loaded {
+            return;
+        }
+        self.loading = true;
+        let (tx, rx) = oneshot::channel();
+        self.rx = Some(rx);
+        tokio::spawn(async move {
+            let result = f().await;
+            tx.send(result).ok();
+        });
+    }
+
+    /// 每帧轮询结果
+    pub fn poll(&mut self) {
+        if let Some(rx) = &mut self.rx {
+            if let Ok(result) = rx.try_recv() {
+                self.rx = None;
+                self.loading = false;
+                match result {
+                    Ok(data) => {
+                        self.data = Some(data);
+                        self.loaded = true;
+                    }
+                    Err(e) => {
+                        self.error = Some(e.to_string());
+                        self.loaded = true;
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn is_loaded(&self) -> bool { self.loaded }
+    pub fn is_loading(&self) -> bool { self.loading }
+    pub fn reset(&mut self) {
+        self.rx = None;
+        self.data = None;
+        self.error = None;
+        self.loading = false;
+        self.loaded = false;
+    }
+}
+
 /// 应用主状态
 pub struct PezMaxApp {
     pub api: ApiClient,
@@ -187,6 +256,12 @@ pub struct PezMaxApp {
     // 异步结果接收器
     pub captcha_rx: Option<oneshot::Receiver<anyhow::Result<CaptchaResponse>>>,
     pub login_rx: Option<oneshot::Receiver<anyhow::Result<LoginResult>>>,
+
+    // 异步数据加载器
+    pub notifications: AsyncData<Vec<Notification>>,
+    pub download_records: AsyncData<Vec<DownloadRecord>>,
+    pub recent_files: AsyncData<Vec<PaperFile>>,
+    pub user_stats_data: AsyncData<UserStats>,
 
     // 认证
     pub is_logged_in: bool,
@@ -261,6 +336,11 @@ impl PezMaxApp {
             captcha_rx: None,
             login_rx: None,
 
+            notifications: AsyncData::new(),
+            download_records: AsyncData::new(),
+            recent_files: AsyncData::new(),
+            user_stats_data: AsyncData::new(),
+
             is_logged_in: false,
             auth_page: AuthPage::Login,
             token: None,
@@ -294,7 +374,7 @@ impl PezMaxApp {
         }
     }
 
-    /// 登录成功后调用：进入首页，触发入场动画
+    /// 登录成功后调用：进入首页，触发入场动画，加载统计数据
     pub fn login_success(&mut self) {
         self.is_logged_in = true;
         self.current_section = Section::Home;
@@ -310,6 +390,9 @@ impl PezMaxApp {
         self.login_captcha_texture = None;
         self.login_error.clear();
         self.captcha_loaded = false;
+        // 自动加载首页数据
+        self.trigger_load_user_stats();
+        self.trigger_load_recent_files();
     }
 
     /// 异步加载验证码
@@ -390,6 +473,46 @@ impl PezMaxApp {
             }.await;
 
             tx.send(result).ok();
+        });
+    }
+
+    /// 异步加载通知列表
+    pub fn trigger_load_notifications(&mut self) {
+        let api = self.api.clone();
+        self.notifications.load(move || async move {
+            let resp = api.get_popup_notifications(0).await?;
+            resp.data.ok_or_else(|| anyhow::anyhow!("通知数据为空"))
+        });
+    }
+
+    /// 异步加载下载记录
+    pub fn trigger_load_download_records(&mut self) {
+        let api = self.api.clone();
+        let user_id = self.current_user.as_ref().map(|u| u.user_id).unwrap_or(0);
+        self.download_records.load(move || async move {
+            let params = PageParams { page_num: 1, page_size: 20, ..Default::default() };
+            let resp = api.get_download_list(user_id, &params).await?;
+            Ok(resp.rows)
+        });
+    }
+
+    /// 异步加载最近文件（首页）
+    pub fn trigger_load_recent_files(&mut self) {
+        let api = self.api.clone();
+        self.recent_files.load(move || async move {
+            let params = PageParams { page_num: 1, page_size: 10, ..Default::default() };
+            let resp = api.get_file_list(&params).await?;
+            Ok(resp.rows)
+        });
+    }
+
+    /// 异步加载用户统计
+    pub fn trigger_load_user_stats(&mut self) {
+        let api = self.api.clone();
+        let old_user_stats = self.user_stats.clone();
+        self.user_stats_data.load(move || async move {
+            let resp = api.get_user_stats().await?;
+            resp.data.ok_or_else(|| anyhow::anyhow!("统计数据为空"))
         });
     }
 
@@ -515,6 +638,18 @@ impl eframe::App for PezMaxApp {
                     }
                 }
                 self.login_rx = None;
+            }
+        }
+
+        // 轮询异步数据加载器（仅登录后）
+        if self.is_logged_in {
+            self.notifications.poll();
+            self.download_records.poll();
+            self.recent_files.poll();
+            self.user_stats_data.poll();
+            // 同步 user_stats_data → user_stats（兼容旧代码）
+            if let Some(ref stats) = self.user_stats_data.data {
+                self.user_stats = Some(stats.clone());
             }
         }
 

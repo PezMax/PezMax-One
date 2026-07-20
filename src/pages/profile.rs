@@ -158,7 +158,12 @@ pub fn render_personal_center(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 }
 
 /// 通知列表
-pub fn render_notifications(_app: &mut PezMaxApp, ui: &mut egui::Ui) {
+pub fn render_notifications(app: &mut PezMaxApp, ui: &mut egui::Ui) {
+    // 自动加载通知
+    if !app.notifications.is_loaded() && !app.notifications.is_loading() {
+        app.trigger_load_notifications();
+    }
+
     ui.add_space(16.0);
     ui.label(
         egui::RichText::new("通知")
@@ -167,86 +172,80 @@ pub fn render_notifications(_app: &mut PezMaxApp, ui: &mut egui::Ui) {
     );
     ui.add_space(16.0);
 
-    let notifications = [
-        ("系统通知", "您的账号已通过审核", "2024-06-15 10:30", false),
-        (
-            "下载完成",
-            "「2024高考数学真题」已下载完成",
-            "2024-06-14 15:20",
-            true,
-        ),
-        (
-            "收藏更新",
-            "「2024高考语文真题」内容已更新",
-            "2024-06-13 09:00",
-            true,
-        ),
-    ];
-
     egui::ScrollArea::vertical()
         .id_salt("notif_scroll")
         .show(ui, |ui| {
-            for (title, content, time, is_read) in &notifications {
-                let bg = if *is_read {
-                    colors::BG_CARD
-                } else {
-                    colors::BG_SELECTED
-                };
-                egui::Frame::new()
-                    .fill(bg)
-                    .corner_radius(CornerRadius::same(0))
-                    .stroke(egui::Stroke::new(1.0, colors::BORDER))
-                    .show(ui, |ui| {
-                        ui.set_min_width(ui.available_width());
-                        ui.horizontal(|ui| {
-                            // 未读指示条
-                            if !*is_read {
-                                egui::Frame::new()
-                                    .fill(colors::PRIMARY)
-                                    .show(ui, |ui| {
-                                        ui.allocate_space(Vec2::new(3.0, 48.0));
-                                    });
-                            } else {
-                                ui.add_space(3.0);
-                            }
-                            ui.add_space(12.0);
-                            ui.vertical(|ui| {
-                                ui.add_space(8.0);
-                                ui.label(
-                                    egui::RichText::new(*title)
-                                        .font(FontId::new(
-                                            14.0,
-                                            egui::FontFamily::Proportional,
-                                        ))
-                                        .color(colors::TEXT_PRIMARY),
-                                );
-                                ui.label(
-                                    egui::RichText::new(*content)
-                                        .font(FontId::new(
-                                            13.0,
-                                            egui::FontFamily::Proportional,
-                                        ))
-                                        .color(colors::TEXT_SECONDARY),
-                                );
-                                ui.label(
-                                    egui::RichText::new(*time)
-                                        .font(FontId::new(
-                                            11.0,
-                                            egui::FontFamily::Proportional,
-                                        ))
-                                        .color(colors::TEXT_SECONDARY),
-                                );
-                                ui.add_space(8.0);
+            if let Some(ref list) = app.notifications.data {
+                for notif in list {
+                    let is_read = notif.status == "1";
+                    let bg = if is_read {
+                        colors::BG_CARD
+                    } else {
+                        colors::BG_SELECTED
+                    };
+                    egui::Frame::new()
+                        .fill(bg)
+                        .corner_radius(CornerRadius::same(0))
+                        .stroke(egui::Stroke::new(1.0, colors::BORDER))
+                        .show(ui, |ui| {
+                            ui.set_min_width(ui.available_width());
+                            ui.horizontal(|ui| {
+                                // 未读指示条
+                                if !is_read {
+                                    egui::Frame::new()
+                                        .fill(colors::PRIMARY)
+                                        .show(ui, |ui| {
+                                            ui.allocate_space(Vec2::new(3.0, 48.0));
+                                        });
+                                } else {
+                                    ui.add_space(3.0);
+                                }
+                                ui.add_space(12.0);
+                                ui.vertical(|ui| {
+                                    ui.add_space(8.0);
+                                    ui.label(
+                                        egui::RichText::new(&notif.title)
+                                            .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                                            .color(colors::TEXT_PRIMARY),
+                                    );
+                                    ui.label(
+                                        egui::RichText::new(&notif.content)
+                                            .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                                            .color(colors::TEXT_SECONDARY),
+                                    );
+                                    ui.label(
+                                        egui::RichText::new(&notif.create_time)
+                                            .font(FontId::new(11.0, egui::FontFamily::Proportional))
+                                            .color(colors::TEXT_SECONDARY),
+                                    );
+                                    ui.add_space(8.0);
+                                });
                             });
                         });
-                    });
-                ui.add_space(4.0);
+                    ui.add_space(4.0);
+                }
+            } else {
+                let msg = if app.notifications.is_loading() {
+                    "加载中..."
+                } else {
+                    "暂无通知"
+                };
+                ui.label(
+                    egui::RichText::new(msg)
+                        .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                        .color(colors::TEXT_SECONDARY),
+                );
             }
         });
 }
 
 /// 下载记录
-pub fn render_download_history(_app: &mut PezMaxApp, ui: &mut egui::Ui) {
+pub fn render_download_history(app: &mut PezMaxApp, ui: &mut egui::Ui) {
+    // 自动加载下载记录
+    if !app.download_records.is_loaded() && !app.download_records.is_loading() {
+        app.trigger_load_download_records();
+    }
+
     ui.add_space(16.0);
     ui.label(
         egui::RichText::new("下载记录")
@@ -255,65 +254,74 @@ pub fn render_download_history(_app: &mut PezMaxApp, ui: &mut egui::Ui) {
     );
     ui.add_space(16.0);
 
-    let records = [
-        ("2024高考数学真题", "数学", "2024-06-15", "2.3MB"),
-        ("2024高考语文真题", "语文", "2024-06-14", "1.8MB"),
-        ("2023高考英语真题", "英语", "2024-06-10", "1.5MB"),
-    ];
-
     egui::ScrollArea::vertical()
         .id_salt("download_scroll")
         .show(ui, |ui| {
-            for (name, subject, date, size) in &records {
-                egui::Frame::new()
-                    .fill(colors::BG_CARD)
-                    .corner_radius(CornerRadius::same(0))
-                    .stroke(egui::Stroke::new(1.0, colors::BORDER))
-                    .show(ui, |ui| {
-                        ui.set_min_width(ui.available_width());
-                        ui.horizontal(|ui| {
-                            ui.add_space(12.0);
-                            ui.label(
-                                egui::RichText::new("📄")
-                                    .font(FontId::new(
-                                        20.0,
-                                        egui::FontFamily::Proportional,
-                                    )),
-                            );
-                            ui.add_space(10.0);
-                            ui.vertical(|ui| {
-                                ui.add_space(8.0);
+            if let Some(ref list) = app.download_records.data {
+                for record in list {
+                    egui::Frame::new()
+                        .fill(colors::BG_CARD)
+                        .corner_radius(CornerRadius::same(0))
+                        .stroke(egui::Stroke::new(1.0, colors::BORDER))
+                        .show(ui, |ui| {
+                            ui.set_min_width(ui.available_width());
+                            ui.horizontal(|ui| {
+                                ui.add_space(12.0);
                                 ui.label(
-                                    egui::RichText::new(*name)
-                                        .font(FontId::new(
-                                            14.0,
-                                            egui::FontFamily::Proportional,
+                                    egui::RichText::new("📄")
+                                        .font(FontId::new(20.0, egui::FontFamily::Proportional)),
+                                );
+                                ui.add_space(10.0);
+                                ui.vertical(|ui| {
+                                    ui.add_space(8.0);
+                                    ui.label(
+                                        egui::RichText::new(&record.file_name)
+                                            .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                                            .color(colors::TEXT_PRIMARY),
+                                    );
+                                    ui.label(
+                                        egui::RichText::new(format!(
+                                            "{} · {}",
+                                            record.file_format, record.download_time
                                         ))
-                                        .color(colors::TEXT_PRIMARY),
+                                        .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                                        .color(colors::TEXT_SECONDARY),
+                                    );
+                                    ui.add_space(8.0);
+                                });
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        ui.add_space(12.0);
+                                        if ui.small_button("隐藏").clicked() {
+                                            // 隐藏下载记录
+                                            if let Some(ref user) = app.current_user {
+                                                // 异步执行
+                                                let api = app.api.clone();
+                                                let uid = user.user_id;
+                                                let fid = record.file_id;
+                                                tokio::spawn(async move {
+                                                    let _ = api.hide_download(uid, fid).await;
+                                                });
+                                            }
+                                        }
+                                    },
                                 );
-                                ui.label(
-                                    egui::RichText::new(format!(
-                                        "{} · {} · {}",
-                                        subject, date, size
-                                    ))
-                                    .font(FontId::new(
-                                        12.0,
-                                        egui::FontFamily::Proportional,
-                                    ))
-                                    .color(colors::TEXT_SECONDARY),
-                                );
-                                ui.add_space(8.0);
                             });
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    ui.add_space(12.0);
-                                    if ui.small_button("隐藏").clicked() {}
-                                },
-                            );
                         });
-                    });
-                ui.add_space(4.0);
+                    ui.add_space(4.0);
+                }
+            } else {
+                let msg = if app.download_records.is_loading() {
+                    "加载中..."
+                } else {
+                    "暂无下载记录"
+                };
+                ui.label(
+                    egui::RichText::new(msg)
+                        .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                        .color(colors::TEXT_SECONDARY),
+                );
             }
         });
 }

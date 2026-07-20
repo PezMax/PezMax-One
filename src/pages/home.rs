@@ -210,57 +210,55 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
             );
             ui.add_space(8.0);
 
-            let recent = [
-                ("2024高考数学真题", "数学", "2024-06-15", "张三"),
-                ("2024高考语文真题", "语文", "2024-06-14", "李四"),
-                ("2024高考英语真题", "英语", "2024-06-13", "王五"),
-                ("2023高考物理真题", "物理", "2024-06-10", "赵六"),
-            ];
-
-            for (name, subject, date, uploader) in &recent {
-                egui::Frame::new()
-                    .fill(colors::BG_CARD)
-                    .corner_radius(CornerRadius::same(0))
-                    .stroke(egui::Stroke::new(1.0, colors::BORDER))
-                    .show(ui, |ui| {
-                        ui.set_min_width(ui.available_width());
-                        ui.horizontal(|ui| {
-                            ui.add_space(12.0);
-                            ui.label(
-                                egui::RichText::new("📄")
-                                    .font(FontId::new(20.0, egui::FontFamily::Proportional)),
-                            );
-                            ui.add_space(10.0);
-                            ui.vertical(|ui| {
-                                ui.add_space(8.0);
+            if let Some(ref files) = app.recent_files.data {
+                for file in files.iter().take(10) {
+                    egui::Frame::new()
+                        .fill(colors::BG_CARD)
+                        .corner_radius(CornerRadius::same(0))
+                        .stroke(egui::Stroke::new(1.0, colors::BORDER))
+                        .show(ui, |ui| {
+                            ui.set_min_width(ui.available_width());
+                            ui.horizontal(|ui| {
+                                ui.add_space(12.0);
                                 ui.label(
-                                    egui::RichText::new(*name)
-                                        .font(FontId::new(
-                                            14.0,
-                                            egui::FontFamily::Proportional,
+                                    egui::RichText::new("📄")
+                                        .font(FontId::new(20.0, egui::FontFamily::Proportional)),
+                                );
+                                ui.add_space(10.0);
+                                ui.vertical(|ui| {
+                                    ui.add_space(8.0);
+                                    ui.label(
+                                        egui::RichText::new(&file.file_name)
+                                            .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                                            .color(colors::TEXT_PRIMARY),
+                                    );
+                                    ui.label(
+                                        egui::RichText::new(format!(
+                                            "{} · {} · by {}",
+                                            file.file_subject, file.create_time, file.file_uploader
                                         ))
-                                        .color(colors::TEXT_PRIMARY),
+                                        .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                                        .color(colors::TEXT_SECONDARY),
+                                    );
+                                    ui.add_space(8.0);
+                                });
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        ui.add_space(12.0);
+                                        if ui.small_button("📥 下载").clicked() {}
+                                    },
                                 );
-                                ui.label(
-                                    egui::RichText::new(format!(
-                                        "{} · {} · by {}",
-                                        subject, date, uploader
-                                    ))
-                                    .font(FontId::new(12.0, egui::FontFamily::Proportional))
-                                    .color(colors::TEXT_SECONDARY),
-                                );
-                                ui.add_space(8.0);
                             });
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    ui.add_space(12.0);
-                                    if ui.small_button("📥 下载").clicked() {}
-                                },
-                            );
                         });
-                    });
-                ui.add_space(4.0);
+                    ui.add_space(4.0);
+                }
+            } else {
+                ui.label(
+                    egui::RichText::new(if app.recent_files.is_loading() { "加载中..." } else { "暂无最近更新" })
+                        .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                        .color(colors::TEXT_SECONDARY),
+                );
             }
 
             ui.add_space(16.0);
