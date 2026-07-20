@@ -20,12 +20,15 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                 ui.add_space(16.0);
 
                 // 全局搜索框
-                ui.add(
-                    egui::TextEdit::singleline(&mut app.search_query)
-                        .hint_text("🔍 搜索试卷、学科、学校...")
-                        .desired_width(280.0)
-                        .font(FontId::new(14.0, egui::FontFamily::Proportional)),
-                );
+                ui.scope(|ui| {
+                    crate::theme::apply_search_style(ui);
+                    ui.add(
+                        egui::TextEdit::singleline(&mut app.search_query)
+                            .hint_text("🔍 搜索试卷、学科、学校...")
+                            .desired_width(280.0)
+                            .font(FontId::new(14.0, egui::FontFamily::Proportional)),
+                    );
+                });
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.add_space(16.0);

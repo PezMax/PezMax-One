@@ -554,12 +554,15 @@ pub fn render_bookmarks(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                         .color(colors::text_secondary()),
                 );
                 ui.add_space(8.0);
-                ui.add(
-                    egui::TextEdit::singleline(&mut app.bookmark_form_name)
-                        .hint_text("书签名称")
-                        .desired_width(200.0)
-                        .font(FontId::new(14.0, egui::FontFamily::Proportional)),
-                );
+                ui.scope(|ui| {
+                    crate::theme::apply_search_style(ui);
+                    ui.add(
+                        egui::TextEdit::singleline(&mut app.bookmark_form_name)
+                            .hint_text("书签名称")
+                            .desired_width(200.0)
+                            .font(FontId::new(14.0, egui::FontFamily::Proportional)),
+                    );
+                });
             });
             ui.add_space(8.0);
             ui.horizontal(|ui| {
@@ -570,12 +573,15 @@ pub fn render_bookmarks(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                         .color(colors::text_secondary()),
                 );
                 ui.add_space(8.0);
-                ui.add(
-                    egui::TextEdit::singleline(&mut app.bookmark_form_url)
-                        .hint_text("https://...")
-                        .desired_width(300.0)
-                        .font(FontId::new(14.0, egui::FontFamily::Proportional)),
-                );
+                ui.scope(|ui| {
+                    crate::theme::apply_search_style(ui);
+                    ui.add(
+                        egui::TextEdit::singleline(&mut app.bookmark_form_url)
+                            .hint_text("https://...")
+                            .desired_width(300.0)
+                            .font(FontId::new(14.0, egui::FontFamily::Proportional)),
+                    );
+                });
             });
             ui.add_space(12.0);
             ui.horizontal(|ui| {

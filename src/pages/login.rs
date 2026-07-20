@@ -61,12 +61,15 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                                     .font(FontId::new(14.0, egui::FontFamily::Proportional))
                                     .color(colors::text_primary()),
                             );
-                            ui.add(
-                                egui::TextEdit::singleline(&mut app.login_username)
-                                    .hint_text("请输入用户名")
-                                    .desired_width(200.0)
-                                    .font(FontId::new(14.0, egui::FontFamily::Proportional)),
-                            );
+                            ui.scope(|ui| {
+                                crate::theme::apply_search_style(ui);
+                                ui.add(
+                                    egui::TextEdit::singleline(&mut app.login_username)
+                                        .hint_text("请输入用户名")
+                                        .desired_width(200.0)
+                                        .font(FontId::new(14.0, egui::FontFamily::Proportional)),
+                                );
+                            });
                         });
 
                         ui.add_space(12.0);
@@ -79,13 +82,16 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                                     .font(FontId::new(14.0, egui::FontFamily::Proportional))
                                     .color(colors::text_primary()),
                             );
-                            ui.add(
-                                egui::TextEdit::singleline(&mut app.login_password)
-                                    .hint_text("请输入密码")
-                                    .password(true)
-                                    .desired_width(200.0)
-                                    .font(FontId::new(14.0, egui::FontFamily::Proportional)),
-                            );
+                            ui.scope(|ui| {
+                                crate::theme::apply_search_style(ui);
+                                ui.add(
+                                    egui::TextEdit::singleline(&mut app.login_password)
+                                        .hint_text("请输入密码")
+                                        .password(true)
+                                        .desired_width(200.0)
+                                        .font(FontId::new(14.0, egui::FontFamily::Proportional)),
+                                );
+                            });
                         });
 
                         // ── 验证码 ──────────────────────────────────────
@@ -98,12 +104,15 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                                         .font(FontId::new(14.0, egui::FontFamily::Proportional))
                                         .color(colors::text_primary()),
                                 );
-                                ui.add(
-                                    egui::TextEdit::singleline(&mut app.login_captcha)
-                                        .hint_text("验证码")
-                                        .desired_width(100.0)
-                                        .font(FontId::new(14.0, egui::FontFamily::Proportional)),
-                                );
+                                ui.scope(|ui| {
+                                    crate::theme::apply_search_style(ui);
+                                    ui.add(
+                                        egui::TextEdit::singleline(&mut app.login_captcha)
+                                            .hint_text("验证码")
+                                            .desired_width(100.0)
+                                            .font(FontId::new(14.0, egui::FontFamily::Proportional)),
+                                    );
+                                });
                                 ui.add_space(8.0);
 
                                 // 验证码图片

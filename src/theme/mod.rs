@@ -1,16 +1,43 @@
 // PezMax egui Desktop — 主题系统
 // Metro Design 风格：扁平、大字体、内容优先、色块分区
-// 支持浅色 / 深色模式（thread_local IS_DARK 驱动）
+// 支持浅色 / 深色 / 跟随系统，以及 Ncrust 同款强调色预设
 
 use egui::{FontFamily, FontId, TextStyle, Vec2};
 use std::borrow::Cow;
 use std::cell::Cell;
 use std::sync::Arc;
 
-// ── 深色模式全局开关 ─────────────────────────────────────────────────────────
+// ── 外观模式 ─────────────────────────────────────────────────────────────────
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum ThemeMode {
+    Light,
+    Dark,
+    System,
+}
+
+// ── 强调色预设（延续 Ncrust 风格）──────────────────────────────────────────
+
+pub struct AccentPreset {
+    pub name: &'static str,
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+}
+
+pub const ACCENT_PRESETS: &[AccentPreset] = &[
+    AccentPreset { name: "钴蓝", r: 0x3B, g: 0x82, b: 0xF6 },
+    AccentPreset { name: "云杉", r: 0x1D, g: 0xB9, b: 0x54 },
+    AccentPreset { name: "绯红", r: 0xEF, g: 0x44, b: 0x44 },
+    AccentPreset { name: "琥珀", r: 0xF5, g: 0x9E, b: 0x0B },
+    AccentPreset { name: "堇紫", r: 0x8B, g: 0x5C, b: 0xF6 },
+];
+
+// ── 线程局部全局状态 ─────────────────────────────────────────────────────────
 
 thread_local! {
-    static IS_DARK: Cell<bool> = const { Cell::new(false) };
+    static IS_DARK:     Cell<bool>  = const { Cell::new(false) };
+    static ACCENT_IDX:  Cell<usize> = const { Cell::new(0) };
 }
 
 pub fn set_dark(dark: bool) {
@@ -21,18 +48,49 @@ pub fn is_dark() -> bool {
     IS_DARK.with(|d| d.get())
 }
 
+pub fn set_accent(idx: usize) {
+    ACCENT_IDX.with(|i| i.set(idx.min(ACCENT_PRESETS.len().saturating_sub(1))));
+}
+
+pub fn accent_idx() -> usize {
+    ACCENT_IDX.with(|i| i.get())
+}
+
+/// ThemeMode::System 时查询 egui 的系统主题；Light/Dark 直接返回
+pub fn effective_dark(ctx: &egui::Context) -> bool {
+    // 注意：ThemeMode 本身不存在线程局部，由 PezMaxApp.theme_mode 持有
+    // 调用者在 update() 里传入当前 mode 以避免跨层依赖
+    // 这里仅暴露系统检测逻辑供 app.rs 使用
+    ctx.system_theme().map(|t| t == egui::Theme::Dark).unwrap_or(false)
+}
+
 // ── 调色板（函数化，运行时读取模式）────────────────────────────────────────
 
 pub mod colors {
     use egui::Color32;
-    use super::is_dark;
+    use super::{accent_idx, is_dark, ACCENT_PRESETS};
 
-    // ── 主色（固定，两种模式下均可读）──────────────────────────────────────
-    pub fn primary()       -> Color32 { Color32::from_rgb(0x00, 0x78, 0xD4) }
-    pub fn primary_dark()  -> Color32 { Color32::from_rgb(0x00, 0x5A, 0x9E) }
-    pub fn primary_light() -> Color32 { Color32::from_rgb(0x4B, 0xA3, 0xE0) }
+    // ── 强调色（从当前预设读取）────────────────────────────────────────────
+    pub fn primary() -> Color32 {
+        let p = &ACCENT_PRESETS[accent_idx()];
+        Color32::from_rgb(p.r, p.g, p.b)
+    }
 
-    // ── 强调色（固定）───────────────────────────────────────────────────────
+    pub fn primary_dark() -> Color32 {
+        let p = &ACCENT_PRESETS[accent_idx()];
+        Color32::from_rgb(p.r * 7 / 10, p.g * 7 / 10, p.b * 7 / 10)
+    }
+
+    pub fn primary_light() -> Color32 {
+        let p = &ACCENT_PRESETS[accent_idx()];
+        Color32::from_rgb(
+            (p.r as u16 * 7 / 10 + 255 * 3 / 10) as u8,
+            (p.g as u16 * 7 / 10 + 255 * 3 / 10) as u8,
+            (p.b as u16 * 7 / 10 + 255 * 3 / 10) as u8,
+        )
+    }
+
+    // ── 其他固定强调色 ─────────────────────────────────────────────────────
     pub fn accent_orange() -> Color32 { Color32::from_rgb(0xF7, 0x63, 0x00) }
     pub fn accent_green()  -> Color32 { Color32::from_rgb(0x00, 0xBC, 0x70) }
     pub fn accent_purple() -> Color32 { Color32::from_rgb(0x88, 0x44, 0xAA) }
@@ -70,10 +128,31 @@ pub mod colors {
         if is_dark() { Color32::from_rgb(0x35, 0x35, 0x5A) }
         else         { Color32::from_rgb(0xD0, 0xD0, 0xE8) }
     }
-    /// 输入框 / 预览区背景
     pub fn bg_input() -> Color32 {
         if is_dark() { Color32::from_rgb(0x20, 0x20, 0x20) }
         else         { Color32::from_rgb(0xF0, 0xF0, 0xF0) }
+    }
+
+    /// 搜索框/输入框背景：强调色去饱和后的深/浅灰调
+    /// 15% 强调色 + 85% 底色，保留微弱色彩倾向
+    pub fn bg_search() -> Color32 {
+        let p = &ACCENT_PRESETS[accent_idx()];
+        let (r, g, b) = (p.r as u16, p.g as u16, p.b as u16);
+        if is_dark() {
+            let base = 0x1C_u16;
+            Color32::from_rgb(
+                ((r * 15 + base * 85) / 100) as u8,
+                ((g * 15 + base * 85) / 100) as u8,
+                ((b * 15 + base * 85) / 100) as u8,
+            )
+        } else {
+            let base = 0xF2_u16;
+            Color32::from_rgb(
+                ((r * 10 + base * 90) / 100) as u8,
+                ((g * 10 + base * 90) / 100) as u8,
+                ((b * 10 + base * 90) / 100) as u8,
+            )
+        }
     }
 
     // ── 边框 ────────────────────────────────────────────────────────────────
@@ -103,6 +182,16 @@ pub mod colors {
     pub fn overlay() -> Color32 { Color32::from_rgba_premultiplied(0, 0, 0, 128) }
 }
 
+/// 将搜索框/输入框专属视觉样式注入到当前 ui 作用域：
+/// 去饱和强调色背景 + 完全无边框（Metro/Ncrust 无框设计）
+/// 在 ui.scope() 内调用，确保样式不溢出到周围控件
+pub fn apply_search_style(ui: &mut egui::Ui) {
+    ui.visuals_mut().extreme_bg_color = colors::bg_search();
+    ui.visuals_mut().widgets.inactive.bg_stroke = egui::Stroke::NONE;
+    ui.visuals_mut().widgets.hovered.bg_stroke  = egui::Stroke::NONE;
+    ui.visuals_mut().widgets.active.bg_stroke   = egui::Stroke::NONE;
+}
+
 /// 获取 Metro Design 风格的字体大小体系
 pub fn metro_text_styles() -> std::collections::BTreeMap<TextStyle, FontId> {
     use TextStyle::*;
@@ -120,25 +209,18 @@ pub fn metro_text_styles() -> std::collections::BTreeMap<TextStyle, FontId> {
 }
 
 /// 加载系统 CJK 字体作为 primary 字体，确保中文文字清晰渲染
-/// 插入到字体列表最前面，避免因回退到不同度量字体导致的模糊
-/// 按平台优先级尝试：Windows 微软雅黑 → macOS PingFang → Linux Noto CJK → WenQuanYi
 pub fn setup_fonts(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
 
-    // (路径, font_index, 说明) — font_index 用于 TTC 多字体集合文件
     let candidates: &[(&str, u32, &str)] = &[
-        // Windows — 微软雅黑（优先，最常用）
         ("C:\\Windows\\Fonts\\msyh.ttc", 0, "Microsoft YaHei Regular"),
         ("C:\\Windows\\Fonts\\simsun.ttc", 0, "SimSun"),
         ("C:\\Windows\\Fonts\\simhei.ttf", 0, "SimHei"),
-        // macOS
         ("/System/Library/Fonts/PingFang.ttc", 0, "PingFang SC Regular"),
         ("/Library/Fonts/Arial Unicode.ttf", 0, "Arial Unicode"),
-        // Linux — Noto CJK（字形最全，推荐）
         ("/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc", 0, "Noto Sans CJK Regular"),
         ("/usr/share/fonts/noto/NotoSansCJK-Regular.ttc", 0, "Noto Sans CJK Regular"),
         ("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", 0, "Noto Sans CJK Regular"),
-        // Linux — WenQuanYi（备选）
         ("/usr/share/fonts/wenquanyi/wqy-microhei/wqy-microhei.ttc", 0, "WenQuanYi Micro Hei"),
         ("/usr/share/fonts/wqy-microhei/wqy-microhei.ttc", 0, "WenQuanYi Micro Hei"),
         ("/usr/share/fonts/truetype/wqy/wqy-microhei.ttc", 0, "WenQuanYi Micro Hei"),
@@ -147,8 +229,6 @@ pub fn setup_fonts(ctx: &egui::Context) {
     for (path, font_index, _label) in candidates {
         if let Ok(bytes) = std::fs::read(path) {
             let font_name = "system_cjk".to_owned();
-
-            // 直接构造 FontData 以显式设置 index 和 tweak
             fonts.font_data.insert(
                 font_name.clone(),
                 Arc::new(egui::FontData {
@@ -162,18 +242,10 @@ pub fn setup_fonts(ctx: &egui::Context) {
                     },
                 }),
             );
-
-            // 关键：插入到最前面（作为 primary 字体），而非 append
-            // 这样 CJK 和 Latin 字符都由同一字体渲染，避免回退模糊
             let prop = fonts.families.entry(FontFamily::Proportional).or_default();
-            if !prop.contains(&font_name) {
-                prop.insert(0, font_name.clone());
-            }
+            if !prop.contains(&font_name) { prop.insert(0, font_name.clone()); }
             let mono = fonts.families.entry(FontFamily::Monospace).or_default();
-            if !mono.contains(&font_name) {
-                mono.insert(0, font_name);
-            }
-
+            if !mono.contains(&font_name) { mono.insert(0, font_name); }
             log::info!("Loaded CJK font from: {} (index: {})", path, font_index);
             break;
         }
@@ -182,8 +254,7 @@ pub fn setup_fonts(ctx: &egui::Context) {
     ctx.set_fonts(fonts);
 }
 
-/// 应用 Metro Design 主题到 egui 上下文（每次切换深浅色后都应调用）
-/// 显式设置所有 widget 状态的颜色，确保深/浅模式下文字、边框、勾选标记都可见
+/// 应用 Metro Design 主题到 egui 上下文（每次切换模式/强调色后都应调用）
 pub fn apply_metro_theme(ctx: &egui::Context) {
     let dark = is_dark();
     let mut style = (*ctx.style()).clone();
@@ -193,15 +264,9 @@ pub fn apply_metro_theme(ctx: &egui::Context) {
     style.spacing.button_padding = Vec2::new(16.0, 8.0);
     style.spacing.indent = 24.0;
 
-    // 基础 visuals（先取深/浅默认值，再逐一覆盖）
     style.visuals = if dark { egui::Visuals::dark() } else { egui::Visuals::light() };
     style.visuals.dark_mode = dark;
 
-    // ── 覆盖所有视觉属性 ────────────────────────────────────────────────
-
-    // 文本色（全局覆盖，所有 label / button / textedit 文本均受控）
-    // 设为 None 以允许 RichText.color() 显式设置优先，
-    // 否则侧边栏（永远深色背景）上的白色图标会被浅色模式的深色 text_primary 覆盖
     style.visuals.override_text_color = None;
     style.visuals.hyperlink_color = colors::primary();
     style.visuals.selection.stroke = egui::Stroke { width: 1.0, color: colors::primary() };
@@ -209,27 +274,22 @@ pub fn apply_metro_theme(ctx: &egui::Context) {
     style.visuals.warn_fg_color = colors::warning();
     style.visuals.error_fg_color = colors::error();
 
-    // 背景
     style.visuals.window_fill = colors::bg_white();
     style.visuals.panel_fill = colors::bg_white();
     style.visuals.faint_bg_color = colors::bg_card();
     style.visuals.extreme_bg_color = colors::bg_card();
     style.visuals.code_bg_color = colors::bg_input();
 
-    // 滑块轨道
     style.visuals.slider_trailing_fill = false;
 
-    // 全局直角
     let zero = egui::CornerRadius::same(0);
     style.visuals.window_corner_radius = zero;
     style.visuals.menu_corner_radius = zero;
 
-    // ── 所有 widget 状态配色（杜绝默认值泄漏）───────────────────────────
     let border_color = colors::border();
     let text_fg   = colors::text_primary();
     let text_weak = colors::text_secondary();
 
-    // noninteractive：提示文字、禁用边框、分隔线
     style.visuals.widgets.noninteractive = egui::style::WidgetVisuals {
         bg_fill:       colors::bg_card(),
         weak_bg_fill:  colors::bg_input(),
@@ -238,8 +298,6 @@ pub fn apply_metro_theme(ctx: &egui::Context) {
         corner_radius: zero,
         expansion:     0.0,
     };
-
-    // inactive：普通控件（按钮、输入框、复选框框体）
     style.visuals.widgets.inactive = egui::style::WidgetVisuals {
         bg_fill:       colors::bg_card(),
         weak_bg_fill:  colors::bg_white(),
@@ -248,8 +306,6 @@ pub fn apply_metro_theme(ctx: &egui::Context) {
         corner_radius: zero,
         expansion:     0.0,
     };
-
-    // hovered：悬停态
     style.visuals.widgets.hovered = egui::style::WidgetVisuals {
         bg_fill:       colors::bg_hover(),
         weak_bg_fill:  colors::bg_hover(),
@@ -258,8 +314,6 @@ pub fn apply_metro_theme(ctx: &egui::Context) {
         corner_radius: zero,
         expansion:     0.0,
     };
-
-    // active：按下态
     style.visuals.widgets.active = egui::style::WidgetVisuals {
         bg_fill:       colors::bg_selected(),
         weak_bg_fill:  colors::bg_selected(),
@@ -268,8 +322,6 @@ pub fn apply_metro_theme(ctx: &egui::Context) {
         corner_radius: zero,
         expansion:     0.0,
     };
-
-    // open：展开态（如下拉菜单）
     style.visuals.widgets.open = egui::style::WidgetVisuals {
         bg_fill:       colors::bg_selected(),
         weak_bg_fill:  colors::bg_selected(),

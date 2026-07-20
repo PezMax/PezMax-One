@@ -318,11 +318,15 @@ fn contribute_field(ui: &mut egui::Ui, label: &str, value: &mut String, hint: &s
             ),
         );
         ui.add_space(8.0);
-        let edit = egui::TextEdit::singleline(value)
-            .hint_text(hint)
-            .desired_width(200.0)
-            .font(FontId::new(14.0, egui::FontFamily::Proportional));
-        ui.add(edit);
+        ui.scope(|ui| {
+            crate::theme::apply_search_style(ui);
+            ui.add(
+                egui::TextEdit::singleline(value)
+                    .hint_text(hint)
+                    .desired_width(200.0)
+                    .font(FontId::new(14.0, egui::FontFamily::Proportional)),
+            );
+        });
     });
 }
 
@@ -361,11 +365,15 @@ pub fn render_report_record(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                         .color(colors::text_secondary()),
                 );
                 ui.add_space(8.0);
-                let edit = egui::TextEdit::singleline(&mut app.report_content)
-                    .hint_text("请描述违规内容")
-                    .desired_width(300.0)
-                    .font(FontId::new(14.0, egui::FontFamily::Proportional));
-                ui.add(edit);
+                ui.scope(|ui| {
+                    crate::theme::apply_search_style(ui);
+                    ui.add(
+                        egui::TextEdit::singleline(&mut app.report_content)
+                            .hint_text("请描述违规内容")
+                            .desired_width(300.0)
+                            .font(FontId::new(14.0, egui::FontFamily::Proportional)),
+                    );
+                });
             });
             ui.add_space(12.0);
 

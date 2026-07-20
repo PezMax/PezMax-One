@@ -2,7 +2,7 @@
 // 四个子标签：个人中心 / 通知 / 下载记录 / 设置
 
 use crate::app::PezMaxApp;
-use crate::theme::colors;
+use crate::theme::{colors, ThemeMode, ACCENT_PRESETS};
 use egui::{CornerRadius, FontId, Vec2};
 
 /// 个人中心：用户信息卡片 + 统计数据 + 账号安全设置
@@ -348,8 +348,17 @@ pub fn render_app_settings(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                 "登录时自动启动 PezMax",
                 &mut app.setting_auto_launch,
             );
+
+            ui.add_space(12.0);
+
+            // ── 外观 ──────────────────────────────────────────────
+            settings_group_label(ui, "外观");
+
+            // 外观模式：浅色 / 深色 / 跟随系统
+            theme_mode_row(ui, &mut app.theme_mode);
             ui.add_space(2.0);
-            toggle_row(ui, "深色模式", "切换深色 / 浅色外观", &mut app.dark_mode);
+            // 强调色色块选择
+            accent_color_row(ui, &mut app.accent_idx);
 
             ui.add_space(12.0);
 
@@ -364,14 +373,6 @@ pub fn render_app_settings(app: &mut PezMaxApp, ui: &mut egui::Ui) {
             );
             ui.add_space(2.0);
             settings_info_row(ui, "默认路径", "~/Downloads/PezMax");
-
-            ui.add_space(12.0);
-
-            // ── 外观 ──────────────────────────────────────────────
-            settings_group_label(ui, "外观");
-            settings_info_row(ui, "强调色", "蓝色（更多颜色开发中）");
-            ui.add_space(2.0);
-            settings_info_row(ui, "壁纸", "无");
 
             ui.add_space(12.0);
 
@@ -543,4 +544,119 @@ fn action_row(ui: &mut egui::Ui, label: &str, desc: &str) -> egui::Response {
         })
         .response
         .interact(egui::Sense::click())
+}
+
+/// 外观模式三态选择行：浅色 / 深色 / 跟随系统
+fn theme_mode_row(ui: &mut egui::Ui, mode: &mut ThemeMode) {
+    egui::Frame::new()
+        .fill(colors::bg_card())
+        .corner_radius(CornerRadius::same(0))
+        .stroke(egui::Stroke::new(1.0, colors::border()))
+        .show(ui, |ui| {
+            ui.set_min_width(ui.available_width());
+            ui.horizontal(|ui| {
+                ui.add_space(16.0);
+                ui.vertical(|ui| {
+                    ui.add_space(10.0);
+                    ui.label(
+                        egui::RichText::new("外观模式")
+                            .font(FontId::new(15.0, egui::FontFamily::Proportional))
+                            .color(colors::text_primary()),
+                    );
+                    ui.add_space(10.0);
+                });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.add_space(16.0);
+                    for (variant, label) in [
+                        (ThemeMode::System, "跟随系统"),
+                        (ThemeMode::Dark,   "深色"),
+                        (ThemeMode::Light,  "浅色"),
+                    ] {
+                        let selected = *mode == variant;
+                        let btn = egui::Button::new(
+                            egui::RichText::new(label)
+                                .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                                .color(if selected {
+                                    colors::text_on_primary()
+                                } else {
+                                    colors::text_secondary()
+                                }),
+                        )
+                        .fill(if selected { colors::primary() } else { colors::bg_input() })
+                        .corner_radius(CornerRadius::same(0))
+                        .min_size(Vec2::new(0.0, 28.0));
+                        if ui.add(btn).clicked() {
+                            *mode = variant;
+                        }
+                        ui.add_space(4.0);
+                    }
+                });
+            });
+        });
+}
+
+/// 强调色色块选择行
+fn accent_color_row(ui: &mut egui::Ui, accent_idx: &mut usize) {
+    egui::Frame::new()
+        .fill(colors::bg_card())
+        .corner_radius(CornerRadius::same(0))
+        .stroke(egui::Stroke::new(1.0, colors::border()))
+        .show(ui, |ui| {
+            ui.set_min_width(ui.available_width());
+            ui.horizontal(|ui| {
+                ui.add_space(16.0);
+                ui.vertical(|ui| {
+                    ui.add_space(10.0);
+                    ui.label(
+                        egui::RichText::new("强调色")
+                            .font(FontId::new(15.0, egui::FontFamily::Proportional))
+                            .color(colors::text_primary()),
+                    );
+                    ui.add_space(10.0);
+                });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.add_space(16.0);
+                    for (i, preset) in ACCENT_PRESETS.iter().enumerate().rev() {
+                        let selected = *accent_idx == i;
+                        let color = egui::Color32::from_rgb(preset.r, preset.g, preset.b);
+                        let (rect, resp) = ui.allocate_exact_size(
+                            Vec2::splat(28.0),
+                            egui::Sense::click(),
+                        );
+                        if resp.clicked() {
+                            *accent_idx = i;
+                        }
+                        // 色块本体
+                        ui.painter().rect_filled(rect, 0.0, color);
+                        // 选中时：白色对勾
+                        if selected {
+                            ui.painter().text(
+                                rect.center(),
+                                egui::Align2::CENTER_CENTER,
+                                "✓",
+                                FontId::new(16.0, egui::FontFamily::Proportional),
+                                egui::Color32::WHITE,
+                            );
+                        }
+                        // 悬停时：高亮边框
+                        if resp.hovered() {
+                            ui.painter().rect_stroke(
+                                rect,
+                                0.0,
+                                egui::Stroke::new(2.0, egui::Color32::WHITE),
+                                egui::StrokeKind::Outside,
+                            );
+                        }
+                        ui.add_space(6.0);
+                    }
+                    // 当前颜色名称
+                    ui.add_space(8.0);
+                    ui.label(
+                        egui::RichText::new(ACCENT_PRESETS[*accent_idx].name)
+                            .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                            .color(colors::text_secondary()),
+                    );
+                });
+            });
+        });
 }

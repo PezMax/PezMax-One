@@ -380,7 +380,10 @@ pub struct PezMaxApp {
     // 设置开关
     pub setting_auto_launch: bool,
     pub setting_silent_download: bool,
-    pub dark_mode: bool,
+
+    // 外观：外观模式 + 强调色索引（对应 theme::ACCENT_PRESETS）
+    pub theme_mode: theme::ThemeMode,
+    pub accent_idx: usize,
 
     // PDF 引擎（全局单例，Arc<Sync>）
     pub pdf_engine: Arc<PdfEngine>,
@@ -465,7 +468,8 @@ impl PezMaxApp {
             report_content: String::new(),
             setting_auto_launch: false,
             setting_silent_download: false,
-            dark_mode: false,
+            theme_mode: theme::ThemeMode::System,
+            accent_idx: 0,
 
             pdf_engine,
             pdf_viewer: PdfViewer::new(),
@@ -874,10 +878,15 @@ impl eframe::App for PezMaxApp {
             );
         }
 
-        // 深色模式切换：同步 thread_local 并重新应用主题
-        let current_dark = theme::is_dark();
-        if self.dark_mode != current_dark {
-            theme::set_dark(self.dark_mode);
+        // 外观同步：每帧解析有效深色模式 + 强调色，变化时重新应用主题
+        let effective_dark = match self.theme_mode {
+            theme::ThemeMode::Light  => false,
+            theme::ThemeMode::Dark   => true,
+            theme::ThemeMode::System => theme::effective_dark(ctx),
+        };
+        if theme::is_dark() != effective_dark || theme::accent_idx() != self.accent_idx {
+            theme::set_dark(effective_dark);
+            theme::set_accent(self.accent_idx);
             theme::apply_metro_theme(ctx);
         }
 
