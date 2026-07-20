@@ -4,10 +4,11 @@
 use crate::app::PezMaxApp;
 use crate::api::client::ApiClient;
 use crate::api::models::*;
+use crate::components::action_bar::Action;
 use crate::pdf;
 use crate::sokuou::map_range;
 use crate::theme::colors;
-use egui::{Color32, CornerRadius, FontId, Vec2};
+use egui::{CornerRadius, FontId, Vec2};
 
 /// 资源管理：筛选器（从数据派生，三级级联）+ 文件纵向列表
 pub fn render_resource_manager(app: &mut PezMaxApp, ui: &mut egui::Ui) {
@@ -247,18 +248,20 @@ pub fn render_resource_manager(app: &mut PezMaxApp, ui: &mut egui::Ui) {
         app.filters.school = sch;
     }
     if let Some(file) = select_file {
+        let fid = file.file_id;
         app.selected_file = Some(file);
         app.preview_anim = crate::sokuou::SpringAnim::with_target(0.4, 0.8, 0.0, 0.0, 1.0);
+        // 直接启动 PDF 加载，跳过预览按钮中间步骤
+        app.trigger_load_pdf_bytes(fid);
     }
 }
 
-/// 文件预览面板（主从视图）
+/// 文件预览面板（全屏 PDF 阅读器 + 底部操作栏由 app.rs 渲染）
 fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     let Some(ref file) = app.selected_file else {
         return;
     };
 
-    // 先提取需要在闭包中使用的字段，避免后续借用冲突
     let file_id = file.file_id;
     let file_name = file.file_name.clone();
     let file_subject = file.file_subject.clone();
@@ -272,206 +275,132 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
         ui.add_space(y_offset);
     }
 
-    ui.add_space(12.0);
-    let mut go_back = false;
-    ui.horizontal(|ui| {
-        ui.add_space(16.0);
-        let back_btn = egui::Button::new(
-            egui::RichText::new("← 返回列表")
-                .font(FontId::new(14.0, egui::FontFamily::Proportional))
-                .color(colors::primary()),
-        )
-        .fill(Color32::TRANSPARENT)
-        .corner_radius(CornerRadius::same(0));
-        if ui.add(back_btn).clicked() {
-            go_back = true;
+    // 处理 app.rs 渲染的操作栏点击
+    match app.preview_bar_action {
+        Action::Back => {
+            app.selected_file = None;
+            app.preview_anim.set_target(0.0);
+            return;
         }
-    });
-
-    if go_back {
-        app.selected_file = None;
-        app.preview_anim.set_target(0.0);
-        return;
+        Action::Download => {
+            let api = app.api.clone();
+            tokio::spawn(async move { let _ = api.download_paper(file_id).await; });
+        }
+        Action::Favorite => {
+            let api = app.api.clone();
+            tokio::spawn(async move { let _ = api.add_favorite(file_id).await; });
+        }
+        Action::Report => {}
+        Action::ToggleInfo => {
+            app.show_info_panel = !app.show_info_panel;
+        }
+        Action::None => {}
     }
 
-    ui.add_space(12.0);
-    ui.separator();
-    ui.add_space(16.0);
-
-    let size_str = if file_size > 0 {
-        format!("{:.1} MB", file_size as f64 / 1048576.0)
-    } else {
-        "-".to_string()
-    };
-
-    egui::ScrollArea::vertical()
-        .id_salt("preview_scroll")
-        .show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.add_space(16.0);
-
-                egui::Frame::new()
-                    .fill(colors::bg_card())
-                    .corner_radius(CornerRadius::same(0))
-                    .stroke(egui::Stroke::new(1.0, colors::border()))
-                    .show(ui, |ui| {
-                        ui.set_min_size(Vec2::new(240.0, 320.0));
-                        ui.set_max_width(240.0);
-                        ui.add_space(20.0);
-                        ui.vertical_centered(|ui| {
-                            ui.label(
-                                egui::RichText::new("📄")
-                                    .font(FontId::new(56.0, egui::FontFamily::Proportional)),
-                            );
-                        });
-                        ui.add_space(12.0);
-
-                        let meta = [
-                            ("文件名", file_name.as_str()),
-                            ("学科",   file_subject.as_str()),
-                            ("学校",   school_name.as_str()),
-                            ("大小",   size_str.as_str()),
-                            ("上传者", create_by.as_str()),
-                        ];
-                        for (key, val) in &meta {
-                            ui.horizontal(|ui| {
-                                ui.add_space(16.0);
-                                ui.label(
-                                    egui::RichText::new(*key)
-                                        .font(FontId::new(12.0, egui::FontFamily::Proportional))
-                                        .color(colors::text_secondary()),
-                                );
-                                ui.add_space(4.0);
-                                ui.label(
-                                    egui::RichText::new(*val)
-                                        .font(FontId::new(13.0, egui::FontFamily::Proportional))
-                                        .color(colors::text_primary()),
-                                );
-                            });
-                            ui.add_space(6.0);
-                        }
-
-                        ui.add_space(16.0);
-                        ui.separator();
-                        ui.add_space(12.0);
-
-                        ui.vertical_centered(|ui| {
-                            let dl_btn = egui::Button::new(
-                                egui::RichText::new("  📥 下载文件  ")
-                                    .font(FontId::new(14.0, egui::FontFamily::Proportional))
-                                    .color(colors::text_on_primary()),
-                            )
-                            .fill(colors::primary())
-                            .min_size(Vec2::new(200.0, 36.0))
-                            .corner_radius(CornerRadius::same(0));
-                            if ui.add(dl_btn).clicked() {
-                                let api = app.api.clone();
-                                tokio::spawn(async move { let _ = api.download_paper(file_id).await; });
-                            }
-                            ui.add_space(8.0);
-
-                            let fav_btn = egui::Button::new(
-                                egui::RichText::new("  ⭐ 收藏  ")
-                                    .font(FontId::new(14.0, egui::FontFamily::Proportional))
-                                    .color(colors::accent_orange()),
-                            )
-                            .fill(colors::bg_hover())
-                            .min_size(Vec2::new(200.0, 36.0))
-                            .corner_radius(CornerRadius::same(0));
-                            if ui.add(fav_btn).clicked() {
-                                let api = app.api.clone();
-                                tokio::spawn(async move { let _ = api.add_favorite(file_id).await; });
-                            }
-                            ui.add_space(8.0);
-
-                            let rep_btn = egui::Button::new(
-                                egui::RichText::new("  🚩 举报  ")
-                                    .font(FontId::new(14.0, egui::FontFamily::Proportional))
-                                    .color(colors::error()),
-                            )
-                            .fill(colors::bg_hover())
-                            .min_size(Vec2::new(200.0, 36.0))
-                            .corner_radius(CornerRadius::same(0));
-                            if ui.add(rep_btn).clicked() {}
-                        });
-                        ui.add_space(20.0);
-                    });
-
-                ui.add_space(16.0);
-
-                // ── PDF 预览区 ────────────────────────────────────
-                if app.pdf_viewer.loaded && app.pdf_viewer.current_page == 0 {
-                    // PDF 已加载完成，显示 PDF 查看器
+    // ── 主内容：PDF 阅读器 + 可选信息侧栏 ──────────────────────
+    // 直接用 ui.vertical() 填充剩余高度，不用 horizontal 嵌套
+    // 避免 horizontal+vertical 嵌套导致的高度计算问题
+    if app.show_info_panel {
+        ui.horizontal(|ui| {
+            // PDF 区
+            ui.vertical(|ui| {
+                let avail = ui.available_size();
+                ui.set_min_size(egui::vec2(avail.x - 260.0, avail.y));
+                if app.pdf_viewer.loaded {
                     let engine = app.pdf_engine.clone();
-                    egui::Frame::new()
-                        .fill(colors::bg_input())
-                        .corner_radius(CornerRadius::same(0))
-                        .stroke(egui::Stroke::new(1.0, colors::border()))
-                        .show(ui, |ui| {
-                            ui.set_min_size(Vec2::new(ui.available_width().max(300.0), 320.0));
-                            pdf::render_pdf_viewer(ui, &mut app.pdf_viewer, &engine);
-                        });
-                } else if app.pdf_loading || app.pdf_viewer.is_loading() {
-                    // 加载中
-                    egui::Frame::new()
-                        .fill(colors::bg_input())
-                        .corner_radius(CornerRadius::same(0))
-                        .stroke(egui::Stroke::new(1.0, colors::border()))
-                        .show(ui, |ui| {
-                            ui.set_min_size(Vec2::new(ui.available_width().max(300.0), 320.0));
-                            ui.vertical_centered(|ui| {
-                                ui.add_space(120.0);
-                                ui.label(
-                                    egui::RichText::new("加载中...")
-                                        .font(FontId::new(15.0, egui::FontFamily::Proportional))
-                                        .color(colors::text_secondary()),
-                                );
-                            });
-                        });
-                    ui.ctx().request_repaint();
+                    pdf::render_pdf_viewer(ui, &mut app.pdf_viewer, &engine);
                 } else {
-                    // 未加载：显示预览 + 加载 PDF 按钮
-                    egui::Frame::new()
-                        .fill(colors::bg_input())
-                        .corner_radius(CornerRadius::same(0))
-                        .stroke(egui::Stroke::new(1.0, colors::border()))
-                        .show(ui, |ui| {
-                            ui.set_min_size(Vec2::new(ui.available_width().max(300.0), 320.0));
-                            ui.vertical_centered(|ui| {
-                                ui.add_space(80.0);
-                                ui.label(
-                                    egui::RichText::new("📋")
-                                        .font(FontId::new(48.0, egui::FontFamily::Proportional)),
-                                );
-                                ui.add_space(12.0);
-                                ui.label(
-                                    egui::RichText::new("PDF 预览")
-                                        .font(FontId::new(15.0, egui::FontFamily::Proportional))
-                                        .color(colors::text_secondary()),
-                                );
-                                ui.add_space(4.0);
-                                ui.label(
-                                    egui::RichText::new("点击下方按钮在线预览")
-                                        .font(FontId::new(12.0, egui::FontFamily::Proportional))
-                                        .color(colors::text_secondary()),
-                                );
-                                ui.add_space(12.0);
-                                let preview_btn = egui::Button::new(
-                                    egui::RichText::new("  📖 在线预览  ")
-                                        .font(FontId::new(14.0, egui::FontFamily::Proportional))
-                                        .color(colors::text_on_primary()),
-                                )
-                                .fill(colors::primary())
-                                .min_size(Vec2::new(160.0, 36.0))
-                                .corner_radius(CornerRadius::same(0));
-                                if ui.add(preview_btn).clicked() {
-                                    let fid = file_id;
-                                    app.trigger_load_pdf_bytes(fid);
-                                }
-                            });
-                        });
+                    render_pdf_placeholder(ui, &file_name, &file_subject, &school_name, file_id, app);
                 }
             });
+
+            // 信息侧栏
+            render_info_panel(ui, &file_name, &file_subject, &school_name, file_size, &create_by);
+        });
+    } else {
+        // 无信息侧栏：直接渲染 PDF 查看器，占满全高
+        if app.pdf_viewer.loaded {
+            let engine = app.pdf_engine.clone();
+            pdf::render_pdf_viewer(ui, &mut app.pdf_viewer, &engine);
+        } else {
+            render_pdf_placeholder(ui, &file_name, &file_subject, &school_name, file_id, app);
+        }
+    }
+}
+
+/// PDF 未加载时的占位（加载中动画）
+fn render_pdf_placeholder(
+    ui: &mut egui::Ui,
+    _file_name: &str,
+    _file_subject: &str,
+    _school_name: &str,
+    file_id: i64,
+    app: &mut PezMaxApp,
+) {
+    if app.pdf_loading || app.pdf_viewer.is_loading() {
+        egui::Frame::new()
+            .fill(colors::bg_card())
+            .stroke(egui::Stroke::NONE)
+            .show(ui, |ui| {
+                ui.set_min_size(egui::vec2(ui.available_width(), ui.available_height()));
+                ui.vertical_centered(|ui| {
+                    ui.add_space(160.0);
+                    ui.label(egui::RichText::new("加载中...")
+                        .font(FontId::new(15.0, egui::FontFamily::Proportional))
+                        .color(colors::text_secondary()));
+                    ui.add_space(8.0);
+                    ui.label(egui::RichText::new("正在下载并解析 PDF 文件")
+                        .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                        .color(colors::text_secondary()));
+                });
+            });
+        ui.ctx().request_repaint();
+    } else {
+        // 刚选择文件，后台加载尚未开始（极短窗口）→ 直接触发加载
+        // 此分支只在点击文件行后一帧内出现，立即显示加载状态
+        app.trigger_load_pdf_bytes(file_id);
+    }
+}
+
+/// 文件信息侧栏
+fn render_info_panel(
+    ui: &mut egui::Ui,
+    file_name: &str,
+    file_subject: &str,
+    school_name: &str,
+    file_size: i64,
+    create_by: &str,
+) {
+    let size_str = if file_size > 0 {
+        format!("{:.1} MB", file_size as f64 / 1048576.0)
+    } else { "-".to_string() };
+
+    egui::Frame::new()
+        .fill(colors::bg_card())
+        .inner_margin(egui::Margin::symmetric(16, 16))
+        .stroke(egui::Stroke::new(1.0, colors::border()))
+        .show(ui, |ui| {
+            ui.set_min_width(220.0);
+            ui.set_max_width(260.0);
+            ui.set_min_height(ui.available_height());
+            ui.vertical_centered(|ui| {
+                ui.label(egui::RichText::new("📄").font(FontId::new(40.0, egui::FontFamily::Proportional)));
+            });
+            ui.add_space(12.0);
+            for (key, val) in &[("文件名", file_name), ("学科", file_subject),
+                ("学校", school_name), ("大小", size_str.as_str()), ("上传者", create_by)]
+            {
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new(format!("{}:", key))
+                        .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                        .color(colors::text_secondary()));
+                    ui.add_space(4.0);
+                    ui.label(egui::RichText::new(*val)
+                        .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                        .color(colors::text_primary()));
+                });
+                ui.add_space(6.0);
+            }
         });
 }
 
