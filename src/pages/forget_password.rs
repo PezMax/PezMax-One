@@ -6,7 +6,7 @@ use egui::{FontId, CornerRadius};
 
 pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
     egui::CentralPanel::default()
-        .frame(egui::Frame::new().fill(colors::BG_WHITE))
+        .frame(egui::Frame::new().fill(colors::bg_white()))
         .show(ctx, |ui| {
             ui.vertical_centered(|ui| {
                 ui.add_space(ui.available_height() * 0.2);
@@ -14,21 +14,21 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                 ui.label(
                     egui::RichText::new("找回密码")
                         .font(FontId::new(28.0, egui::FontFamily::Proportional))
-                        .color(colors::TEXT_PRIMARY),
+                        .color(colors::text_primary()),
                 );
                 ui.add_space(8.0);
                 ui.label(
                     egui::RichText::new("通过密保问题重置您的密码")
                         .font(FontId::new(14.0, egui::FontFamily::Proportional))
-                        .color(colors::TEXT_SECONDARY),
+                        .color(colors::text_secondary()),
                 );
 
                 ui.add_space(32.0);
 
                 egui::Frame::new()
-                    .fill(colors::BG_CARD)
+                    .fill(colors::bg_card())
                     .corner_radius(CornerRadius::same(0))
-                    .stroke(egui::Stroke::new(1.0, colors::BORDER))
+                    .stroke(egui::Stroke::new(1.0, colors::border()))
                     .show(ui, |ui| {
                         ui.set_max_width(400.0);
                         ui.add_space(24.0);

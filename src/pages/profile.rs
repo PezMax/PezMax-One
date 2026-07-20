@@ -16,9 +16,9 @@ pub fn render_personal_center(app: &mut PezMaxApp, ui: &mut egui::Ui) {
             // ── 用户信息卡 ─────────────────────────────────────
             if let Some(ref user) = app.current_user {
                 egui::Frame::new()
-                    .fill(colors::BG_CARD)
+                    .fill(colors::bg_card())
                     .corner_radius(CornerRadius::same(0))
-                    .stroke(egui::Stroke::new(1.0, colors::BORDER))
+                    .stroke(egui::Stroke::new(1.0, colors::border()))
                     .show(ui, |ui| {
                         ui.set_min_width(ui.available_width());
                         ui.add_space(24.0);
@@ -33,7 +33,7 @@ pub fn render_personal_center(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                 .unwrap_or('?')
                                 .to_string();
                             egui::Frame::new()
-                                .fill(colors::PRIMARY)
+                                .fill(colors::primary())
                                 .corner_radius(CornerRadius::same(0))
                                 .show(ui, |ui| {
                                     ui.set_min_size(Vec2::new(72.0, 72.0));
@@ -46,7 +46,7 @@ pub fn render_personal_center(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                                     36.0,
                                                     egui::FontFamily::Proportional,
                                                 ))
-                                                .color(colors::TEXT_ON_PRIMARY),
+                                                .color(colors::text_on_primary()),
                                         );
                                     });
                                 });
@@ -60,7 +60,7 @@ pub fn render_personal_center(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                             22.0,
                                             egui::FontFamily::Proportional,
                                         ))
-                                        .color(colors::TEXT_PRIMARY),
+                                        .color(colors::text_primary()),
                                 );
                                 ui.add_space(4.0);
                                 ui.label(
@@ -69,7 +69,7 @@ pub fn render_personal_center(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                             14.0,
                                             egui::FontFamily::Proportional,
                                         ))
-                                        .color(colors::TEXT_SECONDARY),
+                                        .color(colors::text_secondary()),
                                 );
                                 ui.add_space(12.0);
                                 let btn = egui::Button::new(
@@ -79,7 +79,7 @@ pub fn render_personal_center(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                             egui::FontFamily::Proportional,
                                         )),
                                 )
-                                .fill(colors::BG_HOVER)
+                                .fill(colors::bg_hover())
                                 .corner_radius(CornerRadius::same(0));
                                 if ui.add(btn).clicked() {}
                             });
@@ -97,9 +97,9 @@ pub fn render_personal_center(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                 };
 
                 let stat_items = [
-                    ("⭐", "收藏", fav, colors::ACCENT_ORANGE),
-                    ("📥", "下载", dl, colors::PRIMARY),
-                    ("📤", "上传", ul, colors::ACCENT_GREEN),
+                    ("⭐", "收藏", fav, colors::accent_orange()),
+                    ("📥", "下载", dl, colors::primary()),
+                    ("📤", "上传", ul, colors::accent_green()),
                 ];
 
                 ui.horizontal(|ui| {
@@ -123,7 +123,7 @@ pub fn render_personal_center(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                                 20.0,
                                                 egui::FontFamily::Proportional,
                                             ))
-                                            .color(colors::TEXT_ON_PRIMARY),
+                                            .color(colors::text_on_primary()),
                                     );
                                     ui.label(
                                         egui::RichText::new(*label)
@@ -131,7 +131,7 @@ pub fn render_personal_center(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                                 12.0,
                                                 egui::FontFamily::Proportional,
                                             ))
-                                            .color(colors::TEXT_ON_PRIMARY),
+                                            .color(colors::text_on_primary()),
                                     );
                                 });
                                 ui.add_space(10.0);
@@ -147,7 +147,7 @@ pub fn render_personal_center(app: &mut PezMaxApp, ui: &mut egui::Ui) {
             ui.label(
                 egui::RichText::new("账号安全")
                     .font(FontId::new(16.0, egui::FontFamily::Proportional))
-                    .color(colors::TEXT_PRIMARY),
+                    .color(colors::text_primary()),
             );
             ui.add_space(8.0);
 
@@ -168,7 +168,7 @@ pub fn render_notifications(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     ui.label(
         egui::RichText::new("通知")
             .font(FontId::new(22.0, egui::FontFamily::Proportional))
-            .color(colors::TEXT_PRIMARY),
+            .color(colors::text_primary()),
     );
     ui.add_space(16.0);
 
@@ -179,21 +179,21 @@ pub fn render_notifications(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                 for notif in list {
                     let is_read = notif.status == "1";
                     let bg = if is_read {
-                        colors::BG_CARD
+                        colors::bg_card()
                     } else {
-                        colors::BG_SELECTED
+                        colors::bg_selected()
                     };
                     egui::Frame::new()
                         .fill(bg)
                         .corner_radius(CornerRadius::same(0))
-                        .stroke(egui::Stroke::new(1.0, colors::BORDER))
+                        .stroke(egui::Stroke::new(1.0, colors::border()))
                         .show(ui, |ui| {
                             ui.set_min_width(ui.available_width());
                             ui.horizontal(|ui| {
                                 // 未读指示条
                                 if !is_read {
                                     egui::Frame::new()
-                                        .fill(colors::PRIMARY)
+                                        .fill(colors::primary())
                                         .show(ui, |ui| {
                                             ui.allocate_space(Vec2::new(3.0, 48.0));
                                         });
@@ -206,17 +206,17 @@ pub fn render_notifications(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                     ui.label(
                                         egui::RichText::new(&notif.title)
                                             .font(FontId::new(14.0, egui::FontFamily::Proportional))
-                                            .color(colors::TEXT_PRIMARY),
+                                            .color(colors::text_primary()),
                                     );
                                     ui.label(
                                         egui::RichText::new(&notif.content)
                                             .font(FontId::new(13.0, egui::FontFamily::Proportional))
-                                            .color(colors::TEXT_SECONDARY),
+                                            .color(colors::text_secondary()),
                                     );
                                     ui.label(
                                         egui::RichText::new(&notif.create_time)
                                             .font(FontId::new(11.0, egui::FontFamily::Proportional))
-                                            .color(colors::TEXT_SECONDARY),
+                                            .color(colors::text_secondary()),
                                     );
                                     ui.add_space(8.0);
                                 });
@@ -233,7 +233,7 @@ pub fn render_notifications(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                 ui.label(
                     egui::RichText::new(msg)
                         .font(FontId::new(14.0, egui::FontFamily::Proportional))
-                        .color(colors::TEXT_SECONDARY),
+                        .color(colors::text_secondary()),
                 );
             }
         });
@@ -250,7 +250,7 @@ pub fn render_download_history(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     ui.label(
         egui::RichText::new("下载记录")
             .font(FontId::new(22.0, egui::FontFamily::Proportional))
-            .color(colors::TEXT_PRIMARY),
+            .color(colors::text_primary()),
     );
     ui.add_space(16.0);
 
@@ -260,9 +260,9 @@ pub fn render_download_history(app: &mut PezMaxApp, ui: &mut egui::Ui) {
             if let Some(ref list) = app.download_records.data {
                 for record in list {
                     egui::Frame::new()
-                        .fill(colors::BG_CARD)
+                        .fill(colors::bg_card())
                         .corner_radius(CornerRadius::same(0))
-                        .stroke(egui::Stroke::new(1.0, colors::BORDER))
+                        .stroke(egui::Stroke::new(1.0, colors::border()))
                         .show(ui, |ui| {
                             ui.set_min_width(ui.available_width());
                             ui.horizontal(|ui| {
@@ -277,7 +277,7 @@ pub fn render_download_history(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                     ui.label(
                                         egui::RichText::new(&record.file_name)
                                             .font(FontId::new(14.0, egui::FontFamily::Proportional))
-                                            .color(colors::TEXT_PRIMARY),
+                                            .color(colors::text_primary()),
                                     );
                                     ui.label(
                                         egui::RichText::new(format!(
@@ -285,7 +285,7 @@ pub fn render_download_history(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                             record.file_format, record.download_time
                                         ))
                                         .font(FontId::new(12.0, egui::FontFamily::Proportional))
-                                        .color(colors::TEXT_SECONDARY),
+                                        .color(colors::text_secondary()),
                                     );
                                     ui.add_space(8.0);
                                 });
@@ -320,7 +320,7 @@ pub fn render_download_history(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                 ui.label(
                     egui::RichText::new(msg)
                         .font(FontId::new(14.0, egui::FontFamily::Proportional))
-                        .color(colors::TEXT_SECONDARY),
+                        .color(colors::text_secondary()),
                 );
             }
         });
@@ -332,7 +332,7 @@ pub fn render_app_settings(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     ui.label(
         egui::RichText::new("设置")
             .font(FontId::new(22.0, egui::FontFamily::Proportional))
-            .color(colors::TEXT_PRIMARY),
+            .color(colors::text_primary()),
     );
     ui.add_space(16.0);
 
@@ -349,7 +349,7 @@ pub fn render_app_settings(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                 &mut app.setting_auto_launch,
             );
             ui.add_space(2.0);
-            settings_info_row(ui, "主题", "浅色（深色模式开发中）");
+            toggle_row(ui, "深色模式", "切换深色 / 浅色外观", &mut app.dark_mode);
 
             ui.add_space(12.0);
 
@@ -393,9 +393,9 @@ pub fn render_app_settings(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 /// 安全设置行（可点击）
 fn security_row(ui: &mut egui::Ui, label: &str, desc: &str) {
     let resp = egui::Frame::new()
-        .fill(colors::BG_CARD)
+        .fill(colors::bg_card())
         .corner_radius(CornerRadius::same(0))
-        .stroke(egui::Stroke::new(1.0, colors::BORDER))
+        .stroke(egui::Stroke::new(1.0, colors::border()))
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
             ui.horizontal(|ui| {
@@ -405,12 +405,12 @@ fn security_row(ui: &mut egui::Ui, label: &str, desc: &str) {
                     ui.label(
                         egui::RichText::new(label)
                             .font(FontId::new(15.0, egui::FontFamily::Proportional))
-                            .color(colors::TEXT_PRIMARY),
+                            .color(colors::text_primary()),
                     );
                     ui.label(
                         egui::RichText::new(desc)
                             .font(FontId::new(12.0, egui::FontFamily::Proportional))
-                            .color(colors::TEXT_SECONDARY),
+                            .color(colors::text_secondary()),
                     );
                     ui.add_space(8.0);
                 });
@@ -419,7 +419,7 @@ fn security_row(ui: &mut egui::Ui, label: &str, desc: &str) {
                     ui.label(
                         egui::RichText::new("›")
                             .font(FontId::new(20.0, egui::FontFamily::Proportional))
-                            .color(colors::TEXT_SECONDARY),
+                            .color(colors::text_secondary()),
                     );
                 });
             });
@@ -433,7 +433,7 @@ fn settings_group_label(ui: &mut egui::Ui, title: &str) {
     ui.label(
         egui::RichText::new(title)
             .font(FontId::new(13.0, egui::FontFamily::Proportional))
-            .color(colors::TEXT_SECONDARY),
+            .color(colors::text_secondary()),
     );
     ui.add_space(4.0);
 }
@@ -441,9 +441,9 @@ fn settings_group_label(ui: &mut egui::Ui, title: &str) {
 /// 带开关的设置行
 fn toggle_row(ui: &mut egui::Ui, label: &str, desc: &str, value: &mut bool) {
     egui::Frame::new()
-        .fill(colors::BG_CARD)
+        .fill(colors::bg_card())
         .corner_radius(CornerRadius::same(0))
-        .stroke(egui::Stroke::new(1.0, colors::BORDER))
+        .stroke(egui::Stroke::new(1.0, colors::border()))
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
             ui.horizontal(|ui| {
@@ -453,12 +453,12 @@ fn toggle_row(ui: &mut egui::Ui, label: &str, desc: &str, value: &mut bool) {
                     ui.label(
                         egui::RichText::new(label)
                             .font(FontId::new(15.0, egui::FontFamily::Proportional))
-                            .color(colors::TEXT_PRIMARY),
+                            .color(colors::text_primary()),
                     );
                     ui.label(
                         egui::RichText::new(desc)
                             .font(FontId::new(12.0, egui::FontFamily::Proportional))
-                            .color(colors::TEXT_SECONDARY),
+                            .color(colors::text_secondary()),
                     );
                     ui.add_space(8.0);
                 });
@@ -473,9 +473,9 @@ fn toggle_row(ui: &mut egui::Ui, label: &str, desc: &str, value: &mut bool) {
 /// 只读信息行（带右箭头，无交互）
 fn settings_info_row(ui: &mut egui::Ui, label: &str, value: &str) {
     egui::Frame::new()
-        .fill(colors::BG_CARD)
+        .fill(colors::bg_card())
         .corner_radius(CornerRadius::same(0))
-        .stroke(egui::Stroke::new(1.0, colors::BORDER))
+        .stroke(egui::Stroke::new(1.0, colors::border()))
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
             ui.horizontal(|ui| {
@@ -485,7 +485,7 @@ fn settings_info_row(ui: &mut egui::Ui, label: &str, value: &str) {
                     ui.label(
                         egui::RichText::new(label)
                             .font(FontId::new(15.0, egui::FontFamily::Proportional))
-                            .color(colors::TEXT_PRIMARY),
+                            .color(colors::text_primary()),
                     );
                     ui.add_space(8.0);
                 });
@@ -494,13 +494,13 @@ fn settings_info_row(ui: &mut egui::Ui, label: &str, value: &str) {
                     ui.label(
                         egui::RichText::new("›")
                             .font(FontId::new(20.0, egui::FontFamily::Proportional))
-                            .color(colors::TEXT_SECONDARY),
+                            .color(colors::text_secondary()),
                     );
                     ui.add_space(8.0);
                     ui.label(
                         egui::RichText::new(value)
                             .font(FontId::new(13.0, egui::FontFamily::Proportional))
-                            .color(colors::TEXT_SECONDARY),
+                            .color(colors::text_secondary()),
                     );
                 });
             });
@@ -510,9 +510,9 @@ fn settings_info_row(ui: &mut egui::Ui, label: &str, value: &str) {
 /// 可点击操作行（返回 Response）
 fn action_row(ui: &mut egui::Ui, label: &str, desc: &str) -> egui::Response {
     egui::Frame::new()
-        .fill(colors::BG_CARD)
+        .fill(colors::bg_card())
         .corner_radius(CornerRadius::same(0))
-        .stroke(egui::Stroke::new(1.0, colors::BORDER))
+        .stroke(egui::Stroke::new(1.0, colors::border()))
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
             ui.horizontal(|ui| {
@@ -522,12 +522,12 @@ fn action_row(ui: &mut egui::Ui, label: &str, desc: &str) -> egui::Response {
                     ui.label(
                         egui::RichText::new(label)
                             .font(FontId::new(15.0, egui::FontFamily::Proportional))
-                            .color(colors::TEXT_PRIMARY),
+                            .color(colors::text_primary()),
                     );
                     ui.label(
                         egui::RichText::new(desc)
                             .font(FontId::new(12.0, egui::FontFamily::Proportional))
-                            .color(colors::TEXT_SECONDARY),
+                            .color(colors::text_secondary()),
                     );
                     ui.add_space(8.0);
                 });
@@ -536,7 +536,7 @@ fn action_row(ui: &mut egui::Ui, label: &str, desc: &str) -> egui::Response {
                     ui.label(
                         egui::RichText::new("›")
                             .font(FontId::new(20.0, egui::FontFamily::Proportional))
-                            .color(colors::TEXT_SECONDARY),
+                            .color(colors::text_secondary()),
                     );
                 });
             });

@@ -40,13 +40,13 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
             ui.label(
                 egui::RichText::new(format!("{}，{}", greeting, nickname))
                     .font(FontId::new(28.0, egui::FontFamily::Proportional))
-                    .color(colors::TEXT_PRIMARY),
+                    .color(colors::text_primary()),
             );
             ui.add_space(4.0);
             ui.label(
                 egui::RichText::new("欢迎使用 PezMax 试卷资源管理系统")
                     .font(FontId::new(14.0, egui::FontFamily::Proportional))
-                    .color(colors::TEXT_SECONDARY),
+                    .color(colors::text_secondary()),
             );
 
             ui.add_space(28.0);
@@ -59,9 +59,9 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
             };
 
             let stat_tiles = [
-                ("⭐", "我的收藏", fav, colors::ACCENT_ORANGE),
-                ("📥", "下载次数", dl, colors::PRIMARY),
-                ("📤", "上传贡献", ul, colors::ACCENT_GREEN),
+                ("⭐", "我的收藏", fav, colors::accent_orange()),
+                ("📥", "下载次数", dl, colors::primary()),
+                ("📤", "上传贡献", ul, colors::accent_green()),
             ];
 
             ui.horizontal_wrapped(|ui| {
@@ -89,7 +89,7 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                                 26.0,
                                                 egui::FontFamily::Proportional,
                                             ))
-                                            .color(colors::TEXT_ON_PRIMARY),
+                                            .color(colors::text_on_primary()),
                                     );
                                     ui.label(
                                         egui::RichText::new(*label)
@@ -97,7 +97,7 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                                 13.0,
                                                 egui::FontFamily::Proportional,
                                             ))
-                                            .color(colors::TEXT_ON_PRIMARY),
+                                            .color(colors::text_on_primary()),
                                     );
                                 });
                             });
@@ -112,7 +112,7 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
             ui.label(
                 egui::RichText::new("快速操作")
                     .font(FontId::new(16.0, egui::FontFamily::Proportional))
-                    .color(colors::TEXT_SECONDARY),
+                    .color(colors::text_secondary()),
             );
             ui.add_space(8.0);
 
@@ -126,7 +126,7 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                         "查看并下载试卷资源",
                         Section::Browse,
                         Subsection::ResourceManager,
-                        colors::PRIMARY,
+                        colors::primary(),
                     ),
                     (
                         "📤",
@@ -134,13 +134,13 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                         "上传你的试卷，帮助大家",
                         Section::Community,
                         Subsection::ContributeFile,
-                        colors::ACCENT_GREEN,
+                        colors::accent_green(),
                     ),
                 ];
 
                 for (icon, title, desc, section, sub, color) in quick_actions {
                     let resp = egui::Frame::new()
-                        .fill(colors::BG_CARD)
+                        .fill(colors::bg_card())
                         .corner_radius(CornerRadius::same(0))
                         .stroke(egui::Stroke::new(1.5, color))
                         .show(ui, |ui| {
@@ -173,7 +173,7 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                                 15.0,
                                                 egui::FontFamily::Proportional,
                                             ))
-                                            .color(colors::TEXT_PRIMARY),
+                                            .color(colors::text_primary()),
                                     );
                                     ui.label(
                                         egui::RichText::new(desc)
@@ -181,7 +181,7 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                                 12.0,
                                                 egui::FontFamily::Proportional,
                                             ))
-                                            .color(colors::TEXT_SECONDARY),
+                                            .color(colors::text_secondary()),
                                     );
                                 });
                             });
@@ -206,16 +206,16 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
             ui.label(
                 egui::RichText::new("最近更新")
                     .font(FontId::new(16.0, egui::FontFamily::Proportional))
-                    .color(colors::TEXT_SECONDARY),
+                    .color(colors::text_secondary()),
             );
             ui.add_space(8.0);
 
             if let Some(ref files) = app.recent_files.data {
                 for file in files.iter().take(10) {
                     egui::Frame::new()
-                        .fill(colors::BG_CARD)
+                        .fill(colors::bg_card())
                         .corner_radius(CornerRadius::same(0))
-                        .stroke(egui::Stroke::new(1.0, colors::BORDER))
+                        .stroke(egui::Stroke::new(1.0, colors::border()))
                         .show(ui, |ui| {
                             ui.set_min_width(ui.available_width());
                             ui.horizontal(|ui| {
@@ -230,7 +230,7 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                     ui.label(
                                         egui::RichText::new(&file.file_name)
                                             .font(FontId::new(14.0, egui::FontFamily::Proportional))
-                                            .color(colors::TEXT_PRIMARY),
+                                            .color(colors::text_primary()),
                                     );
                                     ui.label(
                                         egui::RichText::new(format!(
@@ -238,7 +238,7 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                             file.file_subject, file.create_time, file.create_by
                                         ))
                                         .font(FontId::new(12.0, egui::FontFamily::Proportional))
-                                        .color(colors::TEXT_SECONDARY),
+                                        .color(colors::text_secondary()),
                                     );
                                     ui.add_space(8.0);
                                 });
@@ -257,7 +257,7 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                 ui.label(
                     egui::RichText::new(if app.recent_files.is_loading() { "加载中..." } else { "暂无最近更新" })
                         .font(FontId::new(14.0, egui::FontFamily::Proportional))
-                        .color(colors::TEXT_SECONDARY),
+                        .color(colors::text_secondary()),
                 );
             }
 

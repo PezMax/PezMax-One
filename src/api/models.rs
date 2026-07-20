@@ -2,7 +2,16 @@
 // 对应后端 AjaxResult / TableDataInfo 统一格式
 // 后端返回 camelCase JSON，所有数据模型使用 rename_all = "camelCase"
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+
+/// null JSON 值 → 对应类型的 Default（如 String → ""，i64 → 0）
+fn null_to_default<'de, D, T>(d: D) -> Result<T, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Default + Deserialize<'de>,
+{
+    Option::<T>::deserialize(d).map(|v| v.unwrap_or_default())
+}
 
 /// 后端统一响应格式 (AjaxResult)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -148,28 +157,31 @@ pub struct SecurityQuestion {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PaperFile {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub file_id: i64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub file_name: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub file_format: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub file_size: i64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub file_url: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub file_subject: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub file_year: i64,
-    #[serde(rename = "fileSchool", default)]
+    #[serde(rename = "fileSchool", default, deserialize_with = "null_to_default")]
     pub school_name: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub create_by: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub create_time: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub file_cover: String,
+    /// 0=未审核, 1=通过, 2=未通过, 3=被举报；null 视为可见
+    #[serde(default)]
+    pub file_status: Option<i64>,
 }
 
 /// 文件树节点
@@ -189,23 +201,23 @@ pub struct FileTreeNode {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Bookmark {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub id: i64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub title: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub description: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub resource_type: String,
-    #[serde(rename = "coverImage", default)]
+    #[serde(rename = "coverImage", default, deserialize_with = "null_to_default")]
     pub cover_url: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub create_by: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub create_time: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub collection: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub status: i64,
 }
 
@@ -213,17 +225,17 @@ pub struct Bookmark {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Notification {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub notify_id: i64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub title: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub content: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub notify_type: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub status: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub create_time: String,
 }
 
@@ -231,17 +243,17 @@ pub struct Notification {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DownloadRecord {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub download_id: i64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub file_id: i64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub file_name: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub user_id: i64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub download_time: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub file_format: String,
 }
 
@@ -249,13 +261,13 @@ pub struct DownloadRecord {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FavoriteRecord {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub file_id: i64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub file_name: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub file_subject: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub create_time: String,
 }
 
@@ -263,11 +275,11 @@ pub struct FavoriteRecord {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UserStats {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub favorite_count: i64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub download_count: i64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub upload_count: i64,
 }
 
@@ -275,16 +287,38 @@ pub struct UserStats {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Report {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub report_id: i64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub report_type: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub content: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub status: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     pub create_time: String,
+}
+
+/// 排行榜用户项
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserRankItem {
+    #[serde(default, deserialize_with = "null_to_default")]
+    pub user_id: i64,
+    #[serde(default, deserialize_with = "null_to_default")]
+    pub user_name: String,
+    #[serde(default, deserialize_with = "null_to_default")]
+    pub nick_name: String,
+    #[serde(default, deserialize_with = "null_to_default")]
+    pub upload_count: i64,
+    #[serde(default, deserialize_with = "null_to_default")]
+    pub download_count: i64,
+}
+
+impl UserRankItem {
+    pub fn display_name(&self) -> &str {
+        if !self.nick_name.is_empty() { &self.nick_name } else { &self.user_name }
+    }
 }
 
 /// 收藏/下载/举报的通用操作响应

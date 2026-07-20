@@ -15,7 +15,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
         .resizable(false)
         .min_width(width)
         .max_width(width)
-        .frame(Frame::new().fill(colors::BG_SIDEBAR))
+        .frame(Frame::new().fill(colors::bg_sidebar()))
         .show(ctx, |ui| {
             ui.add_space(8.0);
 
@@ -112,7 +112,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                 let y_top = egui::lerp(r_lo.top()..=r_hi.top(), t);
                 let y_bot = egui::lerp(r_lo.bottom()..=r_hi.bottom(), t);
                 let bar = Rect::from_min_max(pos2(r_lo.left(), y_top), pos2(r_lo.left() + 3.0, y_bot));
-                ui.painter().rect_filled(bar, egui::CornerRadius::ZERO, colors::PRIMARY);
+                ui.painter().rect_filled(bar, egui::CornerRadius::ZERO, colors::primary());
             }
 
             // ── 底部：退出登录 ────────────────────────────────────

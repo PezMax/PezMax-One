@@ -5,13 +5,14 @@ use crate::api::models::*;
 use anyhow::Result;
 
 impl ApiClient {
-    /// 获取试卷文件列表（分页，匿名）
+    /// 获取试卷文件列表（分页）
     pub async fn get_file_list(&self, params: &PageParams) -> Result<PageResponse<PaperFile>> {
         let query = vec![
             ("pageNum", params.page_num.to_string()),
             ("pageSize", params.page_size.to_string()),
         ];
-        self.get_anonymous("/datum/file/list", Some(query)).await
+        // 使用带 token 的请求：Electron 版即使对匿名接口也携带 token
+        self.get("/datum/file/list", Some(query)).await
     }
 
     /// 获取文件详情（匿名）

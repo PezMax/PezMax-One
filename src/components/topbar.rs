@@ -10,8 +10,8 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
         .max_height(48.0)
         .frame(
             egui::Frame::new()
-                .fill(colors::BG_CARD)
-                .stroke(egui::Stroke::new(1.0, colors::BORDER)),
+                .fill(colors::bg_card())
+                .stroke(egui::Stroke::new(1.0, colors::border())),
         )
         .show(ctx, |ui| {
             ui.add_space(8.0);
@@ -34,7 +34,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                         ui.label(
                             egui::RichText::new(&user.nick_name)
                                 .font(FontId::new(14.0, egui::FontFamily::Proportional))
-                                .color(colors::TEXT_PRIMARY),
+                                .color(colors::text_primary()),
                         );
                         ui.add_space(8.0);
                     }
@@ -48,7 +48,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                     let bell_resp = ui.label(
                         egui::RichText::new(bell_label)
                             .font(FontId::new(18.0, egui::FontFamily::Proportional))
-                            .color(colors::TEXT_SECONDARY),
+                            .color(colors::text_secondary()),
                     );
                     if bell_resp.interact(egui::Sense::click()).clicked() {
                         app.navigate_to(Section::Profile, Subsection::Notifications);

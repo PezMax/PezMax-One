@@ -9,7 +9,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
     let mut step = 1;
 
     egui::CentralPanel::default()
-        .frame(egui::Frame::new().fill(colors::BG_WHITE))
+        .frame(egui::Frame::new().fill(colors::bg_white()))
         .show(ctx, |ui| {
             ui.vertical_centered(|ui| {
                 ui.add_space(ui.available_height() * 0.1);
@@ -17,13 +17,13 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                 ui.label(
                     egui::RichText::new("创建账号")
                         .font(FontId::new(28.0, egui::FontFamily::Proportional))
-                        .color(colors::TEXT_PRIMARY),
+                        .color(colors::text_primary()),
                 );
                 ui.add_space(8.0);
                 ui.label(
                     egui::RichText::new("注册后即可浏览和下载试卷资源")
                         .font(FontId::new(14.0, egui::FontFamily::Proportional))
-                        .color(colors::TEXT_SECONDARY),
+                        .color(colors::text_secondary()),
                 );
 
                 ui.add_space(32.0);
@@ -33,7 +33,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                     for i in 1..=3 {
                         let is_active = i == step;
                         let is_done = i < step;
-                        let color = if is_done { colors::SUCCESS } else if is_active { colors::PRIMARY } else { colors::BORDER };
+                        let color = if is_done { colors::success() } else if is_active { colors::primary() } else { colors::border() };
 
                         egui::Frame::new()
                             .fill(color)
@@ -45,7 +45,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                                         let step_text = if is_done { "✓".to_string() } else { i.to_string() };
                                         ui.label(
                                             egui::RichText::new(step_text)
-                                                .color(colors::TEXT_ON_PRIMARY)
+                                                .color(colors::text_on_primary())
                                                 .font(FontId::new(12.0, egui::FontFamily::Proportional)),
                                         );
                                     });
@@ -61,9 +61,9 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
 
                 // 注册表单卡片
                 egui::Frame::new()
-                    .fill(colors::BG_CARD)
+                    .fill(colors::bg_card())
                     .corner_radius(CornerRadius::same(0))
-                    .stroke(egui::Stroke::new(1.0, colors::BORDER))
+                    .stroke(egui::Stroke::new(1.0, colors::border()))
                     .show(ui, |ui| {
                         ui.set_max_width(400.0);
                         ui.add_space(24.0);
@@ -107,9 +107,9 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                             let next_label = if step < 3 { "下一步" } else { "完成注册" };
                             let btn = egui::Button::new(
                                 egui::RichText::new(next_label)
-                                    .color(colors::TEXT_ON_PRIMARY),
+                                    .color(colors::text_on_primary()),
                             )
-                            .fill(colors::PRIMARY)
+                            .fill(colors::primary())
                             .min_size(egui::Vec2::new(120.0, 40.0))
                             .corner_radius(CornerRadius::same(0));
 

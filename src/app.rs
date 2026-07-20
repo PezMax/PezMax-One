@@ -318,6 +318,9 @@ pub struct PezMaxApp {
     pub schools_data: AsyncData<Vec<String>>,
     pub bookmarks_data: AsyncData<Vec<Bookmark>>,
     pub favorites_data: AsyncData<Vec<FavoriteRecord>>,
+    // Community 页面
+    pub user_rank_data: AsyncData<Vec<UserRankItem>>,
+    pub my_reports_data: AsyncData<Vec<Report>>,
 
     // 认证
     pub is_logged_in: bool,
@@ -336,6 +339,8 @@ pub struct PezMaxApp {
     pub sidebar_open: bool,
     pub sidebar_anim: SpringAnim,
     pub sidebar_indicator_anim: SpringAnim,
+    // 子标签下划线 X 位置（值 = 当前 subsection 在列表中的浮点索引）
+    pub subtab_indicator_anim: SpringAnim,
 
     // 浏览状态
     pub search_query: String,
@@ -351,6 +356,8 @@ pub struct PezMaxApp {
 
     // 页面切换入场动画
     pub page_enter_anim: SpringAnim,
+    // 认证页切换淡入（0→1）
+    pub auth_anim: Progress,
 
     // Toast 通知
     pub toasts: Vec<AnimatedToast>,
@@ -372,6 +379,7 @@ pub struct PezMaxApp {
     // 设置开关
     pub setting_auto_launch: bool,
     pub setting_silent_download: bool,
+    pub dark_mode: bool,
 }
 
 impl PezMaxApp {
@@ -407,6 +415,8 @@ impl PezMaxApp {
             schools_data: AsyncData::new(),
             bookmarks_data: AsyncData::new(),
             favorites_data: AsyncData::new(),
+            user_rank_data: AsyncData::new(),
+            my_reports_data: AsyncData::new(),
 
             is_logged_in: false,
             auth_page: AuthPage::Login,
@@ -418,6 +428,7 @@ impl PezMaxApp {
             sidebar_open: true,
             sidebar_anim: SpringAnim::new(0.5, 0.825, 1.0),
             sidebar_indicator_anim: SpringAnim::new(0.3, 0.8, 0.0), // 初始指向 Home(0)
+            subtab_indicator_anim: SpringAnim::new(0.25, 0.85, 0.0),
             search_query: String::new(),
             filters: FilterState::default(),
             file_list: vec![],
@@ -429,6 +440,11 @@ impl PezMaxApp {
             preview_anim: SpringAnim::new(0.4, 0.8, 0.0),
             browse_selected_idx: None,
             page_enter_anim: SpringAnim::new(0.4, 0.8, 1.0), // 初始稳态
+            auth_anim: {
+                let mut p = Progress::with_easing(0.2, Easing::EaseOutCubic);
+                p.set_target(1.0);
+                p
+            },
             toasts: vec![],
             unread_notifications: 0,
             bookmark_form_name: String::new(),
@@ -440,6 +456,7 @@ impl PezMaxApp {
             report_content: String::new(),
             setting_auto_launch: false,
             setting_silent_download: false,
+            dark_mode: false,
         };
 
         // 尝试从本地加载凭证并自动登录
@@ -628,13 +645,28 @@ impl PezMaxApp {
         });
     }
 
-    /// 异步加载文件列表（浏览页）
+    /// 异步加载文件列表（浏览页）——分页拉取全量数据
     pub fn trigger_load_file_list(&mut self) {
         let api = self.api.clone();
         self.file_list_data.load(move || async move {
-            let params = PageParams { page_num: 1, page_size: 50, ..Default::default() };
-            let resp = api.get_file_list(&params).await?;
-            Ok(resp.rows)
+            const PAGE_SIZE: i32 = 100;
+            let mut all = Vec::new();
+            let mut page_num = 1i32;
+            loop {
+                let params = PageParams { page_num, page_size: PAGE_SIZE, ..Default::default() };
+                let resp = api.get_file_list(&params).await?;
+                if resp.code != 200 {
+                    return Err(anyhow::anyhow!("服务器错误 {}: {}", resp.code, resp.msg));
+                }
+                let fetched = resp.rows.len() as i64;
+                all.extend(resp.rows);
+                // 已取完：本页不足 PAGE_SIZE，或已达到 total
+                if fetched < PAGE_SIZE as i64 || all.len() as i64 >= resp.total {
+                    break;
+                }
+                page_num += 1;
+            }
+            Ok(all)
         });
     }
 
@@ -643,6 +675,9 @@ impl PezMaxApp {
         let api = self.api.clone();
         self.subjects_data.load(move || async move {
             let resp = api.get_subjects(None).await?;
+            if resp.code != 200 {
+                return Err(anyhow::anyhow!("学科列表错误 {}: {}", resp.code, resp.msg));
+            }
             resp.data.ok_or_else(|| anyhow::anyhow!("学科列表为空"))
         });
     }
@@ -652,6 +687,9 @@ impl PezMaxApp {
         let api = self.api.clone();
         self.schools_data.load(move || async move {
             let resp = api.get_schools(None).await?;
+            if resp.code != 200 {
+                return Err(anyhow::anyhow!("学校列表错误 {}: {}", resp.code, resp.msg));
+            }
             resp.data.ok_or_else(|| anyhow::anyhow!("学校列表为空"))
         });
     }
@@ -662,6 +700,9 @@ impl PezMaxApp {
         self.bookmarks_data.load(move || async move {
             let params = PageParams { page_num: 1, page_size: 50, ..Default::default() };
             let resp = api.get_bookmark_list(&params).await?;
+            if resp.code != 200 {
+                return Err(anyhow::anyhow!("书签列表错误 {}: {}", resp.code, resp.msg));
+            }
             Ok(resp.rows)
         });
     }
@@ -673,6 +714,28 @@ impl PezMaxApp {
         self.favorites_data.load(move || async move {
             let params = PageParams { page_num: 1, page_size: 50, ..Default::default() };
             let resp = api.get_favorite_list(user_id, &params).await?;
+            if resp.code != 200 {
+                return Err(anyhow::anyhow!("收藏列表错误 {}: {}", resp.code, resp.msg));
+            }
+            Ok(resp.rows)
+        });
+    }
+
+    /// 异步加载上传排行榜
+    pub fn trigger_load_user_rank(&mut self) {
+        let api = self.api.clone();
+        self.user_rank_data.load(move || async move {
+            let resp = api.get_user_rank().await?;
+            resp.data.ok_or_else(|| anyhow::anyhow!("排行榜数据为空"))
+        });
+    }
+
+    /// 异步加载我的举报列表
+    pub fn trigger_load_my_reports(&mut self) {
+        let api = self.api.clone();
+        self.my_reports_data.load(move || async move {
+            let params = PageParams { page_num: 1, page_size: 20, ..Default::default() };
+            let resp = api.get_report_list(&params).await?;
             Ok(resp.rows)
         });
     }
@@ -682,6 +745,7 @@ impl PezMaxApp {
         if self.current_section != section {
             self.page_enter_anim = SpringAnim::with_target(0.4, 0.8, 0.0, 0.0, 1.0);
             self.sidebar_indicator_anim.set_target(section.index() as f64);
+            self.subtab_indicator_anim.set_target(0.0);
             self.browse_selected_idx = None;
         }
         self.current_section = section;
@@ -693,13 +757,31 @@ impl PezMaxApp {
         if self.current_section != section {
             self.page_enter_anim = SpringAnim::with_target(0.4, 0.8, 0.0, 0.0, 1.0);
             self.sidebar_indicator_anim.set_target(section.index() as f64);
+            self.subtab_indicator_anim.set_target(0.0);
         }
+        let sub_idx = section.subsections()
+            .iter()
+            .position(|&(s, _)| s == sub)
+            .unwrap_or(0) as f64;
+        self.subtab_indicator_anim.set_target(sub_idx);
         self.current_section = section;
         self.current_subsection = sub;
     }
 
-    /// 切换认证子页面
+    /// 切换当前 Section 内的子标签（带弹簧动画）
+    pub fn navigate_subsection(&mut self, sub: Subsection) {
+        let sub_idx = self.current_section.subsections()
+            .iter()
+            .position(|&(s, _)| s == sub)
+            .unwrap_or(0) as f64;
+        self.subtab_indicator_anim.set_target(sub_idx);
+        self.current_subsection = sub;
+    }
+
+    /// 切换认证子页面（触发淡入动画）
     pub fn set_auth_page(&mut self, page: AuthPage) {
+        self.auth_anim = Progress::with_easing(0.2, Easing::EaseOutCubic);
+        self.auth_anim.set_target(1.0);
         self.auth_page = page;
     }
 
@@ -729,6 +811,8 @@ impl PezMaxApp {
         self.download_records = AsyncData::new();
         self.recent_files = AsyncData::new();
         self.user_stats_data = AsyncData::new();
+        self.user_rank_data = AsyncData::new();
+        self.my_reports_data = AsyncData::new();
     }
 
     /// 4s 后触发离场动画，4.7s 后移除
@@ -749,13 +833,22 @@ impl PezMaxApp {
 
 impl eframe::App for PezMaxApp {
     fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
+        // 深色模式切换：同步 thread_local 并重新应用主题
+        let current_dark = theme::is_dark();
+        if self.dark_mode != current_dark {
+            theme::set_dark(self.dark_mode);
+            theme::apply_metro_theme(ctx);
+        }
+
         let dt = ctx.input(|i| i.stable_dt) as f64;
 
         // 每帧推进所有动画状态
         self.sidebar_anim.update(dt);
         self.sidebar_indicator_anim.update(dt);
+        self.subtab_indicator_anim.update(dt);
         self.preview_anim.update(dt);
         self.page_enter_anim.update(dt);
+        self.auth_anim.update(dt);
         for toast in &mut self.toasts {
             toast.enter.update(dt);
             toast.exit.update(dt);
@@ -764,8 +857,10 @@ impl eframe::App for PezMaxApp {
         // 有动画进行时持续请求重绘
         if !self.sidebar_anim.is_steady()
             || !self.sidebar_indicator_anim.is_steady()
+            || !self.subtab_indicator_anim.is_steady()
             || !self.preview_anim.is_steady()
             || !self.page_enter_anim.is_steady()
+            || !self.auth_anim.is_steady()
             || self.toasts.iter().any(|t| !t.enter.is_steady() || !t.exit.is_steady())
         {
             ctx.request_repaint();
@@ -855,6 +950,8 @@ impl eframe::App for PezMaxApp {
             self.schools_data.poll();
             self.bookmarks_data.poll();
             self.favorites_data.poll();
+            self.user_rank_data.poll();
+            self.my_reports_data.poll();
             // 同步 user_stats_data → user_stats（兼容旧代码）
             if let Some(ref stats) = self.user_stats_data.data {
                 self.user_stats = Some(stats.clone());
@@ -868,20 +965,34 @@ impl eframe::App for PezMaxApp {
                 AuthPage::Register => crate::pages::register::render(self, ctx),
                 AuthPage::ForgetPassword => crate::pages::forget_password::render(self, ctx),
             }
+            // 认证页切换时叠加白色蒙版淡入
+            if !self.auth_anim.is_steady() {
+                let overlay_alpha = ((1.0 - self.auth_anim.value() as f32) * 255.0) as u8;
+                egui::Area::new(egui::Id::new("auth_fade_overlay"))
+                    .order(egui::Order::Foreground)
+                    .fixed_pos(egui::pos2(0.0, 0.0))
+                    .show(ctx, |ui| {
+                        ui.painter().rect_filled(
+                            ctx.screen_rect(),
+                            egui::CornerRadius::ZERO,
+                            egui::Color32::from_rgba_unmultiplied(255, 255, 255, overlay_alpha),
+                        );
+                    });
+            }
             return;
         }
 
         // 自动登录验证中：显示加载提示
         if self.auto_login_rx.is_some() {
             egui::CentralPanel::default()
-                .frame(egui::Frame::new().fill(crate::theme::colors::BG_WHITE))
+                .frame(egui::Frame::new().fill(crate::theme::colors::bg_white()))
                 .show(ctx, |ui| {
                     ui.vertical_centered(|ui| {
                         ui.add_space(ui.available_height() * 0.4);
                         ui.label(
                             egui::RichText::new("验证登录状态...")
                                 .font(egui::FontId::new(18.0, egui::FontFamily::Proportional))
-                                .color(crate::theme::colors::TEXT_SECONDARY),
+                                .color(crate::theme::colors::text_secondary()),
                         );
                     });
                 });
@@ -903,10 +1014,12 @@ impl eframe::App for PezMaxApp {
         // 内容区（页面切换时有轻微入场偏移动画）
         let enter_v = self.page_enter_anim.value();
         egui::CentralPanel::default()
-            .frame(egui::Frame::new().fill(theme::colors::BG_WHITE))
+            .frame(egui::Frame::new().fill(theme::colors::bg_white()))
             .show(ctx, |ui| {
                 if !self.page_enter_anim.is_steady() {
                     let offset = map_range(enter_v, 20.0, 0.0) as f32;
+                    let alpha = map_range(enter_v, 0.4, 1.0) as f32;
+                    ui.set_opacity(alpha.clamp(0.0, 1.0));
                     if offset > 0.1 {
                         ui.add_space(offset);
                     }
@@ -964,18 +1077,21 @@ fn render_subtab_bar(
         .max_height(44.0)
         .frame(
             egui::Frame::new()
-                .fill(colors::BG_CARD)
-                .stroke(egui::Stroke::new(1.0, colors::BORDER)),
+                .fill(colors::bg_card())
+                .stroke(egui::Stroke::new(1.0, colors::border())),
         )
         .show(ctx, |ui| {
+            // 收集各 tab 的 rect，之后用于插值下划线位置
+            let mut tab_rects: Vec<egui::Rect> = Vec::with_capacity(subsections.len());
+
             ui.horizontal(|ui| {
                 ui.add_space(16.0);
-                for &(sub, label) in subsections {
+                for (i, &(sub, label)) in subsections.iter().enumerate() {
                     let is_active = app.current_subsection == sub;
                     let text_color = if is_active {
-                        colors::PRIMARY
+                        colors::primary()
                     } else {
-                        colors::TEXT_SECONDARY
+                        colors::text_secondary()
                     };
 
                     let btn = egui::Button::new(
@@ -987,26 +1103,40 @@ fn render_subtab_bar(
                     .corner_radius(egui::CornerRadius::same(0));
 
                     let resp = ui.add(btn);
+                    tab_rects.push(resp.rect);
 
                     if resp.clicked() && !is_active {
-                        app.current_subsection = sub;
-                    }
-
-                    // 选中：底部蓝色下划线
-                    if is_active {
-                        let r = resp.rect;
-                        ui.painter().line_segment(
-                            [
-                                egui::pos2(r.left() + 4.0, r.bottom() - 2.0),
-                                egui::pos2(r.right() - 4.0, r.bottom() - 2.0),
-                            ],
-                            egui::Stroke::new(2.0, colors::PRIMARY),
-                        );
+                        app.navigate_subsection(sub);
+                        let _ = i; // index already captured via subtab_indicator_anim
                     }
 
                     ui.add_space(8.0);
                 }
             });
+
+            // 弹簧插值下划线：在两个相邻 tab rect 之间平滑滑动
+            if tab_rects.len() >= 2 {
+                let idx_f = app.subtab_indicator_anim.value();
+                let lo = (idx_f.floor() as usize).min(tab_rects.len() - 1);
+                let hi = (idx_f.ceil()  as usize).min(tab_rects.len() - 1);
+                let t  = idx_f.fract() as f32;
+
+                let r_lo = tab_rects[lo];
+                let r_hi = tab_rects[hi];
+                let x0 = egui::lerp(r_lo.left()  + 4.0..=r_hi.left()  + 4.0, t);
+                let x1 = egui::lerp(r_lo.right() - 4.0..=r_hi.right() - 4.0, t);
+                let y  = r_lo.bottom() - 2.0;
+                ui.painter().line_segment(
+                    [egui::pos2(x0, y), egui::pos2(x1, y)],
+                    egui::Stroke::new(2.0, colors::primary()),
+                );
+            } else if let Some(&r) = tab_rects.first() {
+                // 只有一个 tab：直接画
+                ui.painter().line_segment(
+                    [egui::pos2(r.left() + 4.0, r.bottom() - 2.0), egui::pos2(r.right() - 4.0, r.bottom() - 2.0)],
+                    egui::Stroke::new(2.0, colors::primary()),
+                );
+            }
         });
 }
 

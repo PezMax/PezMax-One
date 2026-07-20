@@ -13,7 +13,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
     }
 
     egui::CentralPanel::default()
-        .frame(egui::Frame::new().fill(colors::BG_WHITE))
+        .frame(egui::Frame::new().fill(colors::bg_white()))
         .show(ctx, |ui| {
             // 垂直居中
             ui.vertical_centered(|ui| {
@@ -23,22 +23,22 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                 ui.label(
                     egui::RichText::new("PezMax")
                         .font(FontId::new(42.0, egui::FontFamily::Proportional))
-                        .color(colors::PRIMARY),
+                        .color(colors::primary()),
                 );
                 ui.add_space(4.0);
                 ui.label(
                     egui::RichText::new("试卷资源管理系统")
                         .font(FontId::new(16.0, egui::FontFamily::Proportional))
-                        .color(colors::TEXT_SECONDARY),
+                        .color(colors::text_secondary()),
                 );
 
                 ui.add_space(36.0);
 
                 // 登录卡片
                 egui::Frame::new()
-                    .fill(colors::BG_CARD)
+                    .fill(colors::bg_card())
                     .corner_radius(CornerRadius::same(0))
-                    .stroke(egui::Stroke::new(1.0, colors::BORDER))
+                    .stroke(egui::Stroke::new(1.0, colors::border()))
                     .show(ui, |ui| {
                         ui.set_max_width(380.0);
                         ui.set_min_width(320.0);
@@ -48,7 +48,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                             ui.label(
                                 egui::RichText::new("欢迎回来")
                                     .font(FontId::new(24.0, egui::FontFamily::Proportional))
-                                    .color(colors::TEXT_PRIMARY),
+                                    .color(colors::text_primary()),
                             );
                         });
                         ui.add_space(20.0);
@@ -59,7 +59,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                             ui.label(
                                 egui::RichText::new("用户名")
                                     .font(FontId::new(14.0, egui::FontFamily::Proportional))
-                                    .color(colors::TEXT_PRIMARY),
+                                    .color(colors::text_primary()),
                             );
                             ui.add(
                                 egui::TextEdit::singleline(&mut app.login_username)
@@ -77,7 +77,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                             ui.label(
                                 egui::RichText::new("密  码")
                                     .font(FontId::new(14.0, egui::FontFamily::Proportional))
-                                    .color(colors::TEXT_PRIMARY),
+                                    .color(colors::text_primary()),
                             );
                             ui.add(
                                 egui::TextEdit::singleline(&mut app.login_password)
@@ -96,7 +96,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                                 ui.label(
                                     egui::RichText::new("验证码")
                                         .font(FontId::new(14.0, egui::FontFamily::Proportional))
-                                        .color(colors::TEXT_PRIMARY),
+                                        .color(colors::text_primary()),
                                 );
                                 ui.add(
                                     egui::TextEdit::singleline(&mut app.login_captcha)
@@ -120,13 +120,13 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                                 } else if app.captcha_loaded {
                                     ui.label(
                                         egui::RichText::new("验证码加载失败")
-                                            .color(colors::TEXT_SECONDARY)
+                                            .color(colors::text_secondary())
                                             .font(FontId::new(12.0, egui::FontFamily::Proportional)),
                                     );
                                 } else {
                                     ui.label(
                                         egui::RichText::new("加载中...")
-                                            .color(colors::TEXT_SECONDARY)
+                                            .color(colors::text_secondary())
                                             .font(FontId::new(12.0, egui::FontFamily::Proportional)),
                                     );
                                 }
@@ -141,7 +141,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                                 ui.add_space(24.0);
                                 ui.label(
                                     egui::RichText::new(&app.login_error)
-                                        .color(colors::ERROR)
+                                        .color(colors::error())
                                         .font(FontId::new(13.0, egui::FontFamily::Proportional)),
                                 );
                             });
@@ -165,9 +165,9 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                         let btn = egui::Button::new(
                             egui::RichText::new(btn_label)
                                 .font(FontId::new(16.0, egui::FontFamily::Proportional))
-                                .color(colors::TEXT_ON_PRIMARY),
+                                .color(colors::text_on_primary()),
                         )
-                        .fill(colors::PRIMARY)
+                        .fill(colors::primary())
                         .min_size(egui::Vec2::new(280.0, 44.0))
                         .corner_radius(CornerRadius::same(0));
 

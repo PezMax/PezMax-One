@@ -53,4 +53,9 @@ impl ApiClient {
     pub async fn update_security(&self, data: &serde_json::Value) -> Result<ApiResponse<serde_json::Value>> {
         self.put("/datum/desktop/user/profile/security", data).await
     }
+
+    /// 获取上传排行榜
+    pub async fn get_user_rank(&self) -> Result<ApiResponse<Vec<UserRankItem>>> {
+        self.get("/datum/user/rank", None).await
+    }
 }
