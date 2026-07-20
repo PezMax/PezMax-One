@@ -218,7 +218,7 @@ pub fn render_contribute_file(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                 let file = PaperFile {
                                     file_subject: subject,
                                     school_name: school,
-                                    file_year: year,
+                                    file_year: year.parse().unwrap_or(0),
                                     ..Default::default()
                                 };
                                 let _ = api.create_file(&file).await;

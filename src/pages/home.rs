@@ -235,7 +235,7 @@ pub fn render(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                     ui.label(
                                         egui::RichText::new(format!(
                                             "{} · {} · by {}",
-                                            file.file_subject, file.create_time, file.file_uploader
+                                            file.file_subject, file.create_time, file.create_by
                                         ))
                                         .font(FontId::new(12.0, egui::FontFamily::Proportional))
                                         .color(colors::TEXT_SECONDARY),

@@ -1,5 +1,6 @@
 // 通用 API 响应模型
 // 对应后端 AjaxResult / TableDataInfo 统一格式
+// 后端返回 camelCase JSON，所有数据模型使用 rename_all = "camelCase"
 
 use serde::{Deserialize, Serialize};
 
@@ -72,6 +73,7 @@ pub struct LoginResponse {
 
 /// 用户信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UserInfo {
     #[serde(default)]
     pub user_id: i64,
@@ -93,6 +95,7 @@ pub struct UserInfo {
 
 /// getInfo 响应结构（用户信息嵌套在 data.user 中）
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UserInfoResponse {
     pub user: UserInfo,
     #[serde(default)]
@@ -107,8 +110,9 @@ pub struct UserInfoResponse {
 
 /// 验证码响应
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CaptchaResponse {
-    #[serde(default = "default_true", alias = "captchaEnabled")]
+    #[serde(default = "default_true")]
     pub captcha_enabled: bool,
     #[serde(default)]
     pub uuid: String,
@@ -139,7 +143,10 @@ pub struct SecurityQuestion {
 }
 
 /// 试卷文件
+/// 后端返回: fileId, fileName, fileFormat, fileSize, fileUrl, fileSubject,
+///            fileYear(整数), fileSchool, createBy, createTime, fileCover
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PaperFile {
     #[serde(default)]
     pub file_id: i64,
@@ -154,8 +161,8 @@ pub struct PaperFile {
     #[serde(default)]
     pub file_subject: String,
     #[serde(default)]
-    pub file_year: String,
-    #[serde(default)]
+    pub file_year: i64,
+    #[serde(rename = "fileSchool", default)]
     pub school_name: String,
     #[serde(default)]
     pub create_by: String,
@@ -163,12 +170,11 @@ pub struct PaperFile {
     pub create_time: String,
     #[serde(default)]
     pub file_cover: String,
-    #[serde(default)]
-    pub file_uploader: String,
 }
 
 /// 文件树节点
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FileTreeNode {
     pub id: i64,
     pub label: String,
@@ -179,24 +185,33 @@ pub struct FileTreeNode {
 }
 
 /// 书签
+/// 后端返回: id, title, description, resourceType, coverImage, createBy, createTime, collection
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Bookmark {
     #[serde(default)]
     pub id: i64,
     #[serde(default)]
-    pub bookmark_name: String,
+    pub title: String,
     #[serde(default)]
-    pub bookmark_url: String,
+    pub description: String,
     #[serde(default)]
     pub resource_type: String,
-    #[serde(default)]
+    #[serde(rename = "coverImage", default)]
     pub cover_url: String,
     #[serde(default)]
+    pub create_by: String,
+    #[serde(default)]
     pub create_time: String,
+    #[serde(default)]
+    pub collection: String,
+    #[serde(default)]
+    pub status: i64,
 }
 
 /// 通知
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Notification {
     #[serde(default)]
     pub notify_id: i64,
@@ -214,6 +229,7 @@ pub struct Notification {
 
 /// 下载记录
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DownloadRecord {
     #[serde(default)]
     pub download_id: i64,
@@ -231,6 +247,7 @@ pub struct DownloadRecord {
 
 /// 收藏记录
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FavoriteRecord {
     #[serde(default)]
     pub file_id: i64,
@@ -244,6 +261,7 @@ pub struct FavoriteRecord {
 
 /// 用户统计
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UserStats {
     #[serde(default)]
     pub favorite_count: i64,
@@ -255,6 +273,7 @@ pub struct UserStats {
 
 /// 举报
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Report {
     #[serde(default)]
     pub report_id: i64,

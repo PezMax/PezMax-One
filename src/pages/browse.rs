@@ -144,7 +144,7 @@ pub fn render_resource_manager(app: &mut PezMaxApp, ui: &mut egui::Ui) {
         .iter()
         .filter(|f| {
             let sub_ok = cur_sub.as_deref().map_or(true, |s| s == f.file_subject);
-            let yr_ok = cur_year.map_or(true, |y| y.to_string() == f.file_year);
+            let yr_ok = cur_year.map_or(true, |y| y == f.file_year as i32);
             let sch_ok = cur_school.as_deref().map_or(true, |s| s == f.school_name);
             let q_ok = search_q.is_empty()
                 || f.file_name.to_lowercase().contains(&search_q)
@@ -266,13 +266,14 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                         });
                         ui.add_space(12.0);
 
+                        let year_str = file.file_year.to_string();
                         let meta = [
-                            ("文件名", &file.file_name),
-                            ("学科", &file.file_subject),
-                            ("学校", &file.school_name),
-                            ("年份", &file.file_year),
-                            ("大小", &size_str),
-                            ("上传者", &file.file_uploader),
+                            ("文件名", file.file_name.as_str()),
+                            ("学科", file.file_subject.as_str()),
+                            ("学校", file.school_name.as_str()),
+                            ("年份", year_str.as_str()),
+                            ("大小", size_str.as_str()),
+                            ("上传者", file.create_by.as_str()),
                         ];
 
                         for (key, val) in &meta {
@@ -540,8 +541,8 @@ pub fn render_bookmarks(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                     app.bookmark_form_url.clear();
                     tokio::spawn(async move {
                         let bm = Bookmark {
-                            bookmark_name: name,
-                            bookmark_url: url,
+                            title: name,
+                            description: url,
                             ..Default::default()
                         };
                         let _ = api.create_bookmark(&bm).await;
@@ -572,12 +573,12 @@ pub fn render_bookmarks(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                         ui.vertical(|ui| {
                             ui.add_space(8.0);
                             ui.label(
-                                egui::RichText::new(&bookmark.bookmark_name)
+                                egui::RichText::new(&bookmark.title)
                                     .font(FontId::new(14.0, egui::FontFamily::Proportional))
                                     .color(colors::TEXT_PRIMARY),
                             );
                             ui.label(
-                                egui::RichText::new(&bookmark.bookmark_url)
+                                egui::RichText::new(&bookmark.description)
                                     .font(FontId::new(12.0, egui::FontFamily::Proportional))
                                     .color(colors::TEXT_SECONDARY),
                             );
@@ -769,7 +770,7 @@ fn file_card(ui: &mut egui::Ui, file: &PaperFile, api: &ApiClient) -> bool {
                     );
                     ui.add_space(4.0);
                     ui.label(
-                        egui::RichText::new(format!("{} · {}", file.file_subject, file.file_year))
+                        egui::RichText::new(format!("{} · {}", file.file_subject, file.file_year.to_string()))
                             .font(FontId::new(12.0, egui::FontFamily::Proportional))
                             .color(colors::TEXT_SECONDARY),
                     );
