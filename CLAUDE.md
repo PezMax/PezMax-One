@@ -14,14 +14,8 @@ cargo fix                # auto-fix warnings
 
 The app is a native Windows desktop binary (egui/eframe). No external build tooling needed.
 
-## Submodule
-
-```bash
-git submodule update --init --recursive   # clone PezMax-Java after first checkout
-cd PezMax-Java && git checkout main       # ensure submodule is on the right branch
-```
-
-The Java backend is a separate project (`PezMax-Java/`) — this repo only contains the Rust frontend. The API contract is documented in `后端接口列表.md`.
+The app connects to the remote backend API at `http://154.8.139.48:8080`.
+Java backend source is maintained separately at PezMax/PezMax-Java.
 
 ## Architecture
 
@@ -71,8 +65,6 @@ PezMax-One/                  ← product root, Rust crate root
 │       ├── easing.rs        ← 缓动函数（Linear/EaseOutCubic 等）
 │       ├── animator.rs      ← Animation trait + Animator（预留存根）
 │       └── NOTE.md          ← PezMax-One 使用发现记录
-├── PezMax-Java/             ← git submodule (Java Spring Boot backend)
-├── PezMax-Desktop/          ← reference: old Electron+Vue3 frontend (gitignored)
 ├── repowiki/                ← knowledge base (tracked for reference)
 ├── resources/icon.png       ← app icon
 ├── SOKUOU_ENGINE.md         ← Sokuou Engine 完整设计书
