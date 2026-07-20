@@ -479,8 +479,9 @@ impl PezMaxApp {
     /// 异步加载通知列表
     pub fn trigger_load_notifications(&mut self) {
         let api = self.api.clone();
+        let user_id = self.current_user.as_ref().map(|u| u.user_id).unwrap_or(0);
         self.notifications.load(move || async move {
-            let resp = api.get_popup_notifications(0).await?;
+            let resp = api.get_popup_notifications(user_id).await?;
             resp.data.ok_or_else(|| anyhow::anyhow!("通知数据为空"))
         });
     }
