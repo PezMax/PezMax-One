@@ -2,8 +2,10 @@
 set -e
 
 echo "============================================"
-echo "  PezMax 全量构建脚本 (Linux)"
-echo "  构建 Rust 前端 + Java 后端"
+echo "  PezMax Build Script (Linux)"
+echo "  Build Rust frontend only"
+echo "  Remote backend is at http://154.8.139.48:8080"
+echo "  To build backend locally, run: ./build-backend.sh"
 echo "============================================"
 echo ""
 
@@ -12,71 +14,26 @@ BUILD_DIR="$ROOT_DIR/build"
 DIST_DIR="$BUILD_DIR/dist"
 RUST_TARGET_DIR="$BUILD_DIR/rust-target"
 
-# 清理旧的 dist 目录
+# Clean old dist
 rm -rf "$DIST_DIR"
 mkdir -p "$DIST_DIR"
 
-# ─── 1. 构建 Rust 前端 ────────────────────────────────
-echo "[1/2] 构建 Rust 前端..."
+# ─── Build Rust frontend ─────────────────────────────
+echo "[1/1] Building Rust frontend..."
 
 export CARGO_TARGET_DIR="$RUST_TARGET_DIR"
 
 cd "$ROOT_DIR"
 
 cargo build --release
-echo "[OK] Rust 前端构建成功"
+echo "[OK] Rust frontend built successfully"
 
-# 复制二进制到 dist
+# Copy binary to dist
 cp "$RUST_TARGET_DIR/release/pezmax-egui" "$DIST_DIR/pezmax-egui"
-echo "[OK] 前端二进制已复制到 $DIST_DIR/pezmax-egui"
+echo "[OK] Frontend binary copied to $DIST_DIR/pezmax-egui"
 
-# ─── 2. 构建 Java 后端 ────────────────────────────────
-echo "[2/2] 构建 Java 后端..."
-
-# 检查 Java 是否可用（先查 PATH，再查常见安装路径）
-if command -v java &> /dev/null; then
-    : # Java found in PATH
-elif [ -d "/usr/lib/jvm/java-17-openjdk" ]; then
-    export JAVA_HOME="/usr/lib/jvm/java-17-openjdk"
-    export PATH="$JAVA_HOME/bin:$PATH"
-    echo "[INFO] Found Java at $JAVA_HOME"
-elif [ -d "/c/Program Files/Java/jdk-17" ]; then
-    export JAVA_HOME="/c/Program Files/Java/jdk-17"
-    export PATH="$JAVA_HOME/bin:$PATH"
-    echo "[INFO] Found Java at $JAVA_HOME"
-else
-    echo "[WARN] Java 未安装或未配置，跳过 Java 后端构建。"
-    echo "[WARN] 如需构建后端，请安装 JDK 17+ 并设置 JAVA_HOME 环境变量。"
-    echo ""
-    echo "============================================"
-    echo "  构建完成（仅前端）！"
-    echo "  输出目录: $DIST_DIR"
-    echo "    - pezmax-egui       (Rust 前端)"
-    echo "============================================"
-    exit 0
-fi
-
-cd "$ROOT_DIR/PezMax-Java"
-
-chmod +x mvnw
-./mvnw clean package -DskipTests
-echo "[OK] Java 后端构建成功"
-
-# 复制 JAR 到 dist
-JAR_FILE=$(find ruoyi-admin/target -name "*.jar" ! -name "*sources*" ! -name "*javadoc*" 2>/dev/null | head -1)
-if [ -n "$JAR_FILE" ]; then
-    cp "$JAR_FILE" "$DIST_DIR/ruoyi-admin.jar"
-    echo "[OK] 后端 JAR 已复制到 $DIST_DIR/ruoyi-admin.jar"
-else
-    echo "[WARN] 未找到后端 JAR 文件，请检查构建输出"
-fi
-
-# ─── 完成 ────────────────────────────────────────────
+# ─── Done ────────────────────────────────────────────
 echo "============================================"
-echo "  构建完成！"
-echo "  输出目录: $DIST_DIR"
-echo "    - pezmax-egui       (Rust 前端)"
-echo "    - ruoyi-admin.jar   (Java 后端)"
+echo "  Build complete!"
+echo "  Output: $DIST_DIR/pezmax-egui"
 echo "============================================"
-
-cd "$ROOT_DIR"
