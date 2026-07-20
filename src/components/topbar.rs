@@ -11,7 +11,8 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
         .frame(
             egui::Frame::new()
                 .fill(colors::bg_card())
-                .stroke(egui::Stroke::new(1.0, colors::border())),
+                .inner_margin(egui::Margin::ZERO)
+                .stroke(egui::Stroke::NONE),
         )
         .show(ctx, |ui| {
             ui.add_space(8.0);
