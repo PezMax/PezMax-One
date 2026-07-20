@@ -3,7 +3,7 @@
 
 use crate::app::{PezMaxApp, Section};
 use crate::sokuou::map_range_clamped;
-use crate::theme::colors;
+use crate::theme::{self, colors};
 use egui::{Color32, CornerRadius, Frame, Rect, Sense, pos2};
 
 pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
@@ -13,6 +13,18 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
     // 0.3 → 0.7 之间从透明到不透明，同时从左侧滑入
     let label_alpha = ((anim_val - 0.3) / 0.4).clamp(0.0, 1.0) as f32;
     let label_offset = (1.0 - anim_val) as f32 * 6.0;
+
+    // 侧边栏文字颜色：浅色模式用深褐色，深色模式用白色
+    let sidebar_fg = if theme::is_dark() {
+        Color32::WHITE
+    } else {
+        Color32::from_rgb(0x3A, 0x30, 0x28)
+    };
+    let sidebar_fg_muted = if theme::is_dark() {
+        Color32::from_gray(180)
+    } else {
+        Color32::from_rgb(0x70, 0x65, 0x55)
+    };
 
     egui::SidePanel::left("sidebar")
         .resizable(false)
@@ -35,7 +47,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                 let resp = ui.label(
                     egui::RichText::new("☰")
                         .font(egui::FontId::new(22.0, egui::FontFamily::Proportional))
-                        .color(Color32::WHITE),
+                        .color(sidebar_fg),
                 )
                 .interact(Sense::click())
                 .on_hover_cursor(egui::CursorIcon::PointingHand);
@@ -74,7 +86,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                             ui.label(
                                 egui::RichText::new(section.icon())
                                     .font(egui::FontId::new(22.0, egui::FontFamily::Proportional))
-                                    .color(Color32::WHITE),
+                                    .color(sidebar_fg),
                             );
                             if label_alpha > 0.0 {
                                 ui.add_space(12.0 + label_offset);
@@ -86,9 +98,9 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                                             egui::FontFamily::Proportional,
                                         ))
                                         .color(if is_active {
-                                            Color32::WHITE
+                                            sidebar_fg
                                         } else {
-                                            Color32::from_gray(180)
+                                            sidebar_fg_muted
                                         }),
                                 );
                             }
@@ -139,7 +151,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                             ui.label(
                                 egui::RichText::new("🔓")
                                     .font(egui::FontId::new(20.0, egui::FontFamily::Proportional))
-                                    .color(Color32::WHITE),
+                                    .color(sidebar_fg_muted),
                             );
                             if label_alpha > 0.0 {
                                 ui.add_space(10.0 + label_offset);
@@ -150,7 +162,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                                             14.0,
                                             egui::FontFamily::Proportional,
                                         ))
-                                        .color(Color32::from_gray(180)),
+                                        .color(sidebar_fg_muted),
                                 );
                             }
                         });

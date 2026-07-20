@@ -110,27 +110,27 @@ pub mod colors {
     // ── 背景色 ──────────────────────────────────────────────────────────────
     pub fn bg_white() -> Color32 {
         if is_dark() { Color32::from_rgb(0x1C, 0x1C, 0x1C) }
-        else         { Color32::from_rgb(0xFA, 0xFA, 0xFA) }
+        else         { Color32::from_rgb(0xF5, 0xF0, 0xE8) }
     }
     pub fn bg_card() -> Color32 {
         if is_dark() { Color32::from_rgb(0x26, 0x26, 0x26) }
-        else         { Color32::WHITE }
+        else         { Color32::from_rgb(0xFA, 0xF7, 0xF0) }
     }
     pub fn bg_sidebar() -> Color32 {
         if is_dark() { Color32::from_rgb(0x14, 0x14, 0x1E) }
-        else         { Color32::from_rgb(0x1E, 0x1E, 0x2E) }
+        else         { Color32::from_rgb(0xC0, 0xB0, 0x9C) }
     }
     pub fn bg_hover() -> Color32 {
         if is_dark() { Color32::from_rgb(0x2E, 0x2E, 0x3A) }
-        else         { Color32::from_rgb(0xE8, 0xE8, 0xF0) }
+        else         { Color32::from_rgb(0xE8, 0xE0, 0xD5) }
     }
     pub fn bg_selected() -> Color32 {
         if is_dark() { Color32::from_rgb(0x35, 0x35, 0x5A) }
-        else         { Color32::from_rgb(0xD0, 0xD0, 0xE8) }
+        else         { Color32::from_rgb(0xDD, 0xD3, 0xC5) }
     }
     pub fn bg_input() -> Color32 {
         if is_dark() { Color32::from_rgb(0x20, 0x20, 0x20) }
-        else         { Color32::from_rgb(0xF0, 0xF0, 0xF0) }
+        else         { Color32::from_rgb(0xEE, 0xE8, 0xDE) }
     }
 
     /// 搜索框/输入框背景：强调色去饱和后的深/浅灰调
@@ -158,7 +158,7 @@ pub mod colors {
     // ── 边框 ────────────────────────────────────────────────────────────────
     pub fn border() -> Color32 {
         if is_dark() { Color32::from_rgb(0x3A, 0x3A, 0x3A) }
-        else         { Color32::from_rgb(0xE0, 0xE0, 0xE0) }
+        else         { Color32::from_rgb(0xD4, 0xC8, 0xB8) }
     }
 
     // ── 骨架屏占位色 ────────────────────────────────────────────────────────
