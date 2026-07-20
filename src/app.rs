@@ -364,6 +364,10 @@ pub struct PezMaxApp {
     pub contribute_subject: String,
     pub contribute_school: String,
     pub contribute_year: String,
+    pub contribute_file_path: Option<String>,
+
+    // 举报表单
+    pub report_content: String,
 
     // 设置开关
     pub setting_auto_launch: bool,
@@ -432,6 +436,8 @@ impl PezMaxApp {
             contribute_subject: String::new(),
             contribute_school: String::new(),
             contribute_year: String::new(),
+            contribute_file_path: None,
+            report_content: String::new(),
             setting_auto_launch: false,
             setting_silent_download: false,
         };

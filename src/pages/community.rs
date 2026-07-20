@@ -2,10 +2,11 @@
 // 三个子标签：用户排行 / 贡献文件 / 举报记录
 
 use crate::app::PezMaxApp;
+use crate::api::models::*;
 use crate::theme::colors;
 use egui::{CornerRadius, FontId, Vec2};
 
-/// 用户排行榜（Phase 3 对接真实 API）
+/// 用户排行榜（暂无后端 API，保留模拟数据）
 pub fn render_user_ranking(_app: &mut PezMaxApp, ui: &mut egui::Ui) {
     ui.add_space(16.0);
     ui.label(
@@ -21,7 +22,6 @@ pub fn render_user_ranking(_app: &mut PezMaxApp, ui: &mut egui::Ui) {
     );
     ui.add_space(16.0);
 
-    // 模拟排行数据
     let rank_data = [
         (1, "张三", 128, 3_421),
         (2, "李四", 96, 2_108),
@@ -148,7 +148,18 @@ pub fn render_contribute_file(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                         )
                         .fill(colors::PRIMARY)
                         .corner_radius(CornerRadius::same(0));
-                        if ui.add(btn).clicked() {}
+                        if ui.add(btn).clicked() {
+                            // 使用 rfd 打开文件对话框
+                            #[cfg(not(target_arch = "wasm32"))]
+                            {
+                                let file = rfd::FileDialog::new()
+                                    .add_filter("PDF", &["pdf"])
+                                    .pick_file();
+                                if let Some(path) = file {
+                                    app.contribute_file_path = Some(path.display().to_string());
+                                }
+                            }
+                        }
                         ui.add_space(20.0);
                     });
                 });
@@ -196,10 +207,22 @@ pub fn render_contribute_file(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                         .corner_radius(CornerRadius::same(0));
 
                         if ui.add_enabled(can_submit, btn).clicked() {
-                            // Phase 4: call API upload
+                            let api = app.api.clone();
+                            let subject = app.contribute_subject.clone();
+                            let school = app.contribute_school.clone();
+                            let year = app.contribute_year.clone();
                             app.contribute_subject.clear();
                             app.contribute_school.clear();
                             app.contribute_year.clear();
+                            tokio::spawn(async move {
+                                let file = PaperFile {
+                                    file_subject: subject,
+                                    school_name: school,
+                                    file_year: year,
+                                    ..Default::default()
+                                };
+                                let _ = api.create_file(&file).await;
+                            });
                         }
                     });
                     ui.add_space(16.0);
@@ -256,7 +279,10 @@ fn contribute_field(ui: &mut egui::Ui, label: &str, value: &mut String, hint: &s
 }
 
 /// 举报记录
-pub fn render_report_record(_app: &mut PezMaxApp, ui: &mut egui::Ui) {
+pub fn render_report_record(app: &mut PezMaxApp, ui: &mut egui::Ui) {
+    // 自动加载举报记录（通过文件列表中的举报功能已经触发）
+    // 这里使用简单的举报提交表单
+
     ui.add_space(16.0);
     ui.label(
         egui::RichText::new("举报记录")
@@ -271,15 +297,61 @@ pub fn render_report_record(_app: &mut PezMaxApp, ui: &mut egui::Ui) {
     );
     ui.add_space(20.0);
 
-    // 快速举报按钮
-    let btn = egui::Button::new(
-        egui::RichText::new("  🚩 提交新举报  ")
-            .font(FontId::new(14.0, egui::FontFamily::Proportional))
-            .color(colors::TEXT_ON_PRIMARY),
-    )
-    .fill(colors::ERROR)
-    .corner_radius(CornerRadius::same(0));
-    if ui.add(btn).clicked() {}
+    // 举报表单
+    egui::Frame::new()
+        .fill(colors::BG_CARD)
+        .corner_radius(CornerRadius::same(0))
+        .stroke(egui::Stroke::new(1.0, colors::BORDER))
+        .show(ui, |ui| {
+            ui.set_min_width(ui.available_width());
+            ui.add_space(16.0);
+
+            ui.horizontal(|ui| {
+                ui.add_space(16.0);
+                ui.label(
+                    egui::RichText::new("举报内容")
+                        .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                        .color(colors::TEXT_SECONDARY),
+                );
+                ui.add_space(8.0);
+                let edit = egui::TextEdit::singleline(&mut app.report_content)
+                    .hint_text("请描述违规内容")
+                    .desired_width(300.0)
+                    .font(FontId::new(14.0, egui::FontFamily::Proportional));
+                ui.add(edit);
+            });
+            ui.add_space(12.0);
+
+            ui.horizontal(|ui| {
+                ui.add_space(16.0);
+                let btn = egui::Button::new(
+                    egui::RichText::new("  🚩 提交举报  ")
+                        .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                        .color(colors::TEXT_ON_PRIMARY),
+                )
+                .fill(if !app.report_content.is_empty() {
+                    colors::ERROR
+                } else {
+                    colors::BG_HOVER
+                })
+                .corner_radius(CornerRadius::same(0));
+
+                if ui.add_enabled(!app.report_content.is_empty(), btn).clicked() {
+                    let api = app.api.clone();
+                    let content = app.report_content.clone();
+                    app.report_content.clear();
+                    tokio::spawn(async move {
+                        let report = Report {
+                            content,
+                            report_type: "file".to_string(),
+                            ..Default::default()
+                        };
+                        let _ = api.create_report(&report).await;
+                    });
+                }
+            });
+            ui.add_space(16.0);
+        });
 
     ui.add_space(20.0);
     ui.label(

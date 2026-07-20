@@ -139,7 +139,7 @@ pub struct SecurityQuestion {
 }
 
 /// 试卷文件
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PaperFile {
     #[serde(default)]
     pub file_id: i64,
@@ -254,7 +254,7 @@ pub struct UserStats {
 }
 
 /// 举报
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Report {
     #[serde(default)]
     pub report_id: i64,
