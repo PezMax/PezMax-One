@@ -18,6 +18,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
         .resizable(false)
         .min_width(width)
         .max_width(width)
+        .show_separator_line(false)
         .frame(
             egui::Frame::new()
                 .fill(colors::bg_sidebar())

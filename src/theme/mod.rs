@@ -293,7 +293,7 @@ pub fn apply_metro_theme(ctx: &egui::Context) {
     style.visuals.widgets.noninteractive = egui::style::WidgetVisuals {
         bg_fill:       colors::bg_card(),
         weak_bg_fill:  colors::bg_input(),
-        bg_stroke:     egui::Stroke::new(1.0, border_color),
+        bg_stroke:     egui::Stroke::NONE,
         fg_stroke:     egui::Stroke::new(1.0, text_weak),
         corner_radius: zero,
         expansion:     0.0,

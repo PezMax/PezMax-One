@@ -1174,9 +1174,10 @@ fn render_subtab_bar(
     egui::TopBottomPanel::top("subtab_bar")
         .min_height(44.0)
         .max_height(44.0)
+        .show_separator_line(false)
         .frame(
             egui::Frame::new()
-                .fill(colors::bg_card())
+                .fill(colors::bg_white())
                 .inner_margin(egui::Margin::ZERO)
                 .stroke(egui::Stroke::NONE),
         )
