@@ -209,8 +209,6 @@ impl AnimatedToast {
 pub struct FilterState {
     pub subject: Option<String>,
     pub school: Option<String>,
-    pub year: Option<i32>,
-    pub collapsed: bool,
 }
 
 /// 登录异步结果
@@ -1081,7 +1079,11 @@ impl eframe::App for PezMaxApp {
         // 内容区（页面切换时有轻微入场偏移动画）
         let enter_v = self.page_enter_anim.value();
         egui::CentralPanel::default()
-            .frame(egui::Frame::new().fill(theme::colors::bg_white()))
+            .frame(egui::Frame::new()
+                .fill(theme::colors::bg_white())
+                .inner_margin(egui::Margin::symmetric(20, 0))
+                .stroke(egui::Stroke::NONE),
+            )
             .show(ctx, |ui| {
                 if !self.page_enter_anim.is_steady() {
                     let offset = map_range(enter_v, 20.0, 0.0) as f32;
@@ -1145,7 +1147,8 @@ fn render_subtab_bar(
         .frame(
             egui::Frame::new()
                 .fill(colors::bg_card())
-                .stroke(egui::Stroke::new(1.0, colors::border())),
+                .inner_margin(egui::Margin::ZERO)
+                .stroke(egui::Stroke::NONE),
         )
         .show(ctx, |ui| {
             // 收集各 tab 的 rect，之后用于插值下划线位置
@@ -1161,23 +1164,27 @@ fn render_subtab_bar(
                         colors::text_secondary()
                     };
 
-                    let btn = egui::Button::new(
-                        egui::RichText::new(label)
-                            .font(egui::FontId::new(14.0, egui::FontFamily::Proportional))
-                            .color(text_color),
-                    )
-                    .fill(egui::Color32::TRANSPARENT)
-                    .corner_radius(egui::CornerRadius::same(0));
-
-                    let resp = ui.add(btn);
+                    // 用 allocate_ui 隔离样式，彻底清除任何背景框
+                    let resp = ui.allocate_ui(egui::vec2(80.0, 36.0), |ui| {
+                        ui.style_mut().visuals.widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
+                        ui.style_mut().visuals.widgets.inactive.bg_stroke = egui::Stroke::NONE;
+                        ui.style_mut().visuals.widgets.hovered = ui.style().visuals.widgets.inactive.clone();
+                        ui.style_mut().visuals.widgets.active = ui.style().visuals.widgets.inactive.clone();
+                        ui.add(
+                            egui::Button::new(
+                                egui::RichText::new(label)
+                                    .font(egui::FontId::new(14.0, egui::FontFamily::Proportional))
+                                    .color(text_color),
+                            )
+                            .min_size(egui::vec2(80.0, 36.0)),
+                        )
+                    });
+                    let resp = resp.inner;
                     tab_rects.push(resp.rect);
 
                     if resp.clicked() && !is_active {
                         app.navigate_subsection(sub);
-                        let _ = i; // index already captured via subtab_indicator_anim
                     }
-
-                    ui.add_space(8.0);
                 }
             });
 
