@@ -386,6 +386,10 @@ pub struct PezMaxApp {
     pub theme_mode: theme::ThemeMode,
     pub accent_idx: usize,
 
+    // 搜索框提示文字动画（SpringAnim: 0.0=隐藏, 1.0=完全显示）
+    pub search_hint_anim: SpringAnim,
+    pub search_was_focused: bool,
+
     // 试卷详情面板：是否显示文件信息侧栏
     pub show_info_panel: bool,
     // 预览模式下底部操作栏的待处理动作（每帧渲染后重置）
@@ -478,6 +482,9 @@ impl PezMaxApp {
             setting_silent_download: false,
             theme_mode: theme::ThemeMode::System,
             accent_idx: 0,
+
+            search_hint_anim: SpringAnim::new(0.25, 0.7, 0.0),
+            search_was_focused: false,
 
             show_info_panel: false,
             preview_bar_action: action_bar::Action::None,
@@ -911,6 +918,7 @@ impl eframe::App for PezMaxApp {
         self.preview_anim.update(dt);
         self.page_enter_anim.update(dt);
         self.auth_anim.update(dt);
+        self.search_hint_anim.update(dt);
         self.pdf_viewer.update_animations(dt);
         for toast in &mut self.toasts {
             toast.enter.update(dt);
@@ -945,6 +953,7 @@ impl eframe::App for PezMaxApp {
             || !self.preview_anim.is_steady()
             || !self.page_enter_anim.is_steady()
             || !self.auth_anim.is_steady()
+            || !self.search_hint_anim.is_steady()
             || self.pdf_viewer.is_animating()
             || self.pdf_viewer.is_loading()
             || self.toasts.iter().any(|t| !t.enter.is_steady() || !t.exit.is_steady())
