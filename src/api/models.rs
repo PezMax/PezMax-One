@@ -179,7 +179,7 @@ pub struct FileTreeNode {
 }
 
 /// 书签
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Bookmark {
     #[serde(default)]
     pub id: i64,

@@ -312,6 +312,12 @@ pub struct PezMaxApp {
     pub download_records: AsyncData<Vec<DownloadRecord>>,
     pub recent_files: AsyncData<Vec<PaperFile>>,
     pub user_stats_data: AsyncData<UserStats>,
+    // Browse 页面
+    pub file_list_data: AsyncData<Vec<PaperFile>>,
+    pub subjects_data: AsyncData<Vec<String>>,
+    pub schools_data: AsyncData<Vec<String>>,
+    pub bookmarks_data: AsyncData<Vec<Bookmark>>,
+    pub favorites_data: AsyncData<Vec<FavoriteRecord>>,
 
     // 认证
     pub is_logged_in: bool,
@@ -392,6 +398,11 @@ impl PezMaxApp {
             download_records: AsyncData::new(),
             recent_files: AsyncData::new(),
             user_stats_data: AsyncData::new(),
+            file_list_data: AsyncData::new(),
+            subjects_data: AsyncData::new(),
+            schools_data: AsyncData::new(),
+            bookmarks_data: AsyncData::new(),
+            favorites_data: AsyncData::new(),
 
             is_logged_in: false,
             auth_page: AuthPage::Login,
@@ -605,10 +616,58 @@ impl PezMaxApp {
     /// 异步加载用户统计
     pub fn trigger_load_user_stats(&mut self) {
         let api = self.api.clone();
-        let old_user_stats = self.user_stats.clone();
         self.user_stats_data.load(move || async move {
             let resp = api.get_user_stats().await?;
             resp.data.ok_or_else(|| anyhow::anyhow!("统计数据为空"))
+        });
+    }
+
+    /// 异步加载文件列表（浏览页）
+    pub fn trigger_load_file_list(&mut self) {
+        let api = self.api.clone();
+        self.file_list_data.load(move || async move {
+            let params = PageParams { page_num: 1, page_size: 50, ..Default::default() };
+            let resp = api.get_file_list(&params).await?;
+            Ok(resp.rows)
+        });
+    }
+
+    /// 异步加载学科列表
+    pub fn trigger_load_subjects(&mut self) {
+        let api = self.api.clone();
+        self.subjects_data.load(move || async move {
+            let resp = api.get_subjects(None).await?;
+            resp.data.ok_or_else(|| anyhow::anyhow!("学科列表为空"))
+        });
+    }
+
+    /// 异步加载学校列表
+    pub fn trigger_load_schools(&mut self) {
+        let api = self.api.clone();
+        self.schools_data.load(move || async move {
+            let resp = api.get_schools(None).await?;
+            resp.data.ok_or_else(|| anyhow::anyhow!("学校列表为空"))
+        });
+    }
+
+    /// 异步加载书签列表
+    pub fn trigger_load_bookmarks(&mut self) {
+        let api = self.api.clone();
+        self.bookmarks_data.load(move || async move {
+            let params = PageParams { page_num: 1, page_size: 50, ..Default::default() };
+            let resp = api.get_bookmark_list(&params).await?;
+            Ok(resp.rows)
+        });
+    }
+
+    /// 异步加载收藏列表
+    pub fn trigger_load_favorites(&mut self) {
+        let api = self.api.clone();
+        let user_id = self.current_user.as_ref().map(|u| u.user_id).unwrap_or(0);
+        self.favorites_data.load(move || async move {
+            let params = PageParams { page_num: 1, page_size: 50, ..Default::default() };
+            let resp = api.get_favorite_list(user_id, &params).await?;
+            Ok(resp.rows)
         });
     }
 
@@ -785,6 +844,11 @@ impl eframe::App for PezMaxApp {
             self.download_records.poll();
             self.recent_files.poll();
             self.user_stats_data.poll();
+            self.file_list_data.poll();
+            self.subjects_data.poll();
+            self.schools_data.poll();
+            self.bookmarks_data.poll();
+            self.favorites_data.poll();
             // 同步 user_stats_data → user_stats（兼容旧代码）
             if let Some(ref stats) = self.user_stats_data.data {
                 self.user_stats = Some(stats.clone());
