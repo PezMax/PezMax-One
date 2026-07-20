@@ -4,6 +4,7 @@
 use crate::app::PezMaxApp;
 use crate::api::client::ApiClient;
 use crate::api::models::*;
+use crate::pdf;
 use crate::sokuou::map_range;
 use crate::theme::colors;
 use egui::{Color32, CornerRadius, FontId, Vec2};
@@ -131,9 +132,61 @@ pub fn render_resource_manager(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     let mut new_school: Option<Option<String>> = None;
     let mut new_year: Option<Option<i32>> = None;
 
-    ui.add_space(16.0);
+    ui.add_space(8.0);
 
-    // 学科
+    // ── 筛选器标题栏（可折叠） ──────────────────────────────
+    ui.horizontal(|ui| {
+        ui.add_space(4.0);
+        let is_open = !app.filters.collapsed;
+        let icon = if is_open { "▼" } else { "▶" };
+        let btn = egui::Button::new(
+            egui::RichText::new(format!("{} 筛选条件", icon))
+                .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                .color(colors::text_secondary()),
+        )
+        .fill(Color32::TRANSPARENT)
+        .corner_radius(CornerRadius::same(0));
+        if ui.add(btn).clicked() {
+            app.filters.collapsed = !app.filters.collapsed;
+        }
+
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            // 有已激活的筛选条件时显示计数
+            let active_count = app.filters.subject.is_some() as i32
+                + app.filters.school.is_some() as i32
+                + app.filters.year.is_some() as i32;
+            if active_count > 0 {
+                ui.label(
+                    egui::RichText::new(format!("已选 {} 项", active_count))
+                        .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                        .color(colors::primary()),
+                );
+                ui.add_space(6.0);
+            }
+            if is_open && active_count > 0 {
+                let clear_btn = egui::Button::new(
+                    egui::RichText::new("✕ 清除")
+                        .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                        .color(colors::text_secondary()),
+                )
+                .fill(Color32::TRANSPARENT)
+                .corner_radius(CornerRadius::same(0));
+                if ui.add(clear_btn).clicked() {
+                    new_sub = Some(None);
+                    new_school = Some(None);
+                    new_year = Some(None);
+                }
+            }
+        });
+    });
+
+    // ── 折叠内容 ────────────────────────────────────────────
+    if !app.filters.collapsed {
+        ui.add_space(8.0);
+        ui.separator();
+        ui.add_space(8.0);
+
+        // 学科
     ui.label(
         egui::RichText::new("学科")
             .font(FontId::new(12.0, egui::FontFamily::Proportional))
@@ -199,6 +252,7 @@ pub fn render_resource_manager(app: &mut PezMaxApp, ui: &mut egui::Ui) {
             ui.add_space(4.0);
         }
     });
+    } // ── 结束 if !app.filters.collapsed ──
 
     ui.add_space(12.0);
     ui.separator();
@@ -264,6 +318,15 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
         return;
     };
 
+    // 先提取需要在闭包中使用的字段，避免后续借用冲突
+    let file_id = file.file_id;
+    let file_name = file.file_name.clone();
+    let file_subject = file.file_subject.clone();
+    let school_name = file.school_name.clone();
+    let file_year = file.file_year;
+    let file_size = file.file_size;
+    let create_by = file.create_by.clone();
+
     let v = app.preview_anim.value();
     let y_offset = map_range(v, 16.0, 0.0) as f32;
     if y_offset > 0.1 {
@@ -296,8 +359,8 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     ui.separator();
     ui.add_space(16.0);
 
-    let size_str = if file.file_size > 0 {
-        format!("{:.1} MB", file.file_size as f64 / 1048576.0)
+    let size_str = if file_size > 0 {
+        format!("{:.1} MB", file_size as f64 / 1048576.0)
     } else {
         "-".to_string()
     };
@@ -324,14 +387,14 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                         });
                         ui.add_space(12.0);
 
-                        let year_str = file.file_year.to_string();
+                        let year_str = file_year.to_string();
                         let meta = [
-                            ("文件名", file.file_name.as_str()),
-                            ("学科",   file.file_subject.as_str()),
-                            ("学校",   file.school_name.as_str()),
+                            ("文件名", file_name.as_str()),
+                            ("学科",   file_subject.as_str()),
+                            ("学校",   school_name.as_str()),
                             ("年份",   year_str.as_str()),
                             ("大小",   size_str.as_str()),
-                            ("上传者", file.create_by.as_str()),
+                            ("上传者", create_by.as_str()),
                         ];
                         for (key, val) in &meta {
                             ui.horizontal(|ui| {
@@ -366,8 +429,7 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                             .corner_radius(CornerRadius::same(0));
                             if ui.add(dl_btn).clicked() {
                                 let api = app.api.clone();
-                                let fid = file.file_id;
-                                tokio::spawn(async move { let _ = api.download_paper(fid).await; });
+                                tokio::spawn(async move { let _ = api.download_paper(file_id).await; });
                             }
                             ui.add_space(8.0);
 
@@ -381,8 +443,7 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                             .corner_radius(CornerRadius::same(0));
                             if ui.add(fav_btn).clicked() {
                                 let api = app.api.clone();
-                                let fid = file.file_id;
-                                tokio::spawn(async move { let _ = api.add_favorite(fid).await; });
+                                tokio::spawn(async move { let _ = api.add_favorite(file_id).await; });
                             }
                             ui.add_space(8.0);
 
@@ -401,32 +462,78 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 
                 ui.add_space(16.0);
 
-                egui::Frame::new()
-                    .fill(colors::bg_input())
-                    .corner_radius(CornerRadius::same(0))
-                    .stroke(egui::Stroke::new(1.0, colors::border()))
-                    .show(ui, |ui| {
-                        ui.set_min_size(Vec2::new(ui.available_width().max(300.0), 320.0));
-                        ui.vertical_centered(|ui| {
-                            ui.add_space(120.0);
-                            ui.label(
-                                egui::RichText::new("📋")
-                                    .font(FontId::new(48.0, egui::FontFamily::Proportional)),
-                            );
-                            ui.add_space(12.0);
-                            ui.label(
-                                egui::RichText::new("PDF 预览")
-                                    .font(FontId::new(15.0, egui::FontFamily::Proportional))
-                                    .color(colors::text_secondary()),
-                            );
-                            ui.add_space(4.0);
-                            ui.label(
-                                egui::RichText::new("下载后可用系统阅读器打开")
-                                    .font(FontId::new(12.0, egui::FontFamily::Proportional))
-                                    .color(colors::text_secondary()),
-                            );
+                // ── PDF 预览区 ────────────────────────────────────
+                if app.pdf_viewer.loaded && app.pdf_viewer.current_page == 0 {
+                    // PDF 已加载完成，显示 PDF 查看器
+                    let engine = app.pdf_engine.clone();
+                    egui::Frame::new()
+                        .fill(colors::bg_input())
+                        .corner_radius(CornerRadius::same(0))
+                        .stroke(egui::Stroke::new(1.0, colors::border()))
+                        .show(ui, |ui| {
+                            ui.set_min_size(Vec2::new(ui.available_width().max(300.0), 320.0));
+                            pdf::render_pdf_viewer(ui, &mut app.pdf_viewer, &engine);
                         });
-                    });
+                } else if app.pdf_loading || app.pdf_viewer.is_loading() {
+                    // 加载中
+                    egui::Frame::new()
+                        .fill(colors::bg_input())
+                        .corner_radius(CornerRadius::same(0))
+                        .stroke(egui::Stroke::new(1.0, colors::border()))
+                        .show(ui, |ui| {
+                            ui.set_min_size(Vec2::new(ui.available_width().max(300.0), 320.0));
+                            ui.vertical_centered(|ui| {
+                                ui.add_space(120.0);
+                                ui.label(
+                                    egui::RichText::new("加载中...")
+                                        .font(FontId::new(15.0, egui::FontFamily::Proportional))
+                                        .color(colors::text_secondary()),
+                                );
+                            });
+                        });
+                    ui.ctx().request_repaint();
+                } else {
+                    // 未加载：显示预览 + 加载 PDF 按钮
+                    egui::Frame::new()
+                        .fill(colors::bg_input())
+                        .corner_radius(CornerRadius::same(0))
+                        .stroke(egui::Stroke::new(1.0, colors::border()))
+                        .show(ui, |ui| {
+                            ui.set_min_size(Vec2::new(ui.available_width().max(300.0), 320.0));
+                            ui.vertical_centered(|ui| {
+                                ui.add_space(80.0);
+                                ui.label(
+                                    egui::RichText::new("📋")
+                                        .font(FontId::new(48.0, egui::FontFamily::Proportional)),
+                                );
+                                ui.add_space(12.0);
+                                ui.label(
+                                    egui::RichText::new("PDF 预览")
+                                        .font(FontId::new(15.0, egui::FontFamily::Proportional))
+                                        .color(colors::text_secondary()),
+                                );
+                                ui.add_space(4.0);
+                                ui.label(
+                                    egui::RichText::new("点击下方按钮在线预览")
+                                        .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                                        .color(colors::text_secondary()),
+                                );
+                                ui.add_space(12.0);
+                                let preview_btn = egui::Button::new(
+                                    egui::RichText::new("  📖 在线预览  ")
+                                        .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                                        .color(colors::text_on_primary()),
+                                )
+                                .fill(colors::primary())
+                                .min_size(Vec2::new(160.0, 36.0))
+                                .corner_radius(CornerRadius::same(0));
+                                if ui.add(preview_btn).clicked() {
+                                    let fid = file_id;
+                                    app.trigger_load_pdf_bytes(fid);
+                                }
+                            });
+                        });
+                }
             });
         });
 }

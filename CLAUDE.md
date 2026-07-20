@@ -139,6 +139,7 @@ Rules:
 - Render functions only **read** `.value()` — never call `.set_target()` inside a render function
 - Always call `ctx.request_repaint()` while any animation `!is_steady()`
 - `Animator` in `animator.rs` is a **reserved stub** — do not use until validated
+- **After adding or modifying any Sokuou animation**, update `src/sokuou/NOTE.md` — add the new animation to the "已接入的动画" table, and update "从未使用的 API" / "暴露的不足" sections as needed
 
 ### Current State
 

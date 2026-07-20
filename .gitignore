@@ -6,3 +6,7 @@ node_modules/
 .qoder/
 **/*.rs.bk
 Cargo.lock
+
+# PDFium 运行库（用户自行下载，不提交）
+pdfium.dll
+*.lib

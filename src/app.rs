@@ -1,11 +1,13 @@
 use crate::api::client::ApiClient;
 use crate::api::models::*;
+use crate::pdf::{PdfEngine, PdfViewer};
 use crate::sokuou::{map_range, Easing, Progress, SpringAnim};
 use crate::theme;
 use anyhow;
 use base64::Engine;
 use egui::Context;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use tokio::sync::oneshot;
 
 /// 保存到磁盘的凭证
@@ -208,6 +210,7 @@ pub struct FilterState {
     pub subject: Option<String>,
     pub school: Option<String>,
     pub year: Option<i32>,
+    pub collapsed: bool,
 }
 
 /// 登录异步结果
@@ -380,10 +383,18 @@ pub struct PezMaxApp {
     pub setting_auto_launch: bool,
     pub setting_silent_download: bool,
     pub dark_mode: bool,
+
+    // PDF 引擎（全局单例，Arc<Sync>）
+    pub pdf_engine: Arc<PdfEngine>,
+    // PDF 查看器（当前打开的 PDF 文档状态）
+    pub pdf_viewer: PdfViewer,
+    // PDF 字节加载
+    pub pdf_loading: bool,
+    pub pdf_bytes_rx: Option<oneshot::Receiver<anyhow::Result<Vec<u8>>>>,
 }
 
 impl PezMaxApp {
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, pdf_engine: Arc<PdfEngine>) -> Self {
         theme::setup_fonts(&cc.egui_ctx);
         theme::apply_metro_theme(&cc.egui_ctx);
 
@@ -457,6 +468,11 @@ impl PezMaxApp {
             setting_auto_launch: false,
             setting_silent_download: false,
             dark_mode: false,
+
+            pdf_engine,
+            pdf_viewer: PdfViewer::new(),
+            pdf_loading: false,
+            pdf_bytes_rx: None,
         };
 
         // 尝试从本地加载凭证并自动登录
@@ -815,6 +831,21 @@ impl PezMaxApp {
         self.my_reports_data = AsyncData::new();
     }
 
+    /// 异步加载 PDF 文件字节（用于预览）
+    pub fn trigger_load_pdf_bytes(&mut self, file_id: i64) {
+        if self.pdf_loading || self.pdf_bytes_rx.is_some() {
+            return;
+        }
+        self.pdf_loading = true;
+        let api = self.api.clone();
+        let (tx, rx) = oneshot::channel();
+        self.pdf_bytes_rx = Some(rx);
+        tokio::spawn(async move {
+            let result = api.download_paper(file_id).await;
+            tx.send(result.map_err(|e| anyhow::anyhow!("下载 PDF 失败: {}", e))).ok();
+        });
+    }
+
     /// 4s 后触发离场动画，4.7s 后移除
     pub fn cleanup_toasts(&mut self) {
         let now = std::time::Instant::now();
@@ -861,9 +892,31 @@ impl eframe::App for PezMaxApp {
         self.preview_anim.update(dt);
         self.page_enter_anim.update(dt);
         self.auth_anim.update(dt);
+        self.pdf_viewer.update_animations(dt);
         for toast in &mut self.toasts {
             toast.enter.update(dt);
             toast.exit.update(dt);
+        }
+
+        // 轮询 PDF 渲染结果
+        self.pdf_viewer.poll_render(&self.pdf_engine, ctx);
+
+        // 轮询 PDF 字节下载结果
+        if let Some(rx) = &mut self.pdf_bytes_rx {
+            if let Ok(result) = rx.try_recv() {
+                self.pdf_loading = false;
+                self.pdf_bytes_rx = None;
+                match result {
+                    Ok(bytes) => {
+                        self.pdf_viewer.load_document(&self.pdf_engine, bytes, ctx);
+                    }
+                    Err(e) => {
+                        log::error!("PDF 下载失败: {}", e);
+                        self.pdf_viewer.error = Some(e.to_string());
+                        self.pdf_viewer.loaded = true;
+                    }
+                }
+            }
         }
 
         // 有动画进行时持续请求重绘
@@ -873,6 +926,8 @@ impl eframe::App for PezMaxApp {
             || !self.preview_anim.is_steady()
             || !self.page_enter_anim.is_steady()
             || !self.auth_anim.is_steady()
+            || self.pdf_viewer.is_animating()
+            || self.pdf_viewer.is_loading()
             || self.toasts.iter().any(|t| !t.enter.is_steady() || !t.exit.is_steady())
         {
             ctx.request_repaint();

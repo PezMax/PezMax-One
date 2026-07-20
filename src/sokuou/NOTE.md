@@ -2,28 +2,36 @@
 
 ## 当前状态
 
-Phase 1 初始实现。核心原语已完成，编排层预留。
-尚未接入任何实际 UI 组件（所有页面当前无动画）。
+Phase 1 完成。核心原语已稳定，已接入前端 UI 组件。
 
-## 高频使用预测（待验证）
+## 已接入的动画（2026-07-20）
 
-- SpringAnim：页面切换、侧边栏开合
-- Progress + EaseOutCubic：Toast 淡入淡出、内容加载后渐显
-- map_range：progress → alpha / slide offset / scale
+| 动画 | 类型 | 位置 | 用途 |
+|------|------|------|------|
+| `sidebar_anim` | `SpringAnim` | `app.rs:340` | 侧边栏展开/收起（48px ↔ 200px） |
+| `sidebar_indicator_anim` | `SpringAnim` | `app.rs:341` | 侧边栏导航指示器滑动 |
+| `subtab_indicator_anim` | `SpringAnim` | `app.rs:343` | 子标签指示器滑动 |
+| `preview_anim` | `SpringAnim` | `app.rs:354` / `browse.rs:257` | 预览面板 slide-in/out |
+| `page_enter_anim` | `SpringAnim` | `app.rs:358` | 页面进入过渡 |
+| `auth_anim` | `Progress` | `app.rs:360` | 登录/注册页淡入 |
+| Toast `enter` | `Progress` | `app.rs:184` | Toast 滑入 |
+| Toast `exit` | `Progress` | `app.rs:185` | Toast 滑出 |
 
 ## 暴露的不足（持续更新）
 
-_尚未有实际使用，此栏待填写_
+_待发现_
 
 ## 从未使用的 API（持续更新）
 
-_待统计_
+- `SpringAnim::set_target_with_velocity` — 暂无用例（无手势驱动交互）
+- `Progress::jump_to` — 所有 Progress 实例均使用 `set_target` 平滑过渡
+- `Animator` / `Animation` trait — 预留存根，尚未验证
 
 ## 需要新增的原语（持续更新）
 
-_待统计_
+_待定_
 
 ---
 
-更新规则：每完成一轮 UI 开发后在此记录发现。
-这些记录是 Sokuou Engine 最终统一到独立 crate 时的第一手需求文档。
+更新规则：每新增或修改 Sokuou 动画后，同步更新此表。
+由 CLAUDE.md 中的规则强制执行。

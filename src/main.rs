@@ -7,11 +7,13 @@ mod api;
 mod app;
 mod components;
 mod pages;
+mod pdf;
 mod sokuou;
 mod theme;
 
 use app::PezMaxApp;
 use eframe::NativeOptions;
+use pdf::PdfEngine;
 use std::sync::Arc;
 
 fn main() -> Result<(), eframe::Error> {
@@ -22,6 +24,12 @@ fn main() -> Result<(), eframe::Error> {
     // 创建 Tokio 运行时，使 API 层可以使用 tokio::spawn
     let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
     let _guard = rt.enter(); // 将运行时设为当前线程的默认运行时
+
+    // 初始化 PDF 引擎
+    let pdf_engine = Arc::new(PdfEngine::new());
+    if !pdf_engine.is_available() {
+        log::warn!("PDF engine unavailable: {:?}", pdf_engine.error());
+    }
 
     let icon = eframe::icon_data::from_png_bytes(include_bytes!("../resources/icon.png").as_slice())
         .unwrap_or_default();
@@ -38,6 +46,6 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "PezMax — 试卷资源管理系统",
         options,
-        Box::new(|cc| Ok(Box::new(PezMaxApp::new(cc)))),
+        Box::new(|cc| Ok(Box::new(PezMaxApp::new(cc, pdf_engine)))),
     )
 }
