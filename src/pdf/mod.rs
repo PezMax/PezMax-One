@@ -160,6 +160,13 @@ pub struct PdfViewer {
     pub current_page: usize,
     pub scale: f32,
 
+    /// 上次渲染时使用的缩放值（用于检测是否需要重新渲染）
+    rendered_scale: f32,
+
+    // 缩放过渡动画：弹簧驱动 display_scale 从旧值平滑过渡到 target scale
+    // 渲染帧用 display_scale 显示，后台渲染新分辨率后无缝替换纹理
+    pub display_scale_anim: SpringAnim,
+
     // 动画
     pub page_enter_anim: SpringAnim,
     pub page_exit_anim: SpringAnim,
@@ -178,6 +185,9 @@ pub struct PdfViewer {
 
 impl PdfViewer {
     pub fn new() -> Self {
+        // 缩放弹簧动画（response=0.4, damping=0.8）, 初始值 1.0
+        let mut display_scale_anim = SpringAnim::new(0.4, 0.8, 1.0);
+        let _ = display_scale_anim.update(100.0); // 强制稳态
         Self {
             pdf_bytes: None,
             page_count: 0,
@@ -185,6 +195,8 @@ impl PdfViewer {
             page_height: 842.0,
             current_page: 0,
             scale: 1.0,
+            rendered_scale: 1.0,
+            display_scale_anim,
             page_enter_anim: SpringAnim::new(0.3, 0.8, 0.0),
             page_exit_anim: SpringAnim::new(0.2, 0.8, 0.0),
             is_animating_out: false,
@@ -209,6 +221,9 @@ impl PdfViewer {
         self.pending_render = None;
         self.current_page = 0;
         self.scale = 1.0;
+        self.rendered_scale = 1.0;
+        // 初始显示缩放弹簧从 0 → 1 平滑弹入
+        self.display_scale_anim = SpringAnim::with_target(0.4, 0.8, 0.0, 0.0, 1.0);
 
         // 同步获取文档元数据（pdfium 加载很快，只是渲染慢）
         let bytes = self.pdf_bytes.as_ref().unwrap().clone();
@@ -232,17 +247,22 @@ impl PdfViewer {
     }
 
     /// 请求渲染第 `page_idx` 页（后台线程）
+    /// 如果已有同页同分辨率的纹理则跳过；否则启动后台渲染，旧纹理继续显示不受影响
     fn request_render(&mut self, engine: &Arc<PdfEngine>, page_idx: usize, _ctx: &Context) {
         if page_idx >= self.page_count {
             return;
         }
-        if self.textures.contains_key(&page_idx) {
+        // 已缓存同分辨率纹理 → 跳过
+        if self.textures.contains_key(&page_idx) && (self.rendered_scale - self.scale).abs() < 0.01 {
             return;
         }
         // 忽略重复请求
         if let Some(ref task) = self.pending_render {
             if task.page_idx == page_idx {
-                return;
+                // 但如果是缩放后重新请求，需要覆盖
+                if (self.rendered_scale - self.scale).abs() < 0.01 {
+                    return;
+                }
             }
         }
 
@@ -280,6 +300,7 @@ impl PdfViewer {
                     TextureOptions::LINEAR,
                 );
                 self.textures.insert(idx, tex);
+                self.rendered_scale = self.scale;
                 self.pending_render = None;
                 ctx.request_repaint();
             }
@@ -314,17 +335,28 @@ impl PdfViewer {
         }
     }
 
-    /// 缩放
+    /// 缩放（立即触发弹簧动画过渡，后台渲染新分辨率）
     pub fn zoom_in(&mut self, engine: &Arc<PdfEngine>, ctx: &Context) {
-        self.scale = (self.scale + ZOOM_STEP).min(MAX_SCALE);
-        self.textures.clear();
+        let new_scale = (self.scale + ZOOM_STEP).min(MAX_SCALE);
+        if (new_scale - self.scale).abs() < 0.01 {
+            return;
+        }
+        self.scale = new_scale;
+        self.display_scale_anim.set_target(new_scale as f64);
+        // 后台渲染新分辨率（不阻塞显示，完成时自动替换纹理）
         self.request_render(engine, self.current_page, ctx);
+        ctx.request_repaint();
     }
 
     pub fn zoom_out(&mut self, engine: &Arc<PdfEngine>, ctx: &Context) {
-        self.scale = (self.scale - ZOOM_STEP).max(MIN_SCALE);
-        self.textures.clear();
+        let new_scale = (self.scale - ZOOM_STEP).max(MIN_SCALE);
+        if (new_scale - self.scale).abs() < 0.01 {
+            return;
+        }
+        self.scale = new_scale;
+        self.display_scale_anim.set_target(new_scale as f64);
         self.request_render(engine, self.current_page, ctx);
+        ctx.request_repaint();
     }
 
     pub fn zoom_to_fit(&mut self, available_width: f32, engine: &Arc<PdfEngine>, ctx: &Context) {
@@ -332,8 +364,9 @@ impl PdfViewer {
             let new_scale = (available_width / self.page_width).max(0.5).min(2.0);
             if (new_scale - self.scale).abs() > 0.01 {
                 self.scale = new_scale;
-                self.textures.clear();
+                self.display_scale_anim.set_target(new_scale as f64);
                 self.request_render(engine, self.current_page, ctx);
+                ctx.request_repaint();
             }
         }
     }
@@ -346,17 +379,27 @@ impl PdfViewer {
         self.pending_render.is_some()
     }
 
-    pub fn current_page_size(&self) -> Vec2 {
-        Vec2::new(self.page_width * self.scale, self.page_height * self.scale)
+    /// 显示尺寸（由弹簧动画驱动，平滑过渡到目标 scale）
+    pub fn display_size(&self) -> Vec2 {
+        let s = self.display_scale_anim.value() as f32;
+        Vec2::new(self.page_width * s, self.page_height * s)
+    }
+
+    /// 显示缩放比例（由弹簧动画驱动）
+    pub fn display_scale(&self) -> f32 {
+        self.display_scale_anim.value() as f32
     }
 
     pub fn update_animations(&mut self, dt: f64) {
         self.page_enter_anim.update(dt);
         self.page_exit_anim.update(dt);
+        self.display_scale_anim.update(dt);
     }
 
     pub fn is_animating(&self) -> bool {
-        !self.page_enter_anim.is_steady() || !self.page_exit_anim.is_steady()
+        !self.page_enter_anim.is_steady()
+            || !self.page_exit_anim.is_steady()
+            || !self.display_scale_anim.is_steady()
     }
 
     pub fn page_alpha(&self) -> f32 {
@@ -465,7 +508,7 @@ pub fn render_pdf_viewer(
                 viewer.zoom_to_fit(ui.available_width() - 32.0, engine, ui.ctx());
             }
             ui.add_space(4.0);
-            ui.label(format!("{:.0}%", viewer.scale * 100.0));
+            ui.label(format!("{:.0}%", viewer.display_scale() * 100.0));
         });
     });
 
@@ -485,7 +528,8 @@ pub fn render_pdf_viewer(
             }
 
             if let Some(tex) = viewer.current_texture() {
-                let size = viewer.current_page_size();
+                // 使用弹簧驱动的 display_size 实现平滑缩放过渡
+                let size = viewer.display_size();
                 let img_size = egui::vec2(size.x, size.y);
 
                 ui.vertical_centered(|ui| {
@@ -499,6 +543,7 @@ pub fn render_pdf_viewer(
                         });
                 });
             } else if viewer.is_loading() {
+                // 后台渲染中，显示旧纹理（如果有）或占位提示
                 ui.vertical_centered(|ui| {
                     ui.add_space(160.0);
                     ui.label("渲染中...");
