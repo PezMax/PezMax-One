@@ -151,9 +151,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                 }
 
                 if logout_clicked {
-                    app.is_logged_in = false;
-                    app.token = None;
-                    app.current_user = None;
+                    app.logout();
                 }
             });
         });

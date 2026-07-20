@@ -5,7 +5,55 @@ use crate::theme;
 use anyhow;
 use base64::Engine;
 use egui::Context;
+use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
+
+/// 保存到磁盘的凭证
+#[derive(Debug, Serialize, Deserialize)]
+struct SavedCredentials {
+    token: String,
+    username: String,
+    remember_me: bool,
+}
+
+fn get_data_dir() -> std::path::PathBuf {
+    if let Ok(appdata) = std::env::var("APPDATA") {
+        let dir = std::path::PathBuf::from(appdata).join("PezMax");
+        let _ = std::fs::create_dir_all(&dir);
+        dir
+    } else {
+        std::path::PathBuf::from(".")
+    }
+}
+
+fn credentials_path() -> std::path::PathBuf {
+    get_data_dir().join("credentials.json")
+}
+
+fn save_credentials(token: &str, username: &str, remember_me: bool) {
+    let creds = SavedCredentials {
+        token: token.to_string(),
+        username: username.to_string(),
+        remember_me,
+    };
+    if let Ok(json) = serde_json::to_string(&creds) {
+        let _ = std::fs::write(credentials_path(), json);
+    }
+}
+
+fn load_credentials() -> Option<SavedCredentials> {
+    let path = credentials_path();
+    if !path.exists() {
+        return None;
+    }
+    let json = std::fs::read_to_string(&path).ok()?;
+    serde_json::from_str(&json).ok()
+}
+
+fn clear_credentials() {
+    let path = credentials_path();
+    let _ = std::fs::remove_file(path);
+}
 
 /// 将 base64 图片（JPEG 格式）解码为 egui 纹理
 fn decode_base64_image(b64: &str, ctx: &egui::Context) -> Option<egui::TextureHandle> {
@@ -251,11 +299,13 @@ pub struct PezMaxApp {
     pub login_captcha_enabled: bool,
     pub login_loading: bool,
     pub login_error: String,
+    pub login_remember: bool,
     pub captcha_loaded: bool,
 
     // 异步结果接收器
     pub captcha_rx: Option<oneshot::Receiver<anyhow::Result<CaptchaResponse>>>,
     pub login_rx: Option<oneshot::Receiver<anyhow::Result<LoginResult>>>,
+    pub auto_login_rx: Option<oneshot::Receiver<anyhow::Result<(UserInfo, String)>>>,
 
     // 异步数据加载器
     pub notifications: AsyncData<Vec<Notification>>,
@@ -319,7 +369,7 @@ impl PezMaxApp {
         theme::setup_fonts(&cc.egui_ctx);
         theme::apply_metro_theme(&cc.egui_ctx);
 
-        Self {
+        let mut app = Self {
             api: ApiClient::new(None),
 
             // 登录表单
@@ -332,9 +382,11 @@ impl PezMaxApp {
             login_captcha_enabled: true,
             login_loading: false,
             login_error: String::new(),
+            login_remember: false,
             captcha_loaded: false,
             captcha_rx: None,
             login_rx: None,
+            auto_login_rx: None,
 
             notifications: AsyncData::new(),
             download_records: AsyncData::new(),
@@ -371,6 +423,39 @@ impl PezMaxApp {
             contribute_year: String::new(),
             setting_auto_launch: false,
             setting_silent_download: false,
+        };
+
+        // 尝试从本地加载凭证并自动登录
+        app.try_auto_login();
+
+        app
+    }
+
+    /// 尝试从本地加载凭证并自动登录
+    pub fn try_auto_login(&mut self) {
+        if let Some(creds) = load_credentials() {
+            self.login_username = creds.username;
+            self.login_remember = creds.remember_me;
+            // 设置 token 并异步验证
+            let api = self.api.clone();
+            let saved_token = creds.token.clone();
+            self.is_logged_in = true;
+            let (tx, rx) = oneshot::channel();
+            self.auto_login_rx = Some(rx);
+            tokio::spawn(async move {
+                api.set_token(saved_token.clone()).await;
+                let result = api.get_user_info().await;
+                let result = match result {
+                    Ok(resp) => {
+                        match resp.data {
+                            Some(data) => Ok((data.user, saved_token)),
+                            None => Err(anyhow::anyhow!("获取用户信息失败: {}", resp.msg)),
+                        }
+                    }
+                    Err(e) => Err(e),
+                };
+                tx.send(result).ok();
+            });
         }
     }
 
@@ -381,6 +466,16 @@ impl PezMaxApp {
         self.current_subsection = Subsection::None;
         self.page_enter_anim = SpringAnim::with_target(0.4, 0.8, 0.0, 0.0, 1.0);
         self.sidebar_indicator_anim.set_target(0.0); // Home
+
+        // 保存凭证（如果勾选了"记住我"）
+        if self.login_remember {
+            if let Some(ref token) = self.token {
+                save_credentials(token, &self.login_username, true);
+            }
+        } else {
+            clear_credentials();
+        }
+
         // 清空登录表单
         self.login_username.clear();
         self.login_password.clear();
@@ -551,6 +646,26 @@ impl PezMaxApp {
         }
     }
 
+    /// 登出：清除凭证和 token
+    pub fn logout(&mut self) {
+        self.is_logged_in = false;
+        self.auth_page = AuthPage::Login;
+        self.token = None;
+        self.current_user = None;
+        self.user_stats = None;
+        clear_credentials();
+        // 清除 API token
+        let api = self.api.clone();
+        tokio::spawn(async move {
+            api.clear_token().await;
+        });
+        // 重置异步数据
+        self.notifications = AsyncData::new();
+        self.download_records = AsyncData::new();
+        self.recent_files = AsyncData::new();
+        self.user_stats_data = AsyncData::new();
+    }
+
     /// 4s 后触发离场动画，4.7s 后移除
     pub fn cleanup_toasts(&mut self) {
         let now = std::time::Instant::now();
@@ -644,6 +759,28 @@ impl eframe::App for PezMaxApp {
 
         // 轮询异步数据加载器（仅登录后）
         if self.is_logged_in {
+            // 自动登录结果轮询
+            if let Some(rx) = &mut self.auto_login_rx {
+                if let Ok(result) = rx.try_recv() {
+                    self.auto_login_rx = None;
+                    match result {
+                        Ok((user, token)) => {
+                            self.current_user = Some(user);
+                            self.token = Some(token);
+                            self.login_success();
+                        }
+                        Err(_) => {
+                            // 自动登录失败，清除凭证并退回登录页
+                            clear_credentials();
+                            self.token = None;
+                            self.current_user = None;
+                            self.is_logged_in = false;
+                            self.auth_page = AuthPage::Login;
+                        }
+                    }
+                }
+            }
+
             self.notifications.poll();
             self.download_records.poll();
             self.recent_files.poll();
@@ -661,6 +798,24 @@ impl eframe::App for PezMaxApp {
                 AuthPage::Register => crate::pages::register::render(self, ctx),
                 AuthPage::ForgetPassword => crate::pages::forget_password::render(self, ctx),
             }
+            return;
+        }
+
+        // 自动登录验证中：显示加载提示
+        if self.auto_login_rx.is_some() {
+            egui::CentralPanel::default()
+                .frame(egui::Frame::new().fill(crate::theme::colors::BG_WHITE))
+                .show(ctx, |ui| {
+                    ui.vertical_centered(|ui| {
+                        ui.add_space(ui.available_height() * 0.4);
+                        ui.label(
+                            egui::RichText::new("验证登录状态...")
+                                .font(egui::FontId::new(18.0, egui::FontFamily::Proportional))
+                                .color(crate::theme::colors::TEXT_SECONDARY),
+                        );
+                    });
+                });
+            ctx.request_repaint();
             return;
         }
 

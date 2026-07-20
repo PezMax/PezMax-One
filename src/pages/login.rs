@@ -148,6 +148,14 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                             ui.add_space(12.0);
                         }
 
+                        // ── 记住密码 ────────────────────────────────────
+                        ui.horizontal(|ui| {
+                            ui.add_space(24.0);
+                            let cb = egui::Checkbox::new(&mut app.login_remember, "记住密码");
+                            ui.add(cb);
+                        });
+                        ui.add_space(8.0);
+
                         // ── 登录按钮 ────────────────────────────────────
                         let btn_label = if app.login_loading {
                             "登录中..."
