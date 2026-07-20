@@ -2,7 +2,8 @@
 // Metro Design 风格：扁平、大字体、内容优先、色块分区
 // 支持浅色 / 深色模式（thread_local IS_DARK 驱动）
 
-use egui::{FontFamily, FontId, CornerRadius, TextStyle, Vec2};
+use egui::{FontFamily, FontId, TextStyle, Vec2};
+use std::borrow::Cow;
 use std::cell::Cell;
 use std::sync::Arc;
 
@@ -118,45 +119,62 @@ pub fn metro_text_styles() -> std::collections::BTreeMap<TextStyle, FontId> {
     .into()
 }
 
-/// 加载系统 CJK 字体作为 fallback，修复中文方框乱码
+/// 加载系统 CJK 字体作为 primary 字体，确保中文文字清晰渲染
+/// 插入到字体列表最前面，避免因回退到不同度量字体导致的模糊
+/// 按平台优先级尝试：Windows 微软雅黑 → macOS PingFang → Linux Noto CJK → WenQuanYi
 pub fn setup_fonts(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
 
-    // 按平台优先级尝试常见 CJK 字体路径
-    let candidates: &[&str] = &[
-        // Linux — Noto CJK（首选，字形最全）
-        "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
-        "/usr/share/fonts/noto/NotoSansCJK-Regular.ttc",
-        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-        // Linux — WenQuanYi
-        "/usr/share/fonts/wenquanyi/wqy-microhei/wqy-microhei.ttc",
-        "/usr/share/fonts/wqy-microhei/wqy-microhei.ttc",
-        "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
-        // Windows — 微软雅黑
-        "C:\\Windows\\Fonts\\msyh.ttc",
-        "C:\\Windows\\Fonts\\simsun.ttc",
-        "C:\\Windows\\Fonts\\simhei.ttf",
+    // (路径, font_index, 说明) — font_index 用于 TTC 多字体集合文件
+    let candidates: &[(&str, u32, &str)] = &[
+        // Windows — 微软雅黑（优先，最常用）
+        ("C:\\Windows\\Fonts\\msyh.ttc", 0, "Microsoft YaHei Regular"),
+        ("C:\\Windows\\Fonts\\simsun.ttc", 0, "SimSun"),
+        ("C:\\Windows\\Fonts\\simhei.ttf", 0, "SimHei"),
         // macOS
-        "/System/Library/Fonts/PingFang.ttc",
-        "/Library/Fonts/Arial Unicode.ttf",
+        ("/System/Library/Fonts/PingFang.ttc", 0, "PingFang SC Regular"),
+        ("/Library/Fonts/Arial Unicode.ttf", 0, "Arial Unicode"),
+        // Linux — Noto CJK（字形最全，推荐）
+        ("/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc", 0, "Noto Sans CJK Regular"),
+        ("/usr/share/fonts/noto/NotoSansCJK-Regular.ttc", 0, "Noto Sans CJK Regular"),
+        ("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", 0, "Noto Sans CJK Regular"),
+        // Linux — WenQuanYi（备选）
+        ("/usr/share/fonts/wenquanyi/wqy-microhei/wqy-microhei.ttc", 0, "WenQuanYi Micro Hei"),
+        ("/usr/share/fonts/wqy-microhei/wqy-microhei.ttc", 0, "WenQuanYi Micro Hei"),
+        ("/usr/share/fonts/truetype/wqy/wqy-microhei.ttc", 0, "WenQuanYi Micro Hei"),
     ];
 
-    for path in candidates {
+    for (path, font_index, _label) in candidates {
         if let Ok(bytes) = std::fs::read(path) {
-            fonts
-                .font_data
-                .insert("system_cjk".to_owned(), Arc::new(egui::FontData::from_owned(bytes)));
-            fonts
-                .families
-                .entry(FontFamily::Proportional)
-                .or_default()
-                .push("system_cjk".to_owned());
-            fonts
-                .families
-                .entry(FontFamily::Monospace)
-                .or_default()
-                .push("system_cjk".to_owned());
-            log::info!("Loaded CJK font from: {}", path);
+            let font_name = "system_cjk".to_owned();
+
+            // 直接构造 FontData 以显式设置 index 和 tweak
+            fonts.font_data.insert(
+                font_name.clone(),
+                Arc::new(egui::FontData {
+                    font: Cow::Owned(bytes),
+                    index: *font_index,
+                    tweak: egui::FontTweak {
+                        scale: 1.0,
+                        y_offset_factor: 0.0,
+                        y_offset: 0.0,
+                        baseline_offset_factor: 0.0,
+                    },
+                }),
+            );
+
+            // 关键：插入到最前面（作为 primary 字体），而非 append
+            // 这样 CJK 和 Latin 字符都由同一字体渲染，避免回退模糊
+            let prop = fonts.families.entry(FontFamily::Proportional).or_default();
+            if !prop.contains(&font_name) {
+                prop.insert(0, font_name.clone());
+            }
+            let mono = fonts.families.entry(FontFamily::Monospace).or_default();
+            if !mono.contains(&font_name) {
+                mono.insert(0, font_name);
+            }
+
+            log::info!("Loaded CJK font from: {} (index: {})", path, font_index);
             break;
         }
     }
@@ -165,6 +183,7 @@ pub fn setup_fonts(ctx: &egui::Context) {
 }
 
 /// 应用 Metro Design 主题到 egui 上下文（每次切换深浅色后都应调用）
+/// 显式设置所有 widget 状态的颜色，确保深/浅模式下文字、边框、勾选标记都可见
 pub fn apply_metro_theme(ctx: &egui::Context) {
     let dark = is_dark();
     let mut style = (*ctx.style()).clone();
@@ -174,51 +193,91 @@ pub fn apply_metro_theme(ctx: &egui::Context) {
     style.spacing.button_padding = Vec2::new(16.0, 8.0);
     style.spacing.indent = 24.0;
 
-    // Metro Design: 全局直角
-    let zero = CornerRadius::same(0);
-    style.visuals.window_corner_radius = zero;
-    style.visuals.menu_corner_radius = zero;
-    style.visuals.widgets.noninteractive.corner_radius = zero;
-    style.visuals.widgets.inactive.corner_radius = zero;
-    style.visuals.widgets.hovered.corner_radius = zero;
-    style.visuals.widgets.active.corner_radius = zero;
-    style.visuals.widgets.open.corner_radius = zero;
+    // 基础 visuals（先取深/浅默认值，再逐一覆盖）
+    style.visuals = if dark { egui::Visuals::dark() } else { egui::Visuals::light() };
+    style.visuals.dark_mode = dark;
 
-    // egui 深色/浅色基础 visuals
-    style.visuals = if dark {
-        let mut v = egui::Visuals::dark();
-        v.window_corner_radius = zero;
-        v.menu_corner_radius = zero;
-        v.widgets.noninteractive.corner_radius = zero;
-        v.widgets.inactive.corner_radius = zero;
-        v.widgets.hovered.corner_radius = zero;
-        v.widgets.active.corner_radius = zero;
-        v.widgets.open.corner_radius = zero;
-        v
-    } else {
-        let mut v = egui::Visuals::light();
-        v.window_corner_radius = zero;
-        v.menu_corner_radius = zero;
-        v.widgets.noninteractive.corner_radius = zero;
-        v.widgets.inactive.corner_radius = zero;
-        v.widgets.hovered.corner_radius = zero;
-        v.widgets.active.corner_radius = zero;
-        v.widgets.open.corner_radius = zero;
-        v
-    };
+    // ── 覆盖所有视觉属性 ────────────────────────────────────────────────
 
-    style.visuals.override_text_color = Some(colors::text_primary());
+    // 文本色（全局覆盖，所有 label / button / textedit 文本均受控）
+    // 设为 None 以允许 RichText.color() 显式设置优先，
+    // 否则侧边栏（永远深色背景）上的白色图标会被浅色模式的深色 text_primary 覆盖
+    style.visuals.override_text_color = None;
+    style.visuals.hyperlink_color = colors::primary();
+    style.visuals.selection.stroke = egui::Stroke { width: 1.0, color: colors::primary() };
+    style.visuals.selection.bg_fill = colors::bg_selected();
+    style.visuals.warn_fg_color = colors::warning();
+    style.visuals.error_fg_color = colors::error();
+
+    // 背景
     style.visuals.window_fill = colors::bg_white();
     style.visuals.panel_fill = colors::bg_white();
     style.visuals.faint_bg_color = colors::bg_card();
     style.visuals.extreme_bg_color = colors::bg_card();
-    style.visuals.hyperlink_color = colors::primary();
-    style.visuals.selection.stroke = egui::Stroke { width: 1.0, color: colors::primary() };
-    style.visuals.selection.bg_fill = colors::bg_selected();
+    style.visuals.code_bg_color = colors::bg_input();
 
-    // TextEdit 等控件 widget 背景色跟随 bg_card
-    style.visuals.widgets.noninteractive.bg_fill = colors::bg_card();
-    style.visuals.widgets.inactive.bg_fill = colors::bg_card();
+    // 滑块轨道
+    style.visuals.slider_trailing_fill = false;
+
+    // 全局直角
+    let zero = egui::CornerRadius::same(0);
+    style.visuals.window_corner_radius = zero;
+    style.visuals.menu_corner_radius = zero;
+
+    // ── 所有 widget 状态配色（杜绝默认值泄漏）───────────────────────────
+    let border_color = colors::border();
+    let text_fg   = colors::text_primary();
+    let text_weak = colors::text_secondary();
+
+    // noninteractive：提示文字、禁用边框、分隔线
+    style.visuals.widgets.noninteractive = egui::style::WidgetVisuals {
+        bg_fill:       colors::bg_card(),
+        weak_bg_fill:  colors::bg_input(),
+        bg_stroke:     egui::Stroke::new(1.0, border_color),
+        fg_stroke:     egui::Stroke::new(1.0, text_weak),
+        corner_radius: zero,
+        expansion:     0.0,
+    };
+
+    // inactive：普通控件（按钮、输入框、复选框框体）
+    style.visuals.widgets.inactive = egui::style::WidgetVisuals {
+        bg_fill:       colors::bg_card(),
+        weak_bg_fill:  colors::bg_white(),
+        bg_stroke:     egui::Stroke::new(1.0, border_color),
+        fg_stroke:     egui::Stroke::new(1.5, text_fg),
+        corner_radius: zero,
+        expansion:     0.0,
+    };
+
+    // hovered：悬停态
+    style.visuals.widgets.hovered = egui::style::WidgetVisuals {
+        bg_fill:       colors::bg_hover(),
+        weak_bg_fill:  colors::bg_hover(),
+        bg_stroke:     egui::Stroke::new(1.0, colors::primary_light()),
+        fg_stroke:     egui::Stroke::new(1.5, text_fg),
+        corner_radius: zero,
+        expansion:     0.0,
+    };
+
+    // active：按下态
+    style.visuals.widgets.active = egui::style::WidgetVisuals {
+        bg_fill:       colors::bg_selected(),
+        weak_bg_fill:  colors::bg_selected(),
+        bg_stroke:     egui::Stroke::new(1.0, colors::primary()),
+        fg_stroke:     egui::Stroke::new(2.0, text_fg),
+        corner_radius: zero,
+        expansion:     0.0,
+    };
+
+    // open：展开态（如下拉菜单）
+    style.visuals.widgets.open = egui::style::WidgetVisuals {
+        bg_fill:       colors::bg_selected(),
+        weak_bg_fill:  colors::bg_selected(),
+        bg_stroke:     egui::Stroke::new(1.0, colors::primary()),
+        fg_stroke:     egui::Stroke::new(1.5, text_fg),
+        corner_radius: zero,
+        expansion:     0.0,
+    };
 
     ctx.set_style(style);
 }

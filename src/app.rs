@@ -112,7 +112,7 @@ impl Section {
             Section::Home => "🏠",
             Section::Browse => "📂",
             Section::Community => "👥",
-            Section::Profile => "⚙️",
+            Section::Profile => "👤",
         }
     }
 
@@ -833,6 +833,18 @@ impl PezMaxApp {
 
 impl eframe::App for PezMaxApp {
     fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
+        // 首次帧：记录 DPI/缩放信息以帮助诊断跨平台文字清晰度
+        use std::sync::atomic::{AtomicBool, Ordering};
+        static LOGGED_DPI: AtomicBool = AtomicBool::new(false);
+        if !LOGGED_DPI.swap(true, Ordering::Relaxed) {
+            let pp = ctx.pixels_per_point();
+            let native_pp = ctx.input(|i| i.viewport().native_pixels_per_point);
+            log::info!(
+                "DPI info: pixels_per_point={}, native_pixels_per_point={:?}",
+                pp, native_pp
+            );
+        }
+
         // 深色模式切换：同步 thread_local 并重新应用主题
         let current_dark = theme::is_dark();
         if self.dark_mode != current_dark {

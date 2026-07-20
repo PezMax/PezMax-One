@@ -2,14 +2,17 @@
 // SpringAnim 驱动宽度 48↔200px，sidebar_indicator_anim 驱动左侧高亮滑块
 
 use crate::app::{PezMaxApp, Section};
-use crate::sokuou::map_range;
+use crate::sokuou::map_range_clamped;
 use crate::theme::colors;
-use egui::{Color32, CornerRadius, Frame, Rect, pos2};
+use egui::{Color32, CornerRadius, Frame, Rect, Sense, pos2};
 
 pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
-    let anim_val = app.sidebar_anim.value();
-    let width = map_range(anim_val, 48.0, 200.0) as f32;
-    let show_labels = anim_val > 0.5;
+    let anim_val = app.sidebar_anim.value().clamp(0.0, 1.0);
+    let width = map_range_clamped(anim_val, 48.0, 200.0) as f32;
+    // 导航标签渐入渐出 + 滑动
+    // 0.3 → 0.7 之间从透明到不透明，同时从左侧滑入
+    let label_alpha = ((anim_val - 0.3) / 0.4).clamp(0.0, 1.0) as f32;
+    let label_offset = (1.0 - anim_val) as f32 * 6.0;
 
     egui::SidePanel::left("sidebar")
         .resizable(false)
@@ -17,20 +20,20 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
         .max_width(width)
         .frame(Frame::new().fill(colors::bg_sidebar()))
         .show(ctx, |ui| {
+            ui.set_min_width(width);
             ui.add_space(8.0);
 
-            // ☰ 汉堡按钮
+            // ☰ 汉堡按钮（用 Label + Sense::click 代替 Button，避免 button_padding 导致内容溢出）
             ui.horizontal(|ui| {
-                ui.add_space(13.0);
-                let burger = egui::Button::new(
+                ui.add_space(10.0);
+                let resp = ui.label(
                     egui::RichText::new("☰")
                         .font(egui::FontId::new(20.0, egui::FontFamily::Proportional))
-                        .color(Color32::from_gray(200)),
+                        .color(Color32::WHITE),
                 )
-                .fill(Color32::TRANSPARENT)
-                .corner_radius(CornerRadius::same(0));
-
-                if ui.add(burger).clicked() {
+                .interact(Sense::click())
+                .on_hover_cursor(egui::CursorIcon::PointingHand);
+                if resp.clicked() {
                     app.sidebar_open = !app.sidebar_open;
                     app.sidebar_anim
                         .set_target(if app.sidebar_open { 1.0 } else { 0.0 });
@@ -56,7 +59,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                     .fill(Color32::TRANSPARENT)
                     .corner_radius(CornerRadius::same(0))
                     .show(ui, |ui| {
-                        ui.set_min_width(width - 1.0);
+                        ui.set_min_width(width);
                         ui.add_space(6.0);
                         ui.horizontal(|ui| {
                             // 留出 3px 宽度给滑块指示器
@@ -64,10 +67,12 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                             ui.add_space(10.0);
                             ui.label(
                                 egui::RichText::new(section.icon())
-                                    .font(egui::FontId::new(22.0, egui::FontFamily::Proportional)),
+                                    .font(egui::FontId::new(22.0, egui::FontFamily::Proportional))
+                                    .color(Color32::WHITE),
                             );
-                            if show_labels {
-                                ui.add_space(10.0);
+                            if label_alpha > 0.0 {
+                                ui.add_space(10.0 + label_offset);
+                                ui.set_opacity(label_alpha);
                                 ui.label(
                                     egui::RichText::new(section.title())
                                         .font(egui::FontId::new(
@@ -85,7 +90,8 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                         ui.add_space(6.0);
                     })
                     .response
-                    .interact(egui::Sense::click());
+                    .interact(egui::Sense::click())
+                    .on_hover_cursor(egui::CursorIcon::PointingHand);
 
                 // Save what we need before on_hover_text consumes resp
                 let nav_clicked = resp.clicked();
@@ -93,7 +99,7 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                 item_rects[i] = Some(nav_rect);
 
                 // Tooltip 在折叠态显示功能名（on_hover_text consumes resp）
-                if !show_labels {
+                if label_alpha < 0.5 {
                     resp.on_hover_text(section.title());
                 }
 
@@ -121,15 +127,17 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                 let logout = Frame::new()
                     .corner_radius(CornerRadius::same(0))
                     .show(ui, |ui| {
-                        ui.set_min_width(width - 1.0);
+                        ui.set_min_width(width);
                         ui.horizontal(|ui| {
                             ui.add_space(13.0);
                             ui.label(
-                                egui::RichText::new("🚪")
-                                    .font(egui::FontId::new(20.0, egui::FontFamily::Proportional)),
+                                egui::RichText::new("🔓")
+                                    .font(egui::FontId::new(20.0, egui::FontFamily::Proportional))
+                                    .color(Color32::WHITE),
                             );
-                            if show_labels {
-                                ui.add_space(10.0);
+                            if label_alpha > 0.0 {
+                                ui.add_space(10.0 + label_offset);
+                                ui.set_opacity(label_alpha);
                                 ui.label(
                                     egui::RichText::new("退出登录")
                                         .font(egui::FontId::new(
@@ -143,10 +151,11 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                         ui.add_space(4.0);
                     })
                     .response
-                    .interact(egui::Sense::click());
+                    .interact(egui::Sense::click())
+                    .on_hover_cursor(egui::CursorIcon::PointingHand);
 
                 let logout_clicked = logout.clicked();
-                if !show_labels {
+                if label_alpha < 0.5 {
                     logout.on_hover_text("退出登录");
                 }
 
