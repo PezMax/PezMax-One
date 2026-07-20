@@ -1,5 +1,6 @@
 use crate::api::client::ApiClient;
 use crate::api::models::*;
+use crate::components::action_bar;
 use crate::pdf::{PdfEngine, PdfViewer};
 use crate::sokuou::{map_range, Easing, Progress, SpringAnim};
 use crate::theme;
@@ -385,6 +386,13 @@ pub struct PezMaxApp {
     pub theme_mode: theme::ThemeMode,
     pub accent_idx: usize,
 
+    // 试卷详情面板：是否显示文件信息侧栏
+    pub show_info_panel: bool,
+    // 预览模式下底部操作栏的待处理动作（每帧渲染后重置）
+    pub preview_bar_action: action_bar::Action,
+    // 预览模式，用于 app.rs 中控制边距/面板渲染
+    pub preview_mode: bool,
+
     // PDF 引擎（全局单例，Arc<Sync>）
     pub pdf_engine: Arc<PdfEngine>,
     // PDF 查看器（当前打开的 PDF 文档状态）
@@ -470,6 +478,10 @@ impl PezMaxApp {
             setting_silent_download: false,
             theme_mode: theme::ThemeMode::System,
             accent_idx: 0,
+
+            show_info_panel: false,
+            preview_bar_action: action_bar::Action::None,
+            preview_mode: false,
 
             pdf_engine,
             pdf_viewer: PdfViewer::new(),
@@ -1085,12 +1097,21 @@ impl eframe::App for PezMaxApp {
             render_subtab_bar(self, ctx, &subsections);
         }
 
-        // 内容区（页面切换时有轻微入场偏移动画）
+        // 预览模式：底部操作栏（TopBottomPanel 必须在 CentralPanel 之前渲染）
+        let preview_mode = self.current_section == Section::Browse && self.selected_file.is_some();
+        self.preview_mode = preview_mode;
+        self.preview_bar_action = action_bar::Action::None;
+        if preview_mode {
+            let file_name = self.selected_file.as_ref().map(|f| f.file_name.as_str()).unwrap_or("");
+            self.preview_bar_action = action_bar::render_bar(ctx, file_name);
+        }
+
+        // 内容区
         let enter_v = self.page_enter_anim.value();
         egui::CentralPanel::default()
             .frame(egui::Frame::new()
                 .fill(theme::colors::bg_white())
-                .inner_margin(egui::Margin::symmetric(20, 0))
+                .inner_margin(if preview_mode { egui::Margin::ZERO } else { egui::Margin::symmetric(20, 0) })
                 .stroke(egui::Stroke::NONE),
             )
             .show(ctx, |ui| {
