@@ -33,9 +33,19 @@ echo "[OK] 前端二进制已复制到 $DIST_DIR/pezmax-egui"
 # ─── 2. 构建 Java 后端 ────────────────────────────────
 echo "[2/2] 构建 Java 后端..."
 
-# 检查 Java 是否可用
-if ! command -v java &> /dev/null; then
-    echo "[WARN] Java 未安装或 JAVA_HOME 未配置，跳过 Java 后端构建。"
+# 检查 Java 是否可用（先查 PATH，再查常见安装路径）
+if command -v java &> /dev/null; then
+    : # Java found in PATH
+elif [ -d "/usr/lib/jvm/java-17-openjdk" ]; then
+    export JAVA_HOME="/usr/lib/jvm/java-17-openjdk"
+    export PATH="$JAVA_HOME/bin:$PATH"
+    echo "[INFO] Found Java at $JAVA_HOME"
+elif [ -d "/c/Program Files/Java/jdk-17" ]; then
+    export JAVA_HOME="/c/Program Files/Java/jdk-17"
+    export PATH="$JAVA_HOME/bin:$PATH"
+    echo "[INFO] Found Java at $JAVA_HOME"
+else
+    echo "[WARN] Java 未安装或未配置，跳过 Java 后端构建。"
     echo "[WARN] 如需构建后端，请安装 JDK 17+ 并设置 JAVA_HOME 环境变量。"
     echo ""
     echo "============================================"

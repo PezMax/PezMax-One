@@ -43,9 +43,27 @@ echo [2/2] Building Java backend...
 
 set "JAVA_DIR=%ROOT_DIR%\PezMax-Java"
 
-rem 检查 Java 是否可用
+rem 检查 Java 是否可用（先查 PATH，再查常见安装路径）
 java -version >nul 2>nul
-if %ERRORLEVEL% neq 0 goto :no_java
+if %ERRORLEVEL% equ 0 goto :java_ok
+
+if exist "C:\Program Files\Java\jdk-17\bin\java.exe" (
+    set "PATH=C:\Program Files\Java\jdk-17\bin;%PATH%"
+    set "JAVA_HOME=C:\Program Files\Java\jdk-17"
+    echo [INFO] Found Java at C:\Program Files\Java\jdk-17
+    goto :java_ok
+)
+
+if exist "C:\Program Files\Eclipse Adoptium\jdk-17\bin\java.exe" (
+    set "PATH=C:\Program Files\Eclipse Adoptium\jdk-17\bin;%PATH%"
+    set "JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-17"
+    echo [INFO] Found Java at C:\Program Files\Eclipse Adoptium\jdk-17
+    goto :java_ok
+)
+
+goto :no_java
+
+:java_ok
 
 if not exist "%JAVA_DIR%\mvnw.cmd" (
     echo [ERROR] mvnw.cmd not found in %JAVA_DIR%
@@ -54,7 +72,7 @@ if not exist "%JAVA_DIR%\mvnw.cmd" (
 
 pushd "%JAVA_DIR%"
 echo Building in: %cd%
-call mvnw.cmd clean package -DskipTests
+call "%JAVA_DIR%\mvnw.cmd" clean package -DskipTests
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Java backend build failed!
     popd
