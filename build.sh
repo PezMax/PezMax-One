@@ -33,6 +33,19 @@ echo "[OK] 前端二进制已复制到 $DIST_DIR/pezmax-egui"
 # ─── 2. 构建 Java 后端 ────────────────────────────────
 echo "[2/2] 构建 Java 后端..."
 
+# 检查 Java 是否可用
+if ! command -v java &> /dev/null; then
+    echo "[WARN] Java 未安装或 JAVA_HOME 未配置，跳过 Java 后端构建。"
+    echo "[WARN] 如需构建后端，请安装 JDK 17+ 并设置 JAVA_HOME 环境变量。"
+    echo ""
+    echo "============================================"
+    echo "  构建完成（仅前端）！"
+    echo "  输出目录: $DIST_DIR"
+    echo "    - pezmax-egui       (Rust 前端)"
+    echo "============================================"
+    exit 0
+fi
+
 cd "$ROOT_DIR/PezMax-Java"
 
 chmod +x mvnw

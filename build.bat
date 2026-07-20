@@ -3,8 +3,8 @@ chcp 65001 >nul
 title PezMax Build Script
 
 echo ============================================
-echo   PezMax 全量构建脚本 (Windows)
-echo   构建 Rust 前端 + Java 后端
+echo   PezMax Build Script (Windows)
+echo   Build Rust frontend + Java backend
 echo ============================================
 echo.
 
@@ -20,7 +20,7 @@ if exist "%DIST_DIR%" rmdir /s /q "%DIST_DIR%"
 mkdir "%DIST_DIR%"
 
 rem ─── 1. 构建 Rust 前端 ────────────────────────────────
-echo [1/2] 构建 Rust 前端...
+echo [1/2] Building Rust frontend...
 
 set "CARGO_TARGET_DIR=%RUST_TARGET_DIR%"
 
@@ -28,31 +28,44 @@ cd /d "%ROOT_DIR%"
 
 cargo build --release
 if %ERRORLEVEL% neq 0 (
-    echo [ERROR] Rust 前端构建失败！
+    echo [ERROR] Rust frontend build failed!
     exit /b 1
 )
 
-echo [OK] Rust 前端构建成功
+echo [OK] Rust frontend built successfully
 
 rem 复制二进制到 dist
 copy "%RUST_TARGET_DIR%\release\pezmax-egui.exe" "%DIST_DIR%\pezmax-egui.exe" >nul
-echo [OK] 前端二进制已复制到 %DIST_DIR%\pezmax-egui.exe
+echo [OK] Frontend binary copied to %DIST_DIR%\pezmax-egui.exe
 
 rem ─── 2. 构建 Java 后端 ────────────────────────────────
-echo [2/2] 构建 Java 后端...
+echo [2/2] Building Java backend...
 
-cd /d "%ROOT_DIR%\PezMax-Java"
+set "JAVA_DIR=%ROOT_DIR%\PezMax-Java"
 
-call mvnw.cmd clean package -DskipTests
-if %ERRORLEVEL% neq 0 (
-    echo [ERROR] Java 后端构建失败！
+rem 检查 Java 是否可用
+java -version >nul 2>nul
+if %ERRORLEVEL% neq 0 goto :no_java
+
+if not exist "%JAVA_DIR%\mvnw.cmd" (
+    echo [ERROR] mvnw.cmd not found in %JAVA_DIR%
     exit /b 1
 )
 
-echo [OK] Java 后端构建成功
+pushd "%JAVA_DIR%"
+echo Building in: %cd%
+call mvnw.cmd clean package -DskipTests
+if %ERRORLEVEL% neq 0 (
+    echo [ERROR] Java backend build failed!
+    popd
+    exit /b 1
+)
+popd
 
-rem 复制 JAR 到 dist（取第一个非 sources/javadoc 的 jar）
-for /r "ruoyi-admin\target" %%f in (*.jar) do (
+echo [OK] Java backend built successfully
+
+rem 复制 JAR 到 dist
+for /r "%JAVA_DIR%\ruoyi-admin\target" %%f in (*.jar) do (
     set "JAR_NAME=%%~nxf"
     echo !JAR_NAME! | findstr /v "sources javadoc" >nul
     if not errorlevel 1 (
@@ -61,17 +74,21 @@ for /r "ruoyi-admin\target" %%f in (*.jar) do (
     )
 )
 :jar_copied
+echo [OK] Backend JAR copied to %DIST_DIR%\ruoyi-admin.jar
+goto :build_done
 
-echo [OK] 后端 JAR 已复制到 %DIST_DIR%\ruoyi-admin.jar
+:no_java
+echo [WARN] Java not found - skipping Java backend build.
+echo [WARN] Install JDK 17+ and set JAVA_HOME to build the backend.
 
-rem ─── 完成 ────────────────────────────────────────────
+:build_done
 echo ============================================
-echo   构建完成！
-echo   输出目录: %DIST_DIR%
-echo     - pezmax-egui.exe  (Rust 前端)
-echo     - ruoyi-admin.jar  (Java 后端)
+echo   Build complete!
+echo   Output: %DIST_DIR%
+echo     - pezmax-egui.exe  (Rust frontend)
+echo     - ruoyi-admin.jar  (Java backend)
 echo ============================================
 
 cd /d "%ROOT_DIR%"
 endlocal
-pause
+pause\r
