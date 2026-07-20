@@ -45,15 +45,14 @@ pub fn render_resource_manager(app: &mut PezMaxApp, ui: &mut egui::Ui) {
         return;
     }
 
-    // ── 从文件列表派生三级级联标签 ────────────────────────────
+    // ── 从文件列表派生级联标签 ───────────────────────────────
     // Phase 1: 读取当前筛选状态（clone 避免后续借用冲突）
     let active_sub   = app.filters.subject.clone();
     let active_school = app.filters.school.clone();
-    let active_year  = app.filters.year;
     let search_q     = app.search_query.to_lowercase();
 
-    // 从数据中提取已审核文件，并派生三级筛选选项
-    let (subjects, schools, years, filtered_files) = {
+    // 从数据中提取已审核文件，并派生筛选选项
+    let (subjects, schools, filtered_files) = {
         let all = app.file_list_data.data.as_deref().unwrap_or(&[]);
         let approved: Vec<&PaperFile> = all
             .iter()
@@ -83,186 +82,132 @@ pub fn render_resource_manager(app: &mut PezMaxApp, ui: &mut egui::Ui) {
             set.into_iter().collect()
         };
 
-        // 年份：随学科+学校过滤，降序
-        let years: Vec<i32> = {
-            let mut set = std::collections::BTreeSet::new();
-            for f in &approved {
-                let sub_ok = active_sub.as_deref().map_or(true, |s| s == f.file_subject);
-                let sch_ok = active_school.as_deref().map_or(true, |s| s == f.school_name);
-                if sub_ok && sch_ok && f.file_year > 0 {
-                    set.insert(f.file_year as i32);
-                }
-            }
-            set.into_iter().rev().collect()
-        };
-
         // 最终过滤结果
         let filtered: Vec<PaperFile> = approved
             .into_iter()
             .filter(|f| {
                 let sub_ok = active_sub.as_deref().map_or(true, |s| s == f.file_subject);
                 let sch_ok = active_school.as_deref().map_or(true, |s| s == f.school_name);
-                let yr_ok  = active_year.map_or(true, |y| y == f.file_year as i32);
                 let q_ok   = search_q.is_empty()
                     || f.file_name.to_lowercase().contains(&search_q)
                     || f.file_subject.to_lowercase().contains(&search_q);
-                sub_ok && sch_ok && yr_ok && q_ok
+                sub_ok && sch_ok && q_ok
             })
             .cloned()
             .collect();
 
-        (subjects, schools, years, filtered)
+        (subjects, schools, filtered)
     };
 
     // Phase 2: 级联重置（上级变化时清空下级选项）
     if let Some(ref sch) = active_school {
         if !schools.contains(sch) {
             app.filters.school = None;
-            app.filters.year = None;
-        }
-    }
-    if let Some(yr) = active_year {
-        if !years.contains(&yr) {
-            app.filters.year = None;
         }
     }
 
     // Phase 3: 渲染筛选器，收集用户操作
     let mut new_sub: Option<Option<String>> = None;
     let mut new_school: Option<Option<String>> = None;
-    let mut new_year: Option<Option<i32>> = None;
 
     ui.add_space(8.0);
 
-    // ── 筛选器标题栏（可折叠） ──────────────────────────────
+    // ── 紧凑水平筛选栏 ────────────────────────────────────
     ui.horizontal(|ui| {
-        ui.add_space(4.0);
-        let is_open = !app.filters.collapsed;
-        let icon = if is_open { "▼" } else { "▶" };
-        let btn = egui::Button::new(
-            egui::RichText::new(format!("{} 筛选条件", icon))
-                .font(FontId::new(13.0, egui::FontFamily::Proportional))
-                .color(colors::text_secondary()),
-        )
-        .fill(Color32::TRANSPARENT)
-        .corner_radius(CornerRadius::same(0));
-        if ui.add(btn).clicked() {
-            app.filters.collapsed = !app.filters.collapsed;
+        // 学科组
+        ui.vertical(|ui| {
+            ui.label(
+                egui::RichText::new("学科")
+                    .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                    .color(colors::text_secondary()),
+            );
+            let sub_label = active_sub.as_deref().unwrap_or("全部");
+            egui::ComboBox::from_id_salt("subject_filter")
+                .selected_text(
+                    egui::RichText::new(sub_label)
+                        .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                        .color(if active_sub.is_some() { colors::primary() } else { colors::text_primary() }),
+                )
+                .width(120.0)
+                .show_ui(ui, |ui| {
+                    if ui.selectable_label(active_sub.is_none(), "全部").clicked() {
+                        new_sub = Some(None);
+                    }
+                    for sub in &subjects {
+                        let active = active_sub.as_deref() == Some(sub.as_str());
+                        if ui.selectable_label(active, sub).clicked() {
+                            new_sub = Some(Some(sub.clone()));
+                        }
+                    }
+                });
+        });
+
+        ui.add_space(16.0);
+
+        // 学校组
+        ui.vertical(|ui| {
+            ui.label(
+                egui::RichText::new("学校")
+                    .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                    .color(colors::text_secondary()),
+            );
+            let sch_label = active_school.as_deref().unwrap_or("全部");
+            egui::ComboBox::from_id_salt("school_filter")
+                .selected_text(
+                    egui::RichText::new(sch_label)
+                        .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                        .color(if active_school.is_some() { colors::primary() } else { colors::text_primary() }),
+                )
+                .width(140.0)
+                .show_ui(ui, |ui| {
+                    if ui.selectable_label(active_school.is_none(), "全部").clicked() {
+                        new_school = Some(None);
+                    }
+                    for sch in &schools {
+                        let active = active_school.as_deref() == Some(sch.as_str());
+                        if ui.selectable_label(active, sch).clicked() {
+                            new_school = Some(Some(sch.clone()));
+                        }
+                    }
+                });
+        });
+
+        ui.add_space(16.0);
+
+        // 筛选计数 + 清除按钮
+        let active_count = app.filters.subject.is_some() as i32
+            + app.filters.school.is_some() as i32;
+        if active_count > 0 {
+            ui.label(
+                egui::RichText::new(format!("已选 {} 项", active_count))
+                    .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                    .color(colors::primary()),
+            );
+            ui.add_space(8.0);
+            let clear_btn = egui::Button::new(
+                egui::RichText::new("✕ 清除")
+                    .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                    .color(colors::text_secondary()),
+            )
+            .fill(egui::Color32::TRANSPARENT)
+            .corner_radius(egui::CornerRadius::same(0));
+            if ui.add(clear_btn).clicked() {
+                new_sub = Some(None);
+                new_school = Some(None);
+            }
         }
 
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            // 有已激活的筛选条件时显示计数
-            let active_count = app.filters.subject.is_some() as i32
-                + app.filters.school.is_some() as i32
-                + app.filters.year.is_some() as i32;
-            if active_count > 0 {
-                ui.label(
-                    egui::RichText::new(format!("已选 {} 项", active_count))
-                        .font(FontId::new(12.0, egui::FontFamily::Proportional))
-                        .color(colors::primary()),
-                );
-                ui.add_space(6.0);
-            }
-            if is_open && active_count > 0 {
-                let clear_btn = egui::Button::new(
-                    egui::RichText::new("✕ 清除")
-                        .font(FontId::new(12.0, egui::FontFamily::Proportional))
-                        .color(colors::text_secondary()),
-                )
-                .fill(Color32::TRANSPARENT)
-                .corner_radius(CornerRadius::same(0));
-                if ui.add(clear_btn).clicked() {
-                    new_sub = Some(None);
-                    new_school = Some(None);
-                    new_year = Some(None);
-                }
-            }
+            ui.label(
+                egui::RichText::new(format!("共 {} 份试卷", filtered_files.len()))
+                    .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                    .color(colors::text_secondary()),
+            );
         });
     });
 
-    // ── 折叠内容 ────────────────────────────────────────────
-    if !app.filters.collapsed {
-        ui.add_space(8.0);
-        ui.separator();
-        ui.add_space(8.0);
-
-        // 学科
-    ui.label(
-        egui::RichText::new("学科")
-            .font(FontId::new(12.0, egui::FontFamily::Proportional))
-            .color(colors::text_secondary()),
-    );
-    ui.add_space(4.0);
-    ui.horizontal_wrapped(|ui| {
-        if filter_chip(ui, "全部", active_sub.is_none()) {
-            new_sub = Some(None);
-        }
-        ui.add_space(4.0);
-        for sub in &subjects {
-            let active = active_sub.as_deref() == Some(sub.as_str());
-            if filter_chip(ui, sub, active) {
-                new_sub = Some(Some(sub.clone()));
-            }
-            ui.add_space(4.0);
-        }
-    });
-
-    ui.add_space(10.0);
-
-    // 学校（随学科级联）
-    ui.label(
-        egui::RichText::new("学校")
-            .font(FontId::new(12.0, egui::FontFamily::Proportional))
-            .color(colors::text_secondary()),
-    );
-    ui.add_space(4.0);
-    ui.horizontal_wrapped(|ui| {
-        if filter_chip(ui, "全部", active_school.is_none()) {
-            new_school = Some(None);
-        }
-        ui.add_space(4.0);
-        for sch in &schools {
-            let active = active_school.as_deref() == Some(sch.as_str());
-            if filter_chip(ui, sch, active) {
-                new_school = Some(Some(sch.clone()));
-            }
-            ui.add_space(4.0);
-        }
-    });
-
-    ui.add_space(10.0);
-
-    // 年份（随学科+学校级联）
-    ui.label(
-        egui::RichText::new("年份")
-            .font(FontId::new(12.0, egui::FontFamily::Proportional))
-            .color(colors::text_secondary()),
-    );
-    ui.add_space(4.0);
-    ui.horizontal_wrapped(|ui| {
-        if filter_chip(ui, "全部", active_year.is_none()) {
-            new_year = Some(None);
-        }
-        ui.add_space(4.0);
-        for &yr in &years {
-            let active = active_year == Some(yr);
-            if filter_chip(ui, &yr.to_string(), active) {
-                new_year = Some(Some(yr));
-            }
-            ui.add_space(4.0);
-        }
-    });
-    } // ── 结束 if !app.filters.collapsed ──
-
     ui.add_space(12.0);
     ui.separator();
-    ui.add_space(8.0);
-
-    ui.label(
-        egui::RichText::new(format!("共 {} 份试卷", filtered_files.len()))
-            .font(FontId::new(13.0, egui::FontFamily::Proportional))
-            .color(colors::text_secondary()),
-    );
     ui.add_space(8.0);
 
     // Phase 4: 纵向文件列表
@@ -293,18 +238,13 @@ pub fn render_resource_manager(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     if let Some(s) = new_sub {
         if s != app.filters.subject {
             app.filters.school = None;
-            app.filters.year = None;
         }
         app.filters.subject = s;
     }
     if let Some(sch) = new_school {
         if sch != app.filters.school {
-            app.filters.year = None;
         }
         app.filters.school = sch;
-    }
-    if let Some(y) = new_year {
-        app.filters.year = y;
     }
     if let Some(file) = select_file {
         app.selected_file = Some(file);
@@ -323,7 +263,6 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     let file_name = file.file_name.clone();
     let file_subject = file.file_subject.clone();
     let school_name = file.school_name.clone();
-    let file_year = file.file_year;
     let file_size = file.file_size;
     let create_by = file.create_by.clone();
 
@@ -387,12 +326,10 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                         });
                         ui.add_space(12.0);
 
-                        let year_str = file_year.to_string();
                         let meta = [
                             ("文件名", file_name.as_str()),
                             ("学科",   file_subject.as_str()),
                             ("学校",   school_name.as_str()),
-                            ("年份",   year_str.as_str()),
                             ("大小",   size_str.as_str()),
                             ("上传者", create_by.as_str()),
                         ];
@@ -698,14 +635,6 @@ pub fn render_bookmarks(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                             );
                             ui.add_space(8.0);
                         });
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.add_space(12.0);
-                            if ui.small_button("删除").clicked() {
-                                let api = app.api.clone();
-                                let bid = bookmark.id;
-                                tokio::spawn(async move { let _ = api.delete_bookmark(bid).await; });
-                            }
-                        });
                     });
                 });
             ui.add_space(4.0);
@@ -807,25 +736,6 @@ pub fn render_favorites(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 
 // ── 内部组件 ─────────────────────────────────────────────────────────────────
 
-fn filter_chip(ui: &mut egui::Ui, label: &str, active: bool) -> bool {
-    let (bg, fg) = if active {
-        (colors::primary(), colors::text_on_primary())
-    } else {
-        (colors::bg_hover(), colors::text_secondary())
-    };
-    ui.add(
-        egui::Button::new(
-            egui::RichText::new(label)
-                .font(FontId::new(13.0, egui::FontFamily::Proportional))
-                .color(fg),
-        )
-        .fill(bg)
-        .min_size(Vec2::new(0.0, 28.0))
-        .corner_radius(CornerRadius::same(0)),
-    )
-    .clicked()
-}
-
 /// 全宽纵向文件行，返回是否点击（打开预览）
 fn file_row(ui: &mut egui::Ui, file: &PaperFile, api: &ApiClient) -> bool {
     let size_str = if file.file_size > 0 {
@@ -833,7 +743,6 @@ fn file_row(ui: &mut egui::Ui, file: &PaperFile, api: &ApiClient) -> bool {
     } else {
         "-".to_string()
     };
-    let year_str = if file.file_year > 0 { file.file_year.to_string() } else { String::new() };
 
     let resp = egui::Frame::new()
         .fill(colors::bg_card())
@@ -855,10 +764,9 @@ fn file_row(ui: &mut egui::Ui, file: &PaperFile, api: &ApiClient) -> bool {
                             .font(FontId::new(14.0, egui::FontFamily::Proportional))
                             .color(colors::text_primary()),
                     );
-                    // 副标题：学科 · 年份 · 学校 · 大小
+                    // 副标题：学科 · 学校 · 大小
                     let parts: Vec<&str> = [
                         file.file_subject.as_str(),
-                        year_str.as_str(),
                         file.school_name.as_str(),
                         size_str.as_str(),
                     ]
