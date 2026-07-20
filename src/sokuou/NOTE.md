@@ -16,6 +16,7 @@ Phase 1 完成。核心原语已稳定，已接入前端 UI 组件。
 | `auth_anim` | `Progress` | `app.rs:360` | 登录/注册页淡入 |
 | Toast `enter` | `Progress` | `app.rs:184` | Toast 滑入 |
 | Toast `exit` | `Progress` | `app.rs:185` | Toast 滑出 |
+| `display_scale_anim` | `SpringAnim` | `pdf/mod.rs:165` | PDF 缩放平滑过渡（response=0.4, damping=0.8） |
 
 ## 暴露的不足（持续更新）
 
