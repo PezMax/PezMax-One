@@ -310,9 +310,14 @@ pub struct UserRankItem {
     #[serde(default, deserialize_with = "null_to_default")]
     pub nick_name: String,
     #[serde(default, deserialize_with = "null_to_default")]
+    #[serde(alias = "count")]
     pub upload_count: i64,
     #[serde(default, deserialize_with = "null_to_default")]
     pub download_count: i64,
+    #[serde(default, deserialize_with = "null_to_default")]
+    pub avatar: String,
+    #[serde(default, deserialize_with = "null_to_default")]
+    pub years: i64,
 }
 
 impl UserRankItem {

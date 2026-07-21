@@ -8,8 +8,9 @@ use anyhow;
 use base64::Engine;
 use egui::Context;
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tokio::sync::oneshot;
+use tokio::sync::{mpsc, oneshot};
 
 /// 保存到磁盘的凭证
 #[derive(Debug, Serialize, Deserialize)]
@@ -27,6 +28,12 @@ fn get_data_dir() -> std::path::PathBuf {
     } else {
         std::path::PathBuf::from(".")
     }
+}
+
+fn avatar_cache_dir() -> std::path::PathBuf {
+    let dir = get_data_dir().join("avatar_cache");
+    let _ = std::fs::create_dir_all(&dir);
+    dir
 }
 
 fn credentials_path() -> std::path::PathBuf {
@@ -333,6 +340,15 @@ pub struct PezMaxApp {
     // Community 页面
     pub user_rank_data: AsyncData<Vec<UserRankItem>>,
     pub my_reports_data: AsyncData<Vec<Report>>,
+    // 排行头像缓存（支持 GIF 动图多帧）
+    pub rank_avatar_textures: HashMap<i64, Vec<egui::TextureHandle>>,
+    pub rank_avatar_delays: HashMap<i64, Vec<f32>>,       // 每帧延迟（秒）
+    pub rank_avatar_timer: HashMap<i64, f32>,              // 当前动画计时
+    pub rank_avatar_frame_idx: HashMap<i64, usize>,        // 当前帧索引
+    pub rank_avatar_rx: Option<mpsc::UnboundedReceiver<(i64, anyhow::Result<Vec<u8>>)>>,
+    pub rank_avatar_tx: Option<mpsc::UnboundedSender<(i64, anyhow::Result<Vec<u8>>)>>,
+    pub rank_avatar_failed: HashSet<i64>,
+    pub rank_avatar_pending: HashSet<i64>,
 
     // 认证
     pub is_logged_in: bool,
@@ -469,6 +485,14 @@ impl PezMaxApp {
             favorites_data: AsyncData::new(),
             user_rank_data: AsyncData::new(),
             my_reports_data: AsyncData::new(),
+            rank_avatar_textures: HashMap::new(),
+            rank_avatar_delays: HashMap::new(),
+            rank_avatar_timer: HashMap::new(),
+            rank_avatar_frame_idx: HashMap::new(),
+            rank_avatar_rx: None,
+            rank_avatar_tx: None,
+            rank_avatar_failed: HashSet::new(),
+            rank_avatar_pending: HashSet::new(),
 
             is_logged_in: false,
             auth_page: AuthPage::Login,
@@ -836,6 +860,146 @@ impl PezMaxApp {
         });
     }
 
+    /// 异步加载排行用户头像（支持 GIF 动图，带磁盘缓存）
+    /// 每帧只处理一次真正的加载，避免重复触发
+    pub fn trigger_load_rank_avatars(&mut self, items: &[UserRankItem]) {
+        // 创建通道（如果尚未创建）
+        if self.rank_avatar_tx.is_none() || self.rank_avatar_rx.is_none() {
+            let (tx, rx) = mpsc::unbounded_channel();
+            self.rank_avatar_tx = Some(tx);
+            self.rank_avatar_rx = Some(rx);
+        }
+        let tx = self.rank_avatar_tx.clone().unwrap();
+        let cache_dir = avatar_cache_dir();
+
+        for item in items {
+            if item.avatar.is_empty() {
+                continue;
+            }
+            let user_id = item.user_id;
+            // 跳过已加载、已失败、加载中的
+            if self.rank_avatar_textures.contains_key(&user_id)
+                || self.rank_avatar_failed.contains(&user_id)
+                || self.rank_avatar_pending.contains(&user_id)
+            {
+                continue;
+            }
+            // 标记为加载中
+            self.rank_avatar_pending.insert(user_id);
+
+            // 尝试从磁盘缓存加载
+            let cache_path = cache_dir.join(format!("{}.cache", user_id));
+            if cache_path.exists() {
+                if let Ok(bytes) = std::fs::read(&cache_path) {
+                    if !bytes.is_empty() {
+                        let tx = tx.clone();
+                        tokio::spawn(async move {
+                            tx.send((user_id, Ok(bytes))).ok();
+                        });
+                        continue;
+                    }
+                }
+            }
+            // 下载
+            let avatar_url = item.avatar.clone();
+            let tx = tx.clone();
+            let api = self.api.clone();
+            tokio::spawn(async move {
+                let result = api.download_raw_url(&avatar_url).await;
+                // 下载成功时，保存到磁盘缓存
+                if let Ok(ref bytes) = result {
+                    if !bytes.is_empty() {
+                        let _ = std::fs::write(&cache_path, bytes);
+                    }
+                }
+                tx.send((user_id, result)).ok();
+            });
+        }
+    }
+
+    /// 处理单个排行头像的下载结果，支持 GIF 动图解码
+    /// 返回值表示是否成功处理
+    fn process_rank_avatar_result(&mut self, ctx: &egui::Context, user_id: i64, bytes: Vec<u8>) -> bool {
+        // 从 pending 中移除
+        self.rank_avatar_pending.remove(&user_id);
+
+        // 检测是否为 GIF（魔术字节 47 49 46 = "GIF"）
+        let is_gif = bytes.len() > 6 && bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46;
+
+        if is_gif {
+            // ── 尝试 GIF 解码 ──────────────────────────────────────
+            use image::codecs::gif::GifDecoder;
+            use image::AnimationDecoder;
+            use std::io::Cursor;
+
+            match GifDecoder::new(Cursor::new(&bytes)) {
+                Ok(decoder) => {
+                    match decoder.into_frames().collect_frames() {
+                        Ok(frames) if !frames.is_empty() => {
+                            let mut textures = Vec::with_capacity(frames.len());
+                            let mut delays = Vec::with_capacity(frames.len());
+                            for frame in &frames {
+                                let rgba = frame.buffer();
+                                let (w, h) = rgba.dimensions();
+                                if w == 0 || h == 0 { continue; }
+                                let pixels = rgba.clone().into_raw();
+                                let color_image = egui::ColorImage::from_rgba_unmultiplied(
+                                    [w as usize, h as usize], &pixels,
+                                );
+                                let tex_name = format!("rank_avatar_{}_f{}", user_id, textures.len());
+                                textures.push(ctx.load_texture(
+                                    &tex_name, color_image, egui::TextureOptions::LINEAR,
+                                ));
+                                let delay: std::time::Duration = frame.delay().into();
+                                delays.push(delay.as_secs_f32().max(0.05));
+                            }
+                            if !textures.is_empty() {
+                                self.rank_avatar_textures.insert(user_id, textures);
+                                self.rank_avatar_delays.insert(user_id, delays);
+                                self.rank_avatar_frame_idx.insert(user_id, 0);
+                                self.rank_avatar_timer.insert(user_id, 0.0);
+                                return true;
+                            }
+                        }
+                        Ok(_) => {} // 空帧 → fallthrough 到静态解码
+                        Err(e) => {
+                            log::info!("GIF 帧解码失败 (user={}): {}，尝试静态解码", user_id, e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    log::info!("GIF 解码器创建失败 (user={}): {}，尝试静态解码", user_id, e);
+                }
+            }
+            // GIF 解码失败 → 降级为静态图片解码
+        }
+
+        // ── 静态图片解码（GIF 降级也走这里） ──────────────────────
+        match image::load_from_memory(&bytes) {
+            Ok(img) => {
+                let rgba = img.to_rgba8();
+                let (w, h) = rgba.dimensions();
+                if w > 0 && h > 0 {
+                    let pixels = rgba.into_raw();
+                    let color_image = egui::ColorImage::from_rgba_unmultiplied(
+                        [w as usize, h as usize], &pixels,
+                    );
+                    let tex_name = format!("rank_avatar_{}", user_id);
+                    let tex = ctx.load_texture(&tex_name, color_image, egui::TextureOptions::LINEAR);
+                    self.rank_avatar_textures.insert(user_id, vec![tex]);
+                    return true;
+                }
+            }
+            Err(e) => {
+                log::info!("静态头像解码失败 (user={}): {}", user_id, e);
+            }
+        }
+
+        // 所有解码方式都失败
+        self.rank_avatar_failed.insert(user_id);
+        false
+    }
+
     /// 异步加载我的举报列表
     pub fn trigger_load_my_reports(&mut self) {
         let api = self.api.clone();
@@ -908,6 +1072,14 @@ impl PezMaxApp {
         self.user_stats = None;
         self.avatar_texture = None;
         self.avatar_load_rx = None;
+        self.rank_avatar_textures.clear();
+        self.rank_avatar_delays.clear();
+        self.rank_avatar_timer.clear();
+        self.rank_avatar_frame_idx.clear();
+        self.rank_avatar_rx = None;
+        self.rank_avatar_tx = None;
+        self.rank_avatar_failed.clear();
+        self.rank_avatar_pending.clear();
         clear_credentials();
         // 清除 API token
         let api = self.api.clone();
@@ -1030,6 +1202,38 @@ impl eframe::App for PezMaxApp {
             }
         }
 
+        // 轮询排行头像下载结果（先收集再处理，避免双重 mutable borrow）
+        let mut results: Vec<(i64, Vec<u8>)> = Vec::new();
+        if let Some(rx) = &mut self.rank_avatar_rx {
+            while let Ok((user_id, result)) = rx.try_recv() {
+                match result {
+                    Ok(bytes) => results.push((user_id, bytes)),
+                    Err(e) => log::info!("排行头像加载失败 (user={}): {}", user_id, e),
+                }
+            }
+        }
+        for (user_id, bytes) in results {
+            self.process_rank_avatar_result(ctx, user_id, bytes);
+        }
+
+        // 更新 GIF 动图帧
+        if !self.rank_avatar_delays.is_empty() {
+            for (&user_id, delays) in &self.rank_avatar_delays.clone() {
+                if delays.len() <= 1 {
+                    continue; // 单帧不需要动画
+                }
+                let timer = self.rank_avatar_timer.entry(user_id).or_insert(0.0);
+                *timer += dt as f32;
+                let current_delay = delays[*self.rank_avatar_frame_idx.get(&user_id).unwrap_or(&0)];
+                if *timer >= current_delay {
+                    *timer = 0.0;
+                    let idx = self.rank_avatar_frame_idx.entry(user_id).or_insert(0);
+                    *idx = (*idx + 1) % delays.len();
+                }
+            }
+            ctx.request_repaint();
+        }
+
         // 轮询 PDF 字节下载结果
         if let Some(rx) = &mut self.pdf_bytes_rx {
             if let Ok(result) = rx.try_recv() {
@@ -1060,6 +1264,8 @@ impl eframe::App for PezMaxApp {
             || self.pdf_viewer.is_loading()
             || self.toasts.iter().any(|t| !t.enter.is_steady() || !t.exit.is_steady())
             || self.avatar_load_rx.is_some()
+            || self.rank_avatar_rx.is_some()
+            || self.rank_avatar_delays.values().any(|d| d.len() > 1)
         {
             ctx.request_repaint();
         }
@@ -1159,6 +1365,13 @@ impl eframe::App for PezMaxApp {
             self.bookmarks_data.poll();
             self.favorites_data.poll();
             self.user_rank_data.poll();
+            // 排行榜数据加载完成后，触发头像加载
+            if self.user_rank_data.is_loaded() {
+                let items = self.user_rank_data.data.clone();
+                if let Some(ref items) = items {
+                    self.trigger_load_rank_avatars(items);
+                }
+            }
             self.my_reports_data.poll();
             // 同步 user_stats_data → user_stats（兼容旧代码）
             if let Some(ref stats) = self.user_stats_data.data {

@@ -4,7 +4,90 @@
 use crate::app::PezMaxApp;
 use crate::api::models::*;
 use crate::theme::colors;
-use egui::{CornerRadius, FontId, Vec2};
+use egui::{Color32, CornerRadius, FontId, Rect, StrokeKind, Vec2, pos2};
+
+// ── 头像颜色预设（12 种 Metro 色板，基于 user_id 循环分配）───────────────
+const AVATAR_PALETTE: [(u8, u8, u8); 12] = [
+    (0x3B, 0x82, 0xF6), // 钴蓝
+    (0x1D, 0xB9, 0x54), // 云杉绿
+    (0xEF, 0x44, 0x44), // 绯红
+    (0xF5, 0x9E, 0x0B), // 琥珀
+    (0x8B, 0x5C, 0xF6), // 堇紫
+    (0x00, 0xBC, 0x70), // 翡翠
+    (0xE0, 0x67, 0xC9), // 粉紫
+    (0x00, 0xB7, 0xC3), // 青碧
+    (0xF7, 0x63, 0x00), // 橙
+    (0x54, 0x6E, 0x7A), // 钢蓝
+    (0x9C, 0x27, 0xB0), // 深紫
+    (0x4C, 0xAF, 0x50), // 草绿
+];
+
+fn avatar_color(user_id: i64) -> (u8, u8, u8) {
+    AVATAR_PALETTE[(user_id as usize) % 12]
+}
+
+fn avatar_initial(name: &str) -> String {
+    name.chars().next().map(|c| c.to_uppercase().to_string()).unwrap_or_else(|| "?".to_string())
+}
+
+/// 绘制头像：优先真实头像（方形），备用色块+首字母
+fn draw_avatar(
+    ui: &mut egui::Ui,
+    app: &mut PezMaxApp,
+    item: &UserRankItem,
+    avatar_rect: Rect,
+    avatar_size: f32,
+    r: u8, g: u8, b: u8,
+    initial: &str,
+) {
+    if let Some(textures) = app.rank_avatar_textures.get(&item.user_id) {
+        if !textures.is_empty() {
+            let tex_size = textures[0].size();
+            let (tw, th) = (tex_size[0] as f32, tex_size[1] as f32);
+            let uv_rect = if (tw - th).abs() > 1.0 {
+                if tw > th {
+                    let crop = (1.0 - th / tw) / 2.0;
+                    Rect::from_min_max(pos2(crop, 0.0), pos2(1.0 - crop, 1.0))
+                } else {
+                    let crop = (1.0 - tw / th) / 2.0;
+                    Rect::from_min_max(pos2(0.0, crop), pos2(1.0, 1.0 - crop))
+                }
+            } else {
+                Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0))
+            };
+            let frame_idx = app.rank_avatar_frame_idx.get(&item.user_id).copied().unwrap_or(0);
+            let tex_idx = frame_idx.min(textures.len() - 1);
+            // 方形色块垫底 + 图片覆盖
+            ui.painter().rect_filled(avatar_rect, CornerRadius::ZERO, Color32::from_rgb(r, g, b));
+            ui.painter().image(textures[tex_idx].id(), avatar_rect, uv_rect, Color32::WHITE);
+            return;
+        }
+    }
+    // 备用色块
+    fallback_avatar(ui, avatar_rect, r, g, b, initial);
+}
+
+/// 备用色块头像（方块）
+fn fallback_avatar(ui: &mut egui::Ui, rect: Rect, r: u8, g: u8, b: u8, initial: &str) {
+    ui.painter().rect_filled(rect, CornerRadius::ZERO, egui::Color32::from_rgb(r, g, b));
+    ui.painter().text(
+        rect.center(),
+        egui::Align2::CENTER_CENTER,
+        initial,
+        egui::FontId::new(20.0, egui::FontFamily::Proportional),
+        egui::Color32::WHITE,
+    );
+}
+
+/// 奖牌色：与 rank 1-3 对应的左强调条颜色
+fn medal_bar_color(rank: usize) -> egui::Color32 {
+    match rank {
+        1 => egui::Color32::from_rgb(0xFF, 0xBF, 0x00), // 金
+        2 => egui::Color32::from_rgb(0xC0, 0xC0, 0xC0), // 银
+        3 => egui::Color32::from_rgb(0xCD, 0x7F, 0x32), // 铜
+        _ => colors::primary(),
+    }
+}
 
 /// 用户排行榜（对接 /datum/user/rank）
 pub fn render_user_ranking(app: &mut PezMaxApp, ui: &mut egui::Ui) {
@@ -12,21 +95,21 @@ pub fn render_user_ranking(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 
     ui.add_space(16.0);
     ui.label(
-        egui::RichText::new("用户排行")
-            .font(FontId::new(22.0, egui::FontFamily::Proportional))
+        egui::RichText::new("🏆 用户排行")
+            .font(FontId::new(24.0, egui::FontFamily::Proportional))
             .color(colors::text_primary()),
     );
-    ui.add_space(6.0);
+    ui.add_space(4.0);
     ui.label(
         egui::RichText::new("按贡献度排列的用户列表")
             .font(FontId::new(13.0, egui::FontFamily::Proportional))
             .color(colors::text_secondary()),
     );
-    ui.add_space(16.0);
+    ui.add_space(20.0);
 
     if app.user_rank_data.is_loading() {
         ui.vertical_centered(|ui| {
-            ui.add_space(32.0);
+            ui.add_space(40.0);
             ui.label(
                 egui::RichText::new("加载中…")
                     .font(FontId::new(14.0, egui::FontFamily::Proportional))
@@ -39,7 +122,7 @@ pub fn render_user_ranking(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 
     if let Some(err) = &app.user_rank_data.error.clone() {
         ui.vertical_centered(|ui| {
-            ui.add_space(32.0);
+            ui.add_space(40.0);
             ui.label(
                 egui::RichText::new(format!("加载失败：{}", err))
                     .font(FontId::new(13.0, egui::FontFamily::Proportional))
@@ -61,7 +144,7 @@ pub fn render_user_ranking(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 
     if items.is_empty() {
         ui.vertical_centered(|ui| {
-            ui.add_space(32.0);
+            ui.add_space(40.0);
             ui.label(
                 egui::RichText::new("暂无排行数据")
                     .font(FontId::new(13.0, egui::FontFamily::Proportional))
@@ -73,66 +156,98 @@ pub fn render_user_ranking(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 
     egui::ScrollArea::vertical()
         .id_salt("ranking_scroll")
+        .auto_shrink([false, false])
         .show(ui, |ui| {
+            // 关键：清除一切间距，卡片依次紧挨
+            ui.spacing_mut().item_spacing.y = 0.0;
+
+            let card_width = ui.available_width();
+
             for (idx, item) in items.iter().enumerate() {
                 let rank = idx + 1;
-                let medal = match rank {
-                    1 => "🥇",
-                    2 => "🥈",
-                    3 => "🥉",
-                    _ => "  ",
+                let (rank_label, rank_label_color) = match rank {
+                    1 => ("#1", Color32::from_rgb(0xD4, 0x8B, 0x0A)),
+                    2 => ("#2", Color32::from_rgb(0x80, 0x80, 0x80)),
+                    3 => ("#3", Color32::from_rgb(0xAD, 0x6B, 0x2B)),
+                    _ => ("", Color32::BLACK),
                 };
-                let row_bg = if rank <= 3 {
-                    egui::Color32::from_rgb(0xFF, 0xF8, 0xE8)
+
+                let bar_color = medal_bar_color(rank);
+                let (r, g, b) = avatar_color(item.user_id);
+                let initial = avatar_initial(item.display_name());
+
+                let rank_text_color = if rank <= 3 {
+                    if crate::theme::is_dark() { Color32::WHITE } else { Color32::BLACK }
+                } else {
+                    colors::text_primary()
+                };
+                let rank_secondary_color = if rank <= 3 {
+                    if crate::theme::is_dark() { Color32::from_gray(200) } else { Color32::from_gray(60) }
+                } else {
+                    colors::text_secondary()
+                };
+                let row_bg = if rank == 1 {
+                    if crate::theme::is_dark() { Color32::from_rgb(0x3A, 0x30, 0x10) } else { Color32::from_rgb(0xFF, 0xF8, 0xE0) }
+                } else if rank == 2 {
+                    if crate::theme::is_dark() { Color32::from_rgb(0x30, 0x30, 0x30) } else { Color32::from_rgb(0xF5, 0xF5, 0xF5) }
+                } else if rank == 3 {
+                    if crate::theme::is_dark() { Color32::from_rgb(0x33, 0x2B, 0x1E) } else { Color32::from_rgb(0xFD, 0xF5, 0xEB) }
                 } else {
                     colors::bg_card()
                 };
 
-                egui::Frame::new()
-                    .fill(row_bg)
-                    .corner_radius(CornerRadius::same(0))
-                    .stroke(egui::Stroke::new(1.0, colors::border()))
-                    .show(ui, |ui| {
-                        ui.set_min_width(ui.available_width());
-                        ui.horizontal(|ui| {
-                            ui.add_space(16.0);
-                            ui.label(
-                                egui::RichText::new(medal)
-                                    .font(FontId::new(20.0, egui::FontFamily::Proportional)),
-                            );
-                            ui.add_space(8.0);
-                            ui.label(
-                                egui::RichText::new(format!("#{}", rank))
-                                    .font(FontId::new(13.0, egui::FontFamily::Proportional))
-                                    .color(colors::text_secondary()),
-                            );
-                            ui.add_space(16.0);
-                            ui.label(
-                                egui::RichText::new(item.display_name())
-                                    .font(FontId::new(15.0, egui::FontFamily::Proportional))
-                                    .color(colors::text_primary()),
-                            );
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    ui.add_space(16.0);
-                                    ui.label(
-                                        egui::RichText::new(format!("📥 {}", item.download_count))
-                                            .font(FontId::new(13.0, egui::FontFamily::Proportional))
-                                            .color(colors::text_secondary()),
-                                    );
-                                    ui.add_space(16.0);
-                                    ui.label(
-                                        egui::RichText::new(format!("📤 {} 份", item.upload_count))
-                                            .font(FontId::new(13.0, egui::FontFamily::Proportional))
-                                            .color(colors::text_secondary()),
-                                    );
-                                },
-                            );
-                        });
-                        ui.add_space(6.0);
-                    });
-                ui.add_space(4.0);
+                // 卡片之间无间距，紧挨排列
+                let card_rect = ui.allocate_exact_size(
+                    Vec2::new(card_width, 80.0),
+                    egui::Sense::hover(),
+                ).0;
+
+                let cy = card_rect.center().y;
+
+                // 背景 + 边框（使用 Inside 避免边框重叠）
+                ui.painter().rect(card_rect, CornerRadius::ZERO, row_bg, egui::Stroke::new(1.0, colors::border()), StrokeKind::Inside);
+                // 左强调色条
+                ui.painter().rect_filled(
+                    Rect::from_min_max(pos2(card_rect.left(), card_rect.top()), pos2(card_rect.left() + 4.0, card_rect.bottom())),
+                    CornerRadius::ZERO, bar_color,
+                );
+
+                // 头像（48px）
+                let avatar_size = 48.0;
+                let avatar_rect = Rect::from_center_size(
+                    pos2(card_rect.left() + 4.0 + 16.0 + avatar_size / 2.0, cy),
+                    Vec2::splat(avatar_size),
+                );
+
+                if let Some(textures) = app.rank_avatar_textures.get(&item.user_id) {
+                    if !textures.is_empty() {
+                        // 方形头像：色块垫底 + 图片覆盖
+                        draw_avatar(ui, app, item, avatar_rect, avatar_size, r, g, b, &initial);
+                    } else {
+                        fallback_avatar(ui, avatar_rect, r, g, b, &initial);
+                    }
+                } else {
+                    fallback_avatar(ui, avatar_rect, r, g, b, &initial);
+                }
+
+                // 中间文本
+                let text_x = avatar_rect.right() + 16.0;
+                let mut line_x = text_x;
+
+                if rank <= 3 {
+                    let r = ui.painter().text(pos2(line_x, cy), egui::Align2::LEFT_CENTER, rank_label, FontId::new(16.0, egui::FontFamily::Proportional), rank_label_color);
+                    line_x += r.width() + 10.0;
+                } else {
+                    ui.painter().text(pos2(line_x, cy), egui::Align2::LEFT_CENTER, format!("#{}", rank), FontId::new(14.0, egui::FontFamily::Proportional), colors::text_secondary());
+                    line_x += 30.0;
+                }
+                ui.painter().text(pos2(line_x, cy), egui::Align2::LEFT_CENTER, item.display_name(), FontId::new(17.0, egui::FontFamily::Proportional), rank_text_color);
+
+                // 右侧上传数量
+                let upload_clr = if rank == 1 { Color32::from_rgb(0xE6, 0x7E, 0x22) } else { colors::primary() };
+                let right_x = card_rect.right() - 80.0;
+                ui.painter().text(pos2(right_x, cy - 14.0), egui::Align2::CENTER_CENTER, format!("{}", item.upload_count), FontId::new(26.0, egui::FontFamily::Proportional), upload_clr);
+                ui.painter().text(pos2(right_x, cy + 14.0), egui::Align2::CENTER_CENTER, "份上传", FontId::new(12.0, egui::FontFamily::Proportional), rank_secondary_color);
             }
         });
 }
