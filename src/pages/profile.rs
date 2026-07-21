@@ -1,5 +1,5 @@
 // 个人功能区 — Metro Design 重设计
-// 四个子标签：个人中心 / 通知 / 下载记录 / 设置
+// 五个子标签：个人中心 / 账号设置 / 通知 / 下载记录 / 设置
 //
 // 设计语言：
 //   - 方角纯色块（CornerRadius::ZERO）
@@ -9,10 +9,11 @@
 //   - 内容卡片 bg_card + 1px 边框
 //   - 悬停叠加色（primary color + 低透明度）
 
-use crate::app::PezMaxApp;
+use crate::app::{AccountEditSection, PezMaxApp};
+use crate::api::models::SecurityQuestion;
 use crate::theme::colors;
-use egui::{Color32, CornerRadius, FontId, Rect, Stroke, Vec2, pos2, StrokeKind};
 use crate::theme::{ThemeMode, ACCENT_PRESETS};
+use egui::{Color32, CornerRadius, FontId, Rect, Stroke, Vec2, pos2, StrokeKind};
 
 // ── 公共组件 ─────────────────────────────────────────────────────────────────────
 
@@ -36,7 +37,25 @@ fn section_title(ui: &mut egui::Ui, text: &str) {
     });
 }
 
-// ── 个人中心 ─────────────────────────────────────────────────────────────────
+/// 带小一号标题的 setting 小节标题
+fn setting_section_title(ui: &mut egui::Ui, text: &str) {
+    ui.horizontal(|ui| {
+        egui::Frame::new()
+            .fill(colors::primary())
+            .corner_radius(CornerRadius::ZERO)
+            .show(ui, |ui| {
+                ui.set_min_size(Vec2::new(3.0, 14.0));
+                ui.set_max_size(Vec2::new(3.0, 14.0));
+            });
+        ui.add_space(8.0);
+        ui.label(
+            egui::RichText::new(text)
+                .font(FontId::new(15.0, egui::FontFamily::Proportional))
+                .color(colors::text_primary())
+                .strong(),
+        );
+    });
+}
 
 /// 纯色统计色块（匹配首页 render_metric_blocks 风格）
 fn stat_block(ui: &mut egui::Ui, value: &str, label: &str, color: Color32, width: f32) {
@@ -87,12 +106,17 @@ pub fn render_personal_center(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     egui::ScrollArea::vertical()
         .id_salt("profile_scroll")
         .show(ui, |ui| {
-            // ── 用户信息卡 ─────────────────────────────────────
             if let Some(ref user) = app.current_user {
-                // 头像 + 信息
-                let first_char = user.nick_name.chars().next().unwrap_or('?').to_string();
+                let display_name = if user.nick_name.is_empty() { &user.user_name } else { &user.nick_name };
+                let first_char = display_name.chars().next().unwrap_or('?').to_string();
+                let (fav, dl, ul) = app.user_stats.as_ref().map_or((0, 0, 0), |s| {
+                    (s.favorite_count, s.download_count, s.upload_count)
+                });
+
+                // ── 顶部信息卡：头像 + 信息（左）| 统计（右）─────────
+                let card_height = 100.0;
                 let (rect, _) = ui.allocate_exact_size(
-                    Vec2::new(ui.available_width(), 96.0),
+                    Vec2::new(ui.available_width(), card_height),
                     egui::Sense::hover(),
                 );
                 ui.painter().rect_filled(rect, CornerRadius::ZERO, colors::bg_card());
@@ -109,104 +133,732 @@ pub fn render_personal_center(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                     colors::primary(),
                 );
 
-                // 头像色块
+                // 左半区：头像 + 文字
+                let avatar_size = 72.0;
                 let avatar_rect = Rect::from_min_size(
-                    pos2(rect.left() + 20.0, rect.top() + 14.0),
-                    Vec2::splat(68.0),
+                    pos2(rect.left() + 20.0, rect.top() + (card_height - avatar_size) / 2.0),
+                    Vec2::splat(avatar_size),
                 );
-                ui.painter().rect_filled(avatar_rect, CornerRadius::ZERO, colors::primary());
-                ui.painter().text(
-                    avatar_rect.center(),
-                    egui::Align2::CENTER_CENTER,
-                    &first_char,
-                    FontId::new(32.0, egui::FontFamily::Proportional),
-                    colors::text_on_primary(),
-                );
+                if let Some(tex) = &app.avatar_texture {
+                    let uv = calc_center_crop_uv(app.avatar_image_size, avatar_size);
+                    ui.painter().image(tex.id(), avatar_rect, uv, Color32::WHITE);
+                } else {
+                    ui.painter().rect_filled(avatar_rect, CornerRadius::ZERO, colors::primary());
+                    ui.painter().text(
+                        avatar_rect.center(),
+                        egui::Align2::CENTER_CENTER,
+                        &first_char,
+                        FontId::new(34.0, egui::FontFamily::Proportional),
+                        colors::text_on_primary(),
+                    );
+                }
 
-                // 昵称
+                // 显示名称
                 ui.painter().text(
-                    pos2(avatar_rect.right() + 16.0, rect.top() + 24.0),
+                    pos2(avatar_rect.right() + 16.0, rect.top() + 28.0),
                     egui::Align2::LEFT_CENTER,
-                    &user.nick_name,
-                    FontId::new(22.0, egui::FontFamily::Proportional),
+                    display_name,
+                    FontId::new(24.0, egui::FontFamily::Proportional),
                     colors::text_primary(),
                 );
                 // 用户名
                 ui.painter().text(
-                    pos2(avatar_rect.right() + 16.0, rect.top() + 52.0),
+                    pos2(avatar_rect.right() + 16.0, rect.top() + 60.0),
                     egui::Align2::LEFT_CENTER,
                     format!("@{}", user.user_name),
                     FontId::new(14.0, egui::FontFamily::Proportional),
                     colors::text_secondary(),
                 );
 
-                // 换头像按钮
-                let btn_rect = Rect::from_min_size(
-                    pos2(rect.right() - 100.0, rect.top() + 32.0),
-                    Vec2::new(84.0, 32.0),
-                );
-                let btn_resp = ui.interact(btn_rect, ui.next_auto_id(), egui::Sense::click());
-                ui.painter().rect_stroke(
-                    btn_rect,
-                    CornerRadius::ZERO,
-                    Stroke::new(1.0, colors::primary()),
-                    StrokeKind::Outside,
-                );
-                ui.painter().text(
-                    btn_rect.center(),
-                    egui::Align2::CENTER_CENTER,
-                    "更换头像",
-                    FontId::new(13.0, egui::FontFamily::Proportional),
-                    colors::primary(),
-                );
-                if btn_resp.clicked() {
-                    // 预留：触发头像上传
-                }
-                if btn_resp.hovered() {
-                    let overlay = Color32::from_rgba_premultiplied(
-                        colors::primary().r(), colors::primary().g(), colors::primary().b(), 24,
-                    );
-                    ui.painter().rect_filled(btn_rect, CornerRadius::ZERO, overlay);
-                }
-
-                ui.add_space(12.0);
-
-                // ── 统计色块（3 个，匹配首页风格）───────────────
-                let (fav, dl, ul) = app.user_stats.as_ref().map_or((0, 0, 0), |s| {
-                    (s.favorite_count, s.download_count, s.upload_count)
-                });
-
-                let stats = [
-                    (format!("{}", dl), "下载量", colors::primary()),
-                    (format!("{}", fav), "收藏数", colors::accent_orange()),
-                    (format!("{}", ul), "上传数", colors::accent_green()),
+                // 右半区：统计列
+                let stat_x = rect.right() - 140.0;
+                let stat_items = [
+                    (format!("{}", dl), "下载量"),
+                    (format!("{}", fav), "收藏数"),
+                    (format!("{}", ul), "上传数"),
                 ];
+                let stat_gap = 28.0;
+                let stat_start_y = rect.top() + (card_height - (stat_items.len() as f32 * stat_gap)) / 2.0 + stat_gap / 2.0;
+                for (i, (value, label)) in stat_items.iter().enumerate() {
+                    let y = stat_start_y + i as f32 * stat_gap;
+                    // 数值
+                    ui.painter().text(
+                        pos2(stat_x, y),
+                        egui::Align2::LEFT_CENTER,
+                        value,
+                        FontId::new(18.0, egui::FontFamily::Proportional),
+                        colors::text_primary(),
+                    );
+                    // 标签
+                    ui.painter().text(
+                        pos2(stat_x + 52.0, y),
+                        egui::Align2::LEFT_CENTER,
+                        *label,
+                        FontId::new(13.0, egui::FontFamily::Proportional),
+                        colors::text_secondary(),
+                    );
+                }
 
-                let gap = 8.0;
-                let block_w = (ui.available_width() - gap * 2.0) / 3.0;
+                ui.add_space(16.0);
 
-                ui.horizontal(|ui| {
-                    for (i, (value, label, color)) in stats.iter().enumerate() {
-                        if i > 0 { ui.add_space(gap); }
-                        stat_block(ui, value, label, *color, block_w);
-                    }
-                });
-
-                ui.add_space(20.0);
-
-                // ── 账号安全 ─────────────────────────────────────
-                section_title(ui, "账号安全");
+                // ── 账号设置区域 ─────────────────────────────────────
+                let section_label = match app.account_edit_section {
+                    AccountEditSection::None => "账号设置",
+                    AccountEditSection::Avatar => "修改头像",
+                    AccountEditSection::Username => "修改用户名",
+                    AccountEditSection::Security => "修改密保问题",
+                    AccountEditSection::Password => "修改登录密码",
+                };
+                section_title(ui, section_label);
                 ui.add_space(12.0);
 
-                security_row(ui, "🔑 修改密码", "定期更换密码保护账号安全", colors::primary());
-                ui.add_space(4.0);
-                security_row(ui, "🔒 密保问题", "用于账号找回的安全验证", colors::accent_orange());
+                // 成功/错误提示
+                if !app.account_edit_error.is_empty() {
+                    ui.label(
+                        egui::RichText::new(&app.account_edit_error)
+                            .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                            .color(Color32::RED),
+                    );
+                    ui.add_space(4.0);
+                }
+                if !app.account_edit_success.is_empty() {
+                    ui.label(
+                        egui::RichText::new(&app.account_edit_success)
+                            .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                            .color(Color32::GREEN),
+                    );
+                    ui.add_space(4.0);
+                }
+
+                // 当前编辑区域
+                match app.account_edit_section {
+                    AccountEditSection::None => render_account_settings_list(app, ui),
+                    AccountEditSection::Avatar => render_avatar_edit(app, ui),
+                    AccountEditSection::Username => render_username_edit(app, ui),
+                    AccountEditSection::Security => render_security_edit(app, ui),
+                    AccountEditSection::Password => render_password_edit(app, ui),
+                }
             } else {
                 empty_state(ui, "👤", "用户信息加载中...");
             }
 
             ui.add_space(24.0);
         });
+}
+
+
+/// 账号设置主列表
+fn render_account_settings_list(app: &mut PezMaxApp, ui: &mut egui::Ui) {
+    let user = match &app.current_user {
+        Some(u) => u,
+        None => {
+            empty_state(ui, "👤", "用户信息加载中...");
+            return;
+        }
+    };
+
+    // 头像
+    settings_card_row(ui, "头像", "个人头像，展示在个人中心和各页面", |_ui| {}, |ui| {
+        if edit_button(ui, "更换") {
+            app.account_edit_section = AccountEditSection::Avatar;
+        }
+    });
+
+    ui.add_space(4.0);
+
+    // 用户名
+    settings_card_row(ui, "用户名", "用于登录和个人信息展示", |ui| {
+        ui.label(
+            egui::RichText::new(&user.user_name)
+                .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                .color(colors::text_secondary()),
+        );
+    }, |ui| {
+        if edit_button(ui, "修改") {
+            app.account_edit_username = user.user_name.clone();
+            app.account_edit_section = AccountEditSection::Username;
+        }
+    });
+
+    ui.add_space(4.0);
+
+    // 密保问题
+    settings_card_row(ui, "密保问题", "用于账号找回的安全验证", |_| {}, |ui| {
+        if edit_button(ui, "修改") {
+            app.account_edit_section = AccountEditSection::Security;
+        }
+    });
+
+    ui.add_space(4.0);
+
+    // 登录密码
+    settings_card_row(ui, "登录密码", "定期更换密码保护账号安全", |_| {}, |ui| {
+        if edit_button(ui, "修改") {
+            app.account_edit_section = AccountEditSection::Password;
+        }
+    });
+}
+
+/// 设置项卡片行（带左强调色条 + 标签 + 左侧内容 + 右侧按钮）
+fn settings_card_row(
+    ui: &mut egui::Ui,
+    label: &str,
+    desc: &str,
+    add_left: impl FnOnce(&mut egui::Ui),
+    add_right: impl FnOnce(&mut egui::Ui),
+) {
+    let (rect, _) = ui.allocate_exact_size(
+        Vec2::new(ui.available_width(), 64.0),
+        egui::Sense::hover(),
+    );
+    ui.painter().rect_filled(rect, CornerRadius::ZERO, colors::bg_card());
+    ui.painter().rect_stroke(
+        rect,
+        CornerRadius::ZERO,
+        Stroke::new(1.0, colors::border()),
+        StrokeKind::Outside,
+    );
+    // 左边缘 3px 强调色条
+    ui.painter().rect_filled(
+        Rect::from_min_max(pos2(rect.left(), rect.top()), pos2(rect.left() + 3.0, rect.bottom())),
+        CornerRadius::ZERO,
+        colors::primary(),
+    );
+
+    // 左侧：标签 + 描述 + 值
+    let left_rect = Rect::from_min_max(
+        pos2(rect.left() + 20.0, rect.top() + 6.0),
+        pos2(rect.right() - 76.0, rect.bottom()),
+    );
+    ui.allocate_ui_at_rect(left_rect, |ui| {
+        ui.horizontal(|ui| {
+            // 标签
+            ui.label(
+                egui::RichText::new(label)
+                    .font(FontId::new(15.0, egui::FontFamily::Proportional))
+                    .color(colors::text_primary()),
+            );
+            ui.add_space(8.0);
+            // 值（左侧内容）
+            add_left(ui);
+        });
+        // 描述
+        ui.label(
+            egui::RichText::new(desc)
+                .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                .color(colors::text_secondary()),
+        );
+    });
+
+    // 右侧：按钮区
+    let btn_rect = Rect::from_min_size(
+        pos2(rect.right() - 70.0, rect.top() + 14.0),
+        Vec2::new(60.0, 28.0),
+    );
+    ui.allocate_ui_at_rect(btn_rect, |ui| {
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            add_right(ui);
+        });
+    });
+}
+
+/// 编辑按钮（小号方角）
+fn edit_button(ui: &mut egui::Ui, text: &str) -> bool {
+    let btn = egui::Button::new(
+        egui::RichText::new(text)
+            .font(FontId::new(13.0, egui::FontFamily::Proportional))
+            .color(colors::primary()),
+    )
+    .fill(Color32::TRANSPARENT)
+    .corner_radius(CornerRadius::ZERO)
+    .min_size(Vec2::new(56.0, 28.0))
+    .stroke(Stroke::new(1.0, colors::primary()));
+    ui.add(btn).clicked()
+}
+
+/// 计算居中裁剪的 UV 坐标，使任意比例图片以正方形居中显示
+fn calc_center_crop_uv(image_size: Option<(usize, usize)>, target_size: f32) -> egui::Rect {
+    let (w, h) = match image_size {
+        Some((w, h)) if w > 0 && h > 0 => (w as f32, h as f32),
+        _ => return egui::Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+    };
+
+    let aspect = w / h;
+    if aspect > 1.0 {
+        // 图片宽 > 高：左右裁剪
+        let crop = (1.0 - 1.0 / aspect) / 2.0;
+        egui::Rect::from_min_max(pos2(crop, 0.0), pos2(1.0 - crop, 1.0))
+    } else if aspect < 1.0 {
+        // 图片高 > 宽：上下裁剪
+        let crop = (1.0 - aspect) / 2.0;
+        egui::Rect::from_min_max(pos2(0.0, crop), pos2(1.0, 1.0 - crop))
+    } else {
+        // 正方形：完整显示
+        egui::Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0))
+    }
+}
+
+/// 主要操作按钮（强调色填充）
+fn primary_button(ui: &mut egui::Ui, text: &str, loading: bool) -> bool {
+    let label = if loading {
+        format!("⏳ {}", text)
+    } else {
+        text.to_string()
+    };
+    let btn = egui::Button::new(
+        egui::RichText::new(label)
+            .font(FontId::new(13.0, egui::FontFamily::Proportional))
+            .color(colors::text_on_primary()),
+    )
+    .fill(if loading { colors::bg_input() } else { colors::primary() })
+    .corner_radius(CornerRadius::ZERO)
+    .min_size(Vec2::new(80.0, 32.0));
+    if loading { return false; }
+    ui.add(btn).clicked()
+}
+
+/// 次要按钮
+fn secondary_button(ui: &mut egui::Ui, text: &str) -> bool {
+    let btn = egui::Button::new(
+        egui::RichText::new(text)
+            .font(FontId::new(13.0, egui::FontFamily::Proportional))
+            .color(colors::text_secondary()),
+    )
+    .fill(Color32::TRANSPARENT)
+    .corner_radius(CornerRadius::ZERO)
+    .min_size(Vec2::new(56.0, 28.0))
+    .stroke(Stroke::new(1.0, colors::border()));
+    ui.add(btn).clicked()
+}
+
+/// 编辑表单容器
+fn edit_form(ui: &mut egui::Ui, title: &str, add_content: impl FnOnce(&mut egui::Ui)) {
+    ui.add_space(4.0);
+    egui::Frame::new()
+        .fill(colors::bg_card())
+        .corner_radius(CornerRadius::ZERO)
+        .stroke(Stroke::new(1.0, colors::border()))
+        .inner_margin(egui::Margin::symmetric(20, 16))
+        .show(ui, |ui| {
+            ui.set_min_width(ui.available_width());
+            ui.label(
+                egui::RichText::new(title)
+                    .font(FontId::new(16.0, egui::FontFamily::Proportional))
+                    .color(colors::text_primary())
+                    .strong(),
+            );
+            ui.add_space(12.0);
+            add_content(ui);
+        });
+}
+
+// ── 头像编辑 ────────────────────────────────────────────────────────────────
+
+fn render_avatar_edit(app: &mut PezMaxApp, ui: &mut egui::Ui) {
+    edit_form(ui, "修改头像", |ui| {
+        // 当前头像显示
+        ui.horizontal(|ui| {
+            ui.label(
+                egui::RichText::new("当前头像")
+                    .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                    .color(colors::text_primary()),
+            );
+            let avatar_size = 64.0;
+            if let Some(tex) = &app.avatar_texture {
+                let (r, _) = ui.allocate_exact_size(Vec2::splat(avatar_size), egui::Sense::hover());
+                ui.painter().image(
+                    tex.id(),
+                    r,
+                    egui::Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+                    Color32::WHITE,
+                );
+            } else if let Some(ref user) = app.current_user {
+                let display_name = if user.nick_name.is_empty() { &user.user_name } else { &user.nick_name };
+                let first_char = display_name.chars().next().unwrap_or('?').to_string();
+                let (r, _) = ui.allocate_exact_size(Vec2::splat(avatar_size), egui::Sense::hover());
+                ui.painter().rect_filled(r, CornerRadius::ZERO, colors::primary());
+                ui.painter().text(
+                    r.center(),
+                    egui::Align2::CENTER_CENTER,
+                    &first_char,
+                    FontId::new(28.0, egui::FontFamily::Proportional),
+                    colors::text_on_primary(),
+                );
+            }
+        });
+
+        ui.add_space(12.0);
+
+        // 上传按钮
+        if primary_button(ui, "选择图片并上传", false) {
+            app.account_edit_error.clear();
+            app.account_edit_success.clear();
+            app.account_edit_message_timer = 0.0;
+
+            let api = app.api.clone();
+            tokio::spawn(async move {
+                // 使用 rfd 打开文件选择对话框
+                let file = rfd::AsyncFileDialog::new()
+                    .add_filter("图片", &["jpg", "jpeg", "png", "gif"])
+                    .pick_file()
+                    .await;
+                if let Some(file) = file {
+                    let path = file.path().to_string_lossy().to_string();
+                    match api.upload_avatar(&path).await {
+                        Ok(resp) => {
+                            log::info!("头像上传成功: {:?}", resp);
+                        }
+                        Err(e) => {
+                            log::error!("头像上传失败: {}", e);
+                        }
+                    }
+                }
+            });
+        }
+
+        ui.add_space(8.0);
+        ui.label(
+            egui::RichText::new("支持 JPG / PNG / GIF 格式，文件大小不超过 2MB")
+                .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                .color(colors::text_secondary()),
+        );
+
+        ui.add_space(16.0);
+        if secondary_button(ui, "返回") {
+            app.account_edit_section = AccountEditSection::None;
+            app.account_edit_loading = false;
+            app.account_edit_error.clear();
+            app.account_edit_success.clear();
+            app.account_edit_message_timer = 0.0;
+        }
+    });
+}
+
+// ── 用户名编辑 ──────────────────────────────────────────────────────────────
+
+fn render_username_edit(app: &mut PezMaxApp, ui: &mut egui::Ui) {
+    edit_form(ui, "修改用户名", |ui| {
+        ui.label(
+            egui::RichText::new("用户名将用于登录和个人信息展示")
+                .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                .color(colors::text_secondary()),
+        );
+        ui.add_space(8.0);
+
+        let resp = ui.add(
+            egui::TextEdit::singleline(&mut app.account_edit_username)
+                .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                .text_color(colors::text_primary())
+                .desired_width(240.0)
+                .margin(egui::Vec2::new(8.0, 6.0))
+                .hint_text("请输入新用户名"),
+        );
+        // 设置背景色
+        let bg_rect = resp.rect;
+        ui.painter().rect_filled(bg_rect, CornerRadius::ZERO, colors::bg_input());
+        ui.painter().rect_stroke(
+            bg_rect,
+            CornerRadius::ZERO,
+            Stroke::new(1.0, colors::border()),
+            StrokeKind::Outside,
+        );
+
+        ui.add_space(16.0);
+
+        ui.horizontal(|ui| {
+            if primary_button(ui, "保存用户名", app.account_edit_loading) {
+                let new_name = app.account_edit_username.trim().to_string();
+                if new_name.len() < 2 || new_name.len() > 30 {
+                    app.account_edit_error = "用户名长度应为 2-30 个字符".to_string();
+                    app.account_edit_message_timer = 3.0;
+                    return;
+                }
+                app.account_edit_error.clear();
+                app.account_edit_success.clear();
+
+                // 异步调用 API
+                let api = app.api.clone();
+                let name = new_name.clone();
+                tokio::spawn(async move {
+                    match api.update_username(&name).await {
+                        Ok(resp) => {
+                            if resp.code == 200 {
+                                log::info!("用户名更新成功");
+                            } else {
+                                log::error!("用户名更新失败: {} {}", resp.code, resp.msg);
+                            }
+                        }
+                        Err(e) => {
+                            log::error!("用户名更新失败: {}", e);
+                        }
+                    }
+                });
+                // 本地更新
+                if let Some(ref mut user) = app.current_user {
+                    user.user_name = new_name;
+                }
+                app.account_edit_success = "用户名更新成功".to_string();
+                app.account_edit_message_timer = 3.0;
+                app.account_edit_section = AccountEditSection::None;
+            }
+
+            if secondary_button(ui, "取消") {
+                app.account_edit_section = AccountEditSection::None;
+                app.account_edit_error.clear();
+                app.account_edit_success.clear();
+            }
+        });
+    });
+}
+
+// ── 昵称编辑 ────────────────────────────────────────────────────────────────
+
+// ── 密保问题编辑 ────────────────────────────────────────────────────────────
+
+fn render_security_edit(app: &mut PezMaxApp, ui: &mut egui::Ui) {
+    // 初始化 3 组空密保问题
+    if app.account_edit_security_questions.is_empty() {
+        for _ in 0..3 {
+            app.account_edit_security_questions.push(SecurityQuestion {
+                question: String::new(),
+                answer: String::new(),
+            });
+        }
+    }
+
+    edit_form(ui, "修改密保问题", |ui| {
+        ui.label(
+            egui::RichText::new("设置 3 组密保问题，用于账号找回时的安全验证")
+                .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                .color(colors::text_secondary()),
+        );
+        ui.add_space(16.0);
+
+        // 3 组密保问题输入
+        for i in 0..3 {
+            let q_item = &mut app.account_edit_security_questions[i];
+
+            ui.label(
+                egui::RichText::new(format!("密保 {}", i + 1))
+                    .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                    .color(colors::text_primary())
+                    .strong(),
+            );
+            ui.add_space(4.0);
+
+            ui.label(
+                egui::RichText::new("问题")
+                    .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                    .color(colors::text_secondary()),
+            );
+            ui.add(
+                egui::TextEdit::singleline(&mut q_item.question)
+                    .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                    .text_color(colors::text_primary())
+                    .desired_width(360.0)
+                    .margin(egui::Vec2::new(8.0, 6.0))
+                    .hint_text("请输入密保问题"),
+            );
+
+            ui.label(
+                egui::RichText::new("答案")
+                    .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                    .color(colors::text_secondary()),
+            );
+            ui.add(
+                egui::TextEdit::singleline(&mut q_item.answer)
+                    .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                    .text_color(colors::text_primary())
+                    .desired_width(360.0)
+                    .margin(egui::Vec2::new(8.0, 6.0))
+                    .hint_text("请输入密保答案"),
+            );
+
+            ui.add_space(12.0);
+        }
+
+        ui.add_space(8.0);
+
+        ui.horizontal(|ui| {
+            if primary_button(ui, "保存密保", app.account_edit_loading) {
+                // 验证所有字段
+                let all_filled = app.account_edit_security_questions.iter().all(|q| {
+                    !q.question.trim().is_empty() && !q.answer.trim().is_empty()
+                });
+                if !all_filled {
+                    app.account_edit_error = "请填写完整的 3 组密保问题和答案".to_string();
+                    app.account_edit_message_timer = 3.0;
+                    return;
+                }
+
+                app.account_edit_error.clear();
+                app.account_edit_success.clear();
+
+                let api = app.api.clone();
+                let qs = app.account_edit_security_questions.clone();
+                let data = serde_json::json!({
+                    "securityQuestionOne": qs[0].question,
+                    "securityAnswerOne": qs[0].answer,
+                    "securityQuestionTwo": qs[1].question,
+                    "securityAnswerTwo": qs[1].answer,
+                    "securityQuestionThree": qs[2].question,
+                    "securityAnswerThree": qs[2].answer,
+                });
+                tokio::spawn(async move {
+                    match api.update_security(&data).await {
+                        Ok(resp) => {
+                            if resp.code == 200 {
+                                log::info!("密保更新成功");
+                            } else {
+                                log::error!("密保更新失败: {} {}", resp.code, resp.msg);
+                            }
+                        }
+                        Err(e) => {
+                            log::error!("密保更新失败: {}", e);
+                        }
+                    }
+                });
+                app.account_edit_success = "密保问题已更新".to_string();
+                app.account_edit_message_timer = 3.0;
+                app.account_edit_section = AccountEditSection::None;
+            }
+
+            if secondary_button(ui, "取消") {
+                app.account_edit_section = AccountEditSection::None;
+                app.account_edit_security_questions.clear();
+                app.account_edit_error.clear();
+                app.account_edit_success.clear();
+                app.account_edit_message_timer = 0.0;
+            }
+        });
+    });
+}
+
+// ── 密码修改 ────────────────────────────────────────────────────────────────
+
+fn render_password_edit(app: &mut PezMaxApp, ui: &mut egui::Ui) {
+    edit_form(ui, "修改登录密码", |ui| {
+        ui.label(
+            egui::RichText::new("请输入旧密码并设置新密码")
+                .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                .color(colors::text_secondary()),
+        );
+        ui.add_space(12.0);
+
+        // 旧密码
+        ui.label(
+            egui::RichText::new("旧密码")
+                .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                .color(colors::text_primary()),
+        );
+        ui.add(
+            egui::TextEdit::singleline(&mut app.account_edit_old_password)
+                .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                .text_color(colors::text_primary())
+                .desired_width(240.0)
+                .margin(egui::Vec2::new(8.0, 6.0))
+                .password(true)
+                .hint_text("请输入旧密码"),
+        );
+
+        ui.add_space(8.0);
+
+        // 新密码
+        ui.label(
+            egui::RichText::new("新密码")
+                .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                .color(colors::text_primary()),
+        );
+        ui.add(
+            egui::TextEdit::singleline(&mut app.account_edit_new_password)
+                .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                .text_color(colors::text_primary())
+                .desired_width(240.0)
+                .margin(egui::Vec2::new(8.0, 6.0))
+                .password(true)
+                .hint_text("请输入新密码"),
+        );
+
+        ui.add_space(8.0);
+
+        // 确认新密码
+        ui.label(
+            egui::RichText::new("确认新密码")
+                .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                .color(colors::text_primary()),
+        );
+        ui.add(
+            egui::TextEdit::singleline(&mut app.account_edit_confirm_password)
+                .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                .text_color(colors::text_primary())
+                .desired_width(240.0)
+                .margin(egui::Vec2::new(8.0, 6.0))
+                .password(true)
+                .hint_text("请再次输入新密码"),
+        );
+
+        ui.add_space(16.0);
+
+        ui.horizontal(|ui| {
+            if primary_button(ui, "保存密码", app.account_edit_loading) {
+                let old = app.account_edit_old_password.trim();
+                let new = app.account_edit_new_password.trim();
+                let confirm = app.account_edit_confirm_password.trim();
+
+                if old.is_empty() || new.is_empty() || confirm.is_empty() {
+                    app.account_edit_error = "请填写所有密码字段".to_string();
+                    app.account_edit_message_timer = 3.0;
+                    return;
+                }
+                if new != confirm {
+                    app.account_edit_error = "两次输入的新密码不一致".to_string();
+                    app.account_edit_message_timer = 3.0;
+                    return;
+                }
+                if new.len() < 6 {
+                    app.account_edit_error = "新密码长度不能少于 6 位".to_string();
+                    app.account_edit_message_timer = 3.0;
+                    return;
+                }
+
+                app.account_edit_error.clear();
+                app.account_edit_success.clear();
+
+                let api = app.api.clone();
+                let old_pwd = old.to_string();
+                let new_pwd = new.to_string();
+                tokio::spawn(async move {
+                    match api.update_password(&old_pwd, &new_pwd).await {
+                        Ok(resp) => {
+                            if resp.code == 200 {
+                                log::info!("密码更新成功");
+                            } else {
+                                log::error!("密码更新失败: {} {}", resp.code, resp.msg);
+                            }
+                        }
+                        Err(e) => {
+                            log::error!("密码更新失败: {}", e);
+                        }
+                    }
+                });
+                app.account_edit_success = "密码已更新".to_string();
+                app.account_edit_message_timer = 3.0;
+                app.account_edit_old_password.clear();
+                app.account_edit_new_password.clear();
+                app.account_edit_confirm_password.clear();
+                app.account_edit_section = AccountEditSection::None;
+            }
+
+            if secondary_button(ui, "取消") {
+                app.account_edit_section = AccountEditSection::None;
+                app.account_edit_old_password.clear();
+                app.account_edit_new_password.clear();
+                app.account_edit_confirm_password.clear();
+                app.account_edit_error.clear();
+                app.account_edit_success.clear();
+            }
+        });
+    });
 }
 
 // ── 通知列表 ───────────────────────────────────────────────────────────────
@@ -491,62 +1143,6 @@ pub fn render_app_settings(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 }
 
 // ── 内部组件 ──────────────────────────────────────────────────────────────────
-
-/// 安全设置行（可点击）
-fn security_row(ui: &mut egui::Ui, label: &str, desc: &str, accent: Color32) {
-    let (rect, resp) = ui.allocate_exact_size(
-        Vec2::new(ui.available_width(), 52.0),
-        egui::Sense::click(),
-    );
-
-    ui.painter().rect_filled(rect, CornerRadius::ZERO, colors::bg_card());
-    ui.painter().rect_stroke(
-        rect,
-        CornerRadius::ZERO,
-        Stroke::new(1.0, colors::border()),
-        StrokeKind::Outside,
-    );
-    // 左边缘 3px 强调色条
-    ui.painter().rect_filled(
-        Rect::from_min_max(pos2(rect.left(), rect.top()), pos2(rect.left() + 3.0, rect.bottom())),
-        CornerRadius::ZERO,
-        accent,
-    );
-
-    // 标题
-    ui.painter().text(
-        pos2(rect.left() + 18.0, rect.top() + 14.0),
-        egui::Align2::LEFT_CENTER,
-        label,
-        FontId::new(15.0, egui::FontFamily::Proportional),
-        colors::text_primary(),
-    );
-    // 描述
-    ui.painter().text(
-        pos2(rect.left() + 18.0, rect.top() + 36.0),
-        egui::Align2::LEFT_CENTER,
-        desc,
-        FontId::new(12.0, egui::FontFamily::Proportional),
-        colors::text_secondary(),
-    );
-
-    // 右箭头
-    ui.painter().text(
-        pos2(rect.right() - 14.0, rect.center().y),
-        egui::Align2::RIGHT_CENTER,
-        "›",
-        FontId::new(22.0, egui::FontFamily::Proportional),
-        colors::text_secondary(),
-    );
-
-    if resp.hovered() {
-        let c = accent;
-        let overlay = Color32::from_rgba_premultiplied(c.r(), c.g(), c.b(), 12);
-        ui.painter().rect_filled(rect, CornerRadius::ZERO, overlay);
-    }
-
-    resp.on_hover_cursor(egui::CursorIcon::PointingHand);
-}
 
 /// 设置分组容器（带分组标题）
 fn settings_group(ui: &mut egui::Ui, title: &str, add_contents: impl FnOnce(&mut egui::Ui)) {

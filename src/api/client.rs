@@ -228,4 +228,24 @@ impl ApiClient {
             .await?;
         Ok(resp.bytes().await?.to_vec())
     }
+
+    /// 从任意 URL 下载原始字节流（支持绝对 URL 和相对路径，带 Bearer token）
+    pub async fn download_raw_url(&self, url: &str) -> Result<Vec<u8>> {
+        if url.is_empty() {
+            anyhow::bail!("empty url");
+        }
+        let token = self.get_token().await;
+        let full_url = if url.starts_with("http://") || url.starts_with("https://") {
+            url.to_string()
+        } else {
+            format!("{}{}", self.base_url, url)
+        };
+        let resp = self
+            .client
+            .get(&full_url)
+            .headers(self.headers(token.as_deref()))
+            .send()
+            .await?;
+        Ok(resp.bytes().await?.to_vec())
+    }
 }

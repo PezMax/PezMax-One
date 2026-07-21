@@ -171,6 +171,16 @@ pub enum Subsection {
     AppSettings,
 }
 
+/// 账号设置当前编辑中的子区域
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum AccountEditSection {
+    None,
+    Avatar,
+    Username,
+    Security,
+    Password,
+}
+
 /// Toast 通知级别
 #[derive(Debug, Clone, PartialEq)]
 pub enum ToastLevel {
@@ -397,6 +407,24 @@ pub struct PezMaxApp {
     // 预览模式，用于 app.rs 中控制边距/面板渲染
     pub preview_mode: bool,
 
+    // 头像加载
+    pub avatar_texture: Option<egui::TextureHandle>,
+    pub avatar_image_size: Option<(usize, usize)>,
+    pub avatar_load_rx: Option<oneshot::Receiver<anyhow::Result<Vec<u8>>>>,
+
+    // 账号设置状态
+    pub account_edit_section: AccountEditSection,
+    pub account_edit_username: String,
+    pub account_edit_nickname: String,
+    pub account_edit_old_password: String,
+    pub account_edit_new_password: String,
+    pub account_edit_confirm_password: String,
+    pub account_edit_security_questions: Vec<crate::api::models::SecurityQuestion>,
+    pub account_edit_loading: bool,
+    pub account_edit_error: String,
+    pub account_edit_success: String,
+    pub account_edit_message_timer: f32,
+
     // PDF 引擎（全局单例，Arc<Sync>）
     pub pdf_engine: Arc<PdfEngine>,
     // PDF 查看器（当前打开的 PDF 文档状态）
@@ -490,6 +518,22 @@ impl PezMaxApp {
             preview_bar_action: action_bar::Action::None,
             preview_mode: false,
 
+            avatar_texture: None,
+            avatar_image_size: None,
+            avatar_load_rx: None,
+
+            account_edit_section: AccountEditSection::None,
+            account_edit_username: String::new(),
+            account_edit_nickname: String::new(),
+            account_edit_old_password: String::new(),
+            account_edit_new_password: String::new(),
+            account_edit_confirm_password: String::new(),
+            account_edit_security_questions: vec![],
+            account_edit_loading: false,
+            account_edit_error: String::new(),
+            account_edit_success: String::new(),
+            account_edit_message_timer: 0.0,
+
             pdf_engine,
             pdf_viewer: PdfViewer::new(),
             pdf_loading: false,
@@ -559,6 +603,8 @@ impl PezMaxApp {
         // 自动加载首页数据
         self.trigger_load_user_stats();
         self.trigger_load_recent_files();
+        // 加载头像
+        self.trigger_load_avatar();
     }
 
     /// 异步加载验证码
@@ -679,6 +725,29 @@ impl PezMaxApp {
         self.user_stats_data.load(move || async move {
             let resp = api.get_user_stats().await?;
             resp.data.ok_or_else(|| anyhow::anyhow!("统计数据为空"))
+        });
+    }
+
+    /// 异步加载用户头像
+    pub fn trigger_load_avatar(&mut self) {
+        let avatar_url = self.current_user.as_ref().map(|u| u.avatar.clone()).unwrap_or_default();
+        if avatar_url.is_empty() || self.avatar_load_rx.is_some() {
+            return;
+        }
+        let api = self.api.clone();
+        let (tx, rx) = oneshot::channel();
+        self.avatar_load_rx = Some(rx);
+        tokio::spawn(async move {
+            let result = api.download_raw_url(&avatar_url).await;
+            tx.send(result).ok();
+        });
+    }
+
+    /// 异步加载密保问题（账号设置用）
+    pub fn trigger_load_security_questions(&mut self) {
+        let api = self.api.clone();
+        tokio::spawn(async move {
+            let _ = api.get_security().await;
         });
     }
 
@@ -837,6 +906,8 @@ impl PezMaxApp {
         self.token = None;
         self.current_user = None;
         self.user_stats = None;
+        self.avatar_texture = None;
+        self.avatar_load_rx = None;
         clear_credentials();
         // 清除 API token
         let api = self.api.clone();
@@ -928,6 +999,37 @@ impl eframe::App for PezMaxApp {
         // 轮询 PDF 渲染结果
         self.pdf_viewer.poll_render(&self.pdf_engine, ctx);
 
+        // 轮询头像下载结果
+        if let Some(rx) = &mut self.avatar_load_rx {
+            if let Ok(result) = rx.try_recv() {
+                self.avatar_load_rx = None;
+                match result {
+                    Ok(bytes) => {
+                        if let Ok(img) = image::load_from_memory(&bytes) {
+                            let rgba = img.to_rgba8();
+                            let (w, h) = rgba.dimensions();
+                            if w > 0 && h > 0 {
+                                let pixels = rgba.into_raw();
+                                let color_image = egui::ColorImage::from_rgba_unmultiplied(
+                                    [w as usize, h as usize],
+                                    &pixels,
+                                );
+                                self.avatar_image_size = Some((w as usize, h as usize));
+                                self.avatar_texture = Some(ctx.load_texture(
+                                    "user_avatar",
+                                    color_image,
+                                    egui::TextureOptions::LINEAR,
+                                ));
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        log::info!("头像加载失败: {}", e);
+                    }
+                }
+            }
+        }
+
         // 轮询 PDF 字节下载结果
         if let Some(rx) = &mut self.pdf_bytes_rx {
             if let Ok(result) = rx.try_recv() {
@@ -957,11 +1059,22 @@ impl eframe::App for PezMaxApp {
             || self.pdf_viewer.is_animating()
             || self.pdf_viewer.is_loading()
             || self.toasts.iter().any(|t| !t.enter.is_steady() || !t.exit.is_steady())
+            || self.avatar_load_rx.is_some()
         {
             ctx.request_repaint();
         }
 
         self.cleanup_toasts();
+
+        // 账号设置消息 3 秒后自动消失
+        if self.account_edit_message_timer > 0.0 {
+            self.account_edit_message_timer -= dt as f32;
+            if self.account_edit_message_timer <= 0.0 {
+                self.account_edit_error.clear();
+                self.account_edit_success.clear();
+                self.account_edit_message_timer = 0.0;
+            }
+        }
 
         // 轮询异步结果
 
