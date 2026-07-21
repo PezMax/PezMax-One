@@ -403,6 +403,8 @@ pub struct PezMaxApp {
 
     // 举报表单
     pub report_content: String,
+    pub report_type: String,
+    pub show_report_dialog: bool,
 
     // 设置开关
     pub setting_auto_launch: bool,
@@ -530,6 +532,8 @@ impl PezMaxApp {
             contribute_year: String::new(),
             contribute_file_path: None,
             report_content: String::new(),
+            report_type: String::new(),
+            show_report_dialog: false,
             setting_auto_launch: false,
             setting_silent_download: false,
             theme_mode: theme::ThemeMode::System,
@@ -1426,6 +1430,14 @@ impl eframe::App for PezMaxApp {
         crate::components::topbar::render(self, ctx);
 
         // 子标签栏仅 Browse / Community / Profile 显示
+        // 在渲染子标签栏之前，处理上帧的"返回阅读"请求
+        if self.preview_bar_action == action_bar::Action::Back
+            && self.selected_file.is_some()
+            && self.current_subsection != Subsection::ResourceManager
+        {
+            self.navigate_subsection(Subsection::ResourceManager);
+            self.preview_bar_action = action_bar::Action::None;
+        }
         let section = self.current_section;
         let subsections = section.subsections();
         if !subsections.is_empty() {
@@ -1438,7 +1450,17 @@ impl eframe::App for PezMaxApp {
         self.preview_bar_action = action_bar::Action::None;
         if preview_mode {
             let file_name = self.selected_file.as_ref().map(|f| f.file_name.as_str()).unwrap_or("");
-            self.preview_bar_action = action_bar::render_bar(ctx, file_name);
+            let bar_mode = if self.current_subsection == Subsection::ResourceManager {
+                action_bar::PreviewMode::Reading
+            } else {
+                action_bar::PreviewMode::Away
+            };
+            // 保存当前帧操作栏按钮动作，供下一帧在子标签栏之前处理
+            let bar_action = action_bar::render_bar(ctx, file_name, bar_mode);
+            if bar_action == action_bar::Action::Back && bar_mode == action_bar::PreviewMode::Away {
+                // 标记"返回阅读"，下一帧在子标签渲染前切换回 ResourceManager
+                self.preview_bar_action = bar_action;
+            }
         }
 
         // 内容区

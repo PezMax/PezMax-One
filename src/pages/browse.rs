@@ -8,6 +8,7 @@ use crate::components::action_bar::Action;
 use crate::pdf;
 use crate::sokuou::map_range;
 use crate::theme::colors;
+use crate::app::ToastLevel;
 use egui::{CornerRadius, FontId, Vec2};
 
 /// 资源管理：筛选器（从数据派生，三级级联）+ 文件纵向列表
@@ -284,13 +285,44 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
         }
         Action::Download => {
             let api = app.api.clone();
-            tokio::spawn(async move { let _ = api.download_paper(file_id).await; });
+            let fid = file_id;
+            let fname = file_name.clone();
+            tokio::spawn(async move {
+                // 选择保存路径
+                let file = rfd::AsyncFileDialog::new()
+                    .set_file_name(&fname)
+                    .add_filter("PDF", &["pdf"])
+                    .save_file()
+                    .await;
+                if let Some(file) = file {
+                    match api.download_paper(fid).await {
+                        Ok(bytes) => {
+                            let _ = std::fs::write(file.path(), &bytes);
+                        }
+                        Err(e) => {
+                            log::error!("下载失败: {}", e);
+                        }
+                    }
+                }
+            });
         }
         Action::Favorite => {
             let api = app.api.clone();
-            tokio::spawn(async move { let _ = api.add_favorite(file_id).await; });
+            let fid = file_id;
+            let msg = format!("已收藏 {}", file_name);
+            tokio::spawn(async move {
+                match api.add_favorite(fid).await {
+                    Ok(_) => log::info!("收藏成功: {}", fid),
+                    Err(e) => log::error!("收藏失败: {}", e),
+                }
+            });
+            app.add_toast(msg, ToastLevel::Success);
         }
-        Action::Report => {}
+        Action::Report => {
+            app.show_report_dialog = true;
+            app.report_content.clear();
+            app.report_type = "侵权".to_string();
+        }
         Action::ToggleInfo => {
             app.show_info_panel = !app.show_info_panel;
         }
@@ -325,6 +357,63 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
         } else {
             render_pdf_placeholder(ui, &file_name, &file_subject, &school_name, file_id, app);
         }
+    }
+
+    // ── 举报对话框 ────────────────────────────────────────
+    if app.show_report_dialog {
+        let fid = file_id;
+        egui::Window::new("举报试卷")
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ui.ctx(), |ui| {
+                ui.set_min_width(360.0);
+                ui.label(
+                    egui::RichText::new("举报原因")
+                        .font(FontId::new(14.0, egui::FontFamily::Proportional)),
+                );
+                ui.add_space(8.0);
+                egui::ComboBox::from_id_salt("report_type")
+                    .selected_text(&app.report_type)
+                    .show_ui(ui, |ui| {
+                        for t in &["侵权", "色情", "暴力", "广告", "其他"] {
+                            ui.selectable_value(&mut app.report_type, t.to_string(), *t);
+                        }
+                    });
+                ui.add_space(8.0);
+                ui.add(
+                    egui::TextEdit::multiline(&mut app.report_content)
+                        .hint_text("补充说明（可选）")
+                        .desired_rows(3)
+                        .desired_width(340.0),
+                );
+                ui.add_space(12.0);
+                ui.horizontal(|ui| {
+                    if ui.button("取消").clicked() {
+                        app.show_report_dialog = false;
+                    }
+                    ui.add_space(8.0);
+                    let can_submit = !app.report_type.is_empty();
+                    if ui.add_enabled(can_submit, egui::Button::new("提交举报")).clicked() {
+                        let api = app.api.clone();
+                        let r#type = app.report_type.clone();
+                        let content = app.report_content.clone();
+                        tokio::spawn(async move {
+                            let report = Report {
+                                report_type: r#type,
+                                content,
+                                ..Default::default()
+                            };
+                            match api.create_report(&report).await {
+                                Ok(_) => log::info!("举报成功"),
+                                Err(e) => log::error!("举报失败: {}", e),
+                            }
+                        });
+                        app.add_toast("举报已提交", ToastLevel::Success);
+                        app.show_report_dialog = false;
+                    }
+                });
+            });
     }
 }
 

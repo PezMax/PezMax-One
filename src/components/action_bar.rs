@@ -14,10 +14,27 @@ pub enum Action {
     ToggleInfo,
 }
 
+/// 预览模式：决定底部栏按钮文本和行为
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PreviewMode {
+    /// 预览模式中，用户正在阅读试卷
+    Reading,
+    /// 预览模式中，但用户在其他子标签（书签/收藏）
+    Away,
+    /// 非预览模式
+    None,
+}
+
 /// 渲染底部操作栏（TopBottomPanel 级别，左右贴边）
-pub fn render_bar(ctx: &egui::Context, file_name: &str) -> Action {
+pub fn render_bar(ctx: &egui::Context, file_name: &str, mode: PreviewMode) -> Action {
     let mut action = Action::None;
     let bar_bg = Color32::from_rgb(0x1E, 0x1E, 0x2E);
+
+    let back_text = match mode {
+        PreviewMode::Reading => "← 退出阅读",
+        PreviewMode::Away => "← 返回阅读",
+        PreviewMode::None => "← 返回列表",
+    };
 
     egui::TopBottomPanel::bottom("preview_action_bar")
         .min_height(48.0)
@@ -32,7 +49,7 @@ pub fn render_bar(ctx: &egui::Context, file_name: &str) -> Action {
             ui.horizontal(|ui| {
                 ui.add_space(0.0);
 
-                if bar_btn(ui, "← 返回列表", 14.0) {
+                if bar_btn(ui, back_text, 14.0) {
                     action = Action::Back;
                 }
 
@@ -61,7 +78,7 @@ pub fn render_bar(ctx: &egui::Context, file_name: &str) -> Action {
 }
 
 fn bar_btn(ui: &mut egui::Ui, text: &str, font_size: f32) -> bool {
-    let (rect, response) = ui.allocate_exact_size(Vec2::new(80.0, 48.0), Sense::click());
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(110.0, 48.0), Sense::click());
     let clicked = response.clicked();
     let hovered = response.hovered();
     let pressed = response.is_pointer_button_down_on();

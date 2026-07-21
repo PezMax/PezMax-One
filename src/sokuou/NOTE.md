@@ -16,8 +16,9 @@ Phase 1 完成。核心原语已稳定，已接入前端 UI 组件。
 | `auth_anim` | `Progress` | `app.rs:360` | 登录/注册页淡入 |
 | Toast `enter` | `Progress` | `app.rs:184` | Toast 滑入 |
 | Toast `exit` | `Progress` | `app.rs:185` | Toast 滑出 |
-| `display_scale_anim` | `SpringAnim` | `pdf/mod.rs:165` | PDF 缩放平滑过渡（response=0.4, damping=0.8） |
+| `display_scale_anim` | `SpringAnim` | `pdf/mod.rs:168` | PDF 缩放平滑过渡（response=0.4, damping=0.8） |
 | `search_hint_anim` | `SpringAnim` | `app.rs` | 🔍 左滑出场 + 占位文字右滑入场（response=0.25, damping=0.7） |
+| `grid_size_anim` | `SpringAnim` | `pdf/mod.rs` | 平摊模式下页面宽度平滑过渡（response=0.4, damping=0.825） |
 
 ## 暴露的不足（持续更新）
 
@@ -32,6 +33,14 @@ _待发现_
 ## 需要新增的原语（持续更新）
 
 _待定_
+
+## 已移除的动画（2026-07-21）
+
+| 动画 | 类型 | 之前位置 | 移除原因 |
+|------|------|----------|---------|
+| `page_enter_anim` | `SpringAnim` | `pdf/mod.rs:172` | PDF 阅读器改为全文档纵向滚动，不再需要单页翻页过渡 |
+| `page_exit_anim` | `SpringAnim` | `pdf/mod.rs:173` | 同上 |
+| `is_animating_out` | `bool` | `pdf/mod.rs:174` | 同上 |
 
 ---
 
