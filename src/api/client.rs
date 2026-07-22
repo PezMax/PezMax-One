@@ -236,24 +236,42 @@ impl ApiClient {
         }
         let token = self.get_token().await;
         let full_url = if url.starts_with("http://") || url.starts_with("https://") {
-            // 替换 Docker 内部主机名（如 http://minio:9000/...）为公网后端地址
+            // 替换 Docker 内部主机名（如 http://minio:9000/...）为公网可访问地址
             // 使用纯字符串替换，避免 url::Url::parse 对中文路径进行解码
             // 参考 Electron 版 normalizeFileUrl 的逻辑
             let rewritten = url
-                .replace("minio:9000", "154.8.139.48:8080")
-                .replace("localhost:9000", "154.8.139.48:8080")
-                .replace("127.0.0.1:9000", "154.8.139.48:8080");
+                // MinIO – 尝试公网直连 9000 端口
+                .replace("minio:9000", "154.8.139.48:9000")
+                .replace("localhost:9000", "154.8.139.48:9000")
+                .replace("127.0.0.1:9000", "154.8.139.48:9000");
+            log::info!("download_raw_url: 原始 URL = {}, 重写后 = {}", url, rewritten);
             rewritten
         } else {
-            format!("{}{}", self.base_url, url)
+            let full = format!("{}{}", self.base_url, url);
+            log::info!("download_raw_url: 相对路径 URL = {}, 完整 = {}", url, full);
+            full
         };
-        let resp = self
-            .client
-            .get(&full_url)
-            .headers(self.headers(token.as_deref()))
-            .send()
-            .await?;
-        Ok(resp.bytes().await?.to_vec())
+        // 外部 URL（如 MinIO）不发送 JWT token 和 JSON Content-Type，
+        // 避免 MinIO 因无法识别的 Authorization 头而拒绝请求或返回错误页面
+        let resp = if url.starts_with("http://") || url.starts_with("https://") {
+            self.client.get(&full_url).send().await?
+        } else {
+            self.client
+                .get(&full_url)
+                .headers(self.headers(token.as_deref()))
+                .send()
+                .await?
+        };
+        let status = resp.status();
+        let bytes = resp.bytes().await?.to_vec();
+        log::info!("download_raw_url: 状态 {} , 收到 {} bytes", status, bytes.len());
+        if !status.is_success() {
+            anyhow::bail!("HTTP {} downloading {}", status, full_url);
+        }
+        if bytes.is_empty() {
+            anyhow::bail!("empty response from {}", full_url);
+        }
+        Ok(bytes)
     }
 
     /// 下载任意 URL 的原始字节（别名，供封面图等使用）

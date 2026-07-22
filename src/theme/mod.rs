@@ -159,11 +159,102 @@ fn current_accent_rgb() -> (u8, u8, u8) {
 }
 
 /// ThemeMode::System 时查询 egui 的系统主题；Light/Dark 直接返回
+/// 在 Linux 上，当 egui 无法检测到系统主题时，会尝试多种 Linux 原生方案
+/// 作为回退：gsettings (GNOME)、kdeglobals (KDE)、GTK_THEME 环境变量、GTK settings.ini
 pub fn effective_dark(ctx: &egui::Context) -> bool {
-    // 注意：ThemeMode 本身不存在线程局部，由 PezMaxApp.theme_mode 持有
-    // 调用者在 update() 里传入当前 mode 以避免跨层依赖
-    // 这里仅暴露系统检测逻辑供 app.rs 使用
-    ctx.system_theme().map(|t| t == egui::Theme::Dark).unwrap_or(false)
+    // 优先使用 egui 的系统主题检测（Windows/macOS 可靠，部分 Linux 桌面也支持）
+    if let Some(theme) = ctx.system_theme() {
+        return theme == egui::Theme::Dark;
+    }
+    // 回退：Linux 原生检测
+    #[cfg(target_os = "linux")]
+    {
+        detect_linux_dark_mode()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        false
+    }
+}
+
+/// Linux 深色模式检测：依次尝试多种桌面环境方案
+#[cfg(target_os = "linux")]
+fn detect_linux_dark_mode() -> bool {
+    // 1. GNOME 42+：gsettings org.gnome.desktop.interface color-scheme
+    if let Ok(output) = std::process::Command::new("gsettings")
+        .args(["get", "org.gnome.desktop.interface", "color-scheme"])
+        .output()
+    {
+        if output.status.success() {
+            let s = String::from_utf8_lossy(&output.stdout).trim().to_lowercase();
+            if s.contains("prefer-dark") || s.contains("dark") {
+                return true;
+            }
+            if s.contains("default") || s.contains("light") {
+                return false;
+            }
+        }
+    }
+
+    // 2. 旧版 GNOME：gsettings org.gnome.desktop.interface gtk-theme 包含 "dark"
+    if let Ok(output) = std::process::Command::new("gsettings")
+        .args(["get", "org.gnome.desktop.interface", "gtk-theme"])
+        .output()
+    {
+        if output.status.success() {
+            let s = String::from_utf8_lossy(&output.stdout).trim().to_lowercase();
+            if s.contains("dark") || s.contains("adwaita") && !s.contains("light") {
+                return true;
+            }
+        }
+    }
+
+    // 3. KDE：读取 ~/.config/kdeglobals 中的 ColorScheme
+    if let Ok(home) = std::env::var("HOME") {
+        let kdeglobals_path = std::path::Path::new(&home).join(".config/kdeglobals");
+        if kdeglobals_path.exists() {
+            if let Ok(content) = std::fs::read_to_string(&kdeglobals_path) {
+                for line in content.lines() {
+                    if line.trim().starts_with("ColorScheme=") {
+                        let val = line.trim().split('=').nth(1).unwrap_or("").to_lowercase();
+                        if val.contains("dark") {
+                            return true;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    // 4. GTK_THEME 环境变量
+    if let Ok(gtk_theme) = std::env::var("GTK_THEME") {
+        if gtk_theme.to_lowercase().contains("dark") {
+            return true;
+        }
+    }
+
+    // 5. GTK settings.ini（GTK 4.0 优先，3.0 回退）
+    if let Ok(home) = std::env::var("HOME") {
+        for config_path in [
+            format!("{home}/.config/gtk-4.0/settings.ini"),
+            format!("{home}/.config/gtk-3.0/settings.ini"),
+        ] {
+            if let Ok(content) = std::fs::read_to_string(&config_path) {
+                for line in content.lines() {
+                    let trimmed = line.trim();
+                    if trimmed == "gtk-application-prefer-dark-theme=1" {
+                        return true;
+                    }
+                    if trimmed == "gtk-application-prefer-dark-theme=0" {
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+
+    false // 默认浅色
 }
 
 // ── 深色模式过渡动画（MetroAnim 驱动）────────────────────────────────────────

@@ -36,7 +36,7 @@ fn avatar_cache_dir() -> std::path::PathBuf {
     dir
 }
 
-fn bookmark_cover_cache_dir() -> std::path::PathBuf {
+pub fn bookmark_cover_cache_dir() -> std::path::PathBuf {
     let dir = get_data_dir().join("bookmark_cover_cache");
     let _ = std::fs::create_dir_all(&dir);
     dir
@@ -1126,17 +1126,33 @@ impl PezMaxApp {
         false
     }
 
-    /// 处理书签封面下载结果
+    /// 处理书签封面下载结果（中心裁剪至 16:9 宽高比，避免拉伸）
     fn process_bookmark_cover_result(&mut self, ctx: &egui::Context, bookmark_id: i64, bytes: &[u8]) {
         log::info!("处理书签封面 {}, {} bytes", bookmark_id, bytes.len());
         match image::load_from_memory(bytes) {
-            Ok(img) => {
-                let rgba = img.to_rgba8();
-                let (w, h) = rgba.dimensions();
+            Ok(mut img) => {
+                let (w, h) = (img.width(), img.height());
                 if w > 0 && h > 0 {
-                    let pixels = rgba.into_raw();
+                    // 中心裁剪至 16:9 宽高比
+                    let target_ratio = 16.0 / 9.0;
+                    let img_ratio = w as f64 / h as f64;
+                    let cropped = if img_ratio > target_ratio {
+                        // 图片太宽，裁剪左右
+                        let new_w = (h as f64 * target_ratio) as u32;
+                        let offset = (w - new_w) / 2;
+                        image::imageops::crop(&mut img, offset, 0, new_w, h).to_image()
+                    } else if img_ratio < target_ratio {
+                        // 图片太高，裁剪上下
+                        let new_h = (w as f64 / target_ratio) as u32;
+                        let offset = (h - new_h) / 2;
+                        image::imageops::crop(&mut img, 0, offset, w, new_h).to_image()
+                    } else {
+                        img.to_rgba8()
+                    };
+                    let (cw, ch) = cropped.dimensions();
+                    let pixels = cropped.into_raw();
                     let color_image = egui::ColorImage::from_rgba_unmultiplied(
-                        [w as usize, h as usize], &pixels,
+                        [cw as usize, ch as usize], &pixels,
                     );
                     let tex_name = format!("bookmark_cover_{}", bookmark_id);
                     let tex = ctx.load_texture(&tex_name, color_image, egui::TextureOptions::LINEAR);
@@ -1601,10 +1617,11 @@ impl eframe::App for PezMaxApp {
             self.subjects_data.poll();
             self.schools_data.poll();
             self.bookmarks_data.poll();
-            // 如果书签数据被重置，也重置封面加载标记
-            // 如果书签数据被重置，也重置封面加载标记
+            // 如果书签数据被重置，同时重置封面加载标记和请求记录，
+            // 以便刷新后重新加载（包括之前失败的封面）
             if !self.bookmarks_data.is_loading() && !self.bookmarks_data.is_loaded() {
                 self.bookmark_covers_triggered = false;
+                self.bookmark_cover_requested.clear();
             }
             // 书签数据加载完成后，触发封面加载（仅一次）
             if self.bookmarks_data.is_loaded() && !self.bookmark_covers_triggered {

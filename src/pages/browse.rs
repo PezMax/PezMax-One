@@ -1147,7 +1147,7 @@ fn render_bookmark_detail(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                     ui.allocate_rect(cover_rect, egui::Sense::hover());
                 }
 
-                // 触发封面加载
+                // 触发封面加载（优先读磁盘缓存，再走网络下载）
                 if has_cover && !has_cover_texture {
                     let api = app.api.clone();
                     let id = bm_id;
@@ -1155,9 +1155,27 @@ fn render_bookmark_detail(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                     // 用 once 标记避免重复触发
                     if !app.bookmark_cover_requested.contains(&id) {
                         app.bookmark_cover_requested.insert(id);
+                        let cache_path = crate::app::bookmark_cover_cache_dir()
+                            .join(format!("bm_cover_{}.cache", id));
                         let (tx, rx) = oneshot::channel();
                         tokio::spawn(async move {
+                            // 优先读磁盘缓存
+                            if cache_path.exists() {
+                                if let Ok(cached) = std::fs::read(&cache_path) {
+                                    if !cached.is_empty() {
+                                        log::info!("书签 {} 封面命中磁盘缓存 ({} bytes)", id, cached.len());
+                                        tx.send(Ok(cached)).ok();
+                                        return;
+                                    }
+                                }
+                            }
                             let result = api.download_bytes(&url).await;
+                            // 成功后写磁盘缓存
+                            if let Ok(ref bytes) = result {
+                                if !bytes.is_empty() {
+                                    let _ = std::fs::write(&cache_path, bytes);
+                                }
+                            }
                             tx.send(result).ok();
                         });
                         app.bookmark_cover_rx = Some(rx);
