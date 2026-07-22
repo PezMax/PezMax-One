@@ -2,7 +2,6 @@
 // 三个子标签：资源管理 / 外部书签 / 我的收藏
 
 use crate::app::PezMaxApp;
-use crate::api::client::ApiClient;
 use crate::api::models::*;
 use crate::components::action_bar::Action;
 use crate::pdf;
@@ -228,7 +227,7 @@ pub fn render_resource_manager(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                 });
             } else {
                 for file in &filtered_files {
-                    if file_row(ui, file, &app.api) {
+                    if file_row(ui, file, app) {
                         select_file = Some(file.clone());
                     }
                     ui.add_space(4.0);
@@ -309,14 +308,43 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
         Action::Favorite => {
             let api = app.api.clone();
             let fid = file_id;
-            let msg = format!("已收藏 {}", file_name);
-            tokio::spawn(async move {
-                match api.add_favorite(fid).await {
-                    Ok(_) => log::info!("收藏成功: {}", fid),
-                    Err(e) => log::error!("收藏失败: {}", e),
+            let uid = app.current_user.as_ref().map(|u| u.user_id).unwrap_or(0);
+            let is_fav = app.favorite_file_ids.contains(&fid);
+            let msg = if is_fav {
+                format!("已取消收藏 {}", file_name)
+            } else {
+                format!("已收藏 {}", file_name)
+            };
+            if is_fav {
+                // 取消收藏
+                app.favorite_file_ids.remove(&fid);
+                // 乐观更新统计数据
+                if let Some(ref mut stats) = app.user_stats {
+                    stats.favorite_count = (stats.favorite_count - 1).max(0);
                 }
-            });
+                tokio::spawn(async move {
+                    match api.remove_favorite(uid, fid).await {
+                        Ok(_) => log::info!("取消收藏成功: {}", fid),
+                        Err(e) => log::error!("取消收藏失败: {}", e),
+                    }
+                });
+            } else {
+                // 添加收藏
+                app.favorite_file_ids.insert(fid);
+                // 乐观更新统计数据
+                if let Some(ref mut stats) = app.user_stats {
+                    stats.favorite_count += 1;
+                }
+                tokio::spawn(async move {
+                    match api.add_favorite(uid, fid).await {
+                        Ok(_) => log::info!("收藏成功: {}", fid),
+                        Err(e) => log::error!("收藏失败: {}", e),
+                    }
+                });
+            }
             app.add_toast(msg, ToastLevel::Success);
+            // 后台刷新统计（确保下次打开时数据一致）
+            app.trigger_load_user_stats();
         }
         Action::Report => {
             app.show_report_dialog = true;
@@ -324,39 +352,108 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
             app.report_type = "侵权".to_string();
         }
         Action::ToggleInfo => {
-            app.show_info_panel = !app.show_info_panel;
+            app.show_info_dialog = true;
         }
         Action::None => {}
     }
 
-    // ── 主内容：PDF 阅读器 + 可选信息侧栏 ──────────────────────
-    // 直接用 ui.vertical() 填充剩余高度，不用 horizontal 嵌套
-    // 避免 horizontal+vertical 嵌套导致的高度计算问题
-    if app.show_info_panel {
-        ui.horizontal(|ui| {
-            // PDF 区
-            ui.vertical(|ui| {
-                let avail = ui.available_size();
-                ui.set_min_size(egui::vec2(avail.x - 260.0, avail.y));
-                if app.pdf_viewer.loaded {
-                    let engine = app.pdf_engine.clone();
-                    pdf::render_pdf_viewer(ui, &mut app.pdf_viewer, &engine);
-                } else {
-                    render_pdf_placeholder(ui, &file_name, &file_subject, &school_name, file_id, app);
+    // ── 主内容：PDF 阅读器（全宽渲染） ────────────────────────
+    if app.pdf_viewer.loaded {
+        let engine = app.pdf_engine.clone();
+        pdf::render_pdf_viewer(ui, &mut app.pdf_viewer, &engine);
+    } else {
+        render_pdf_placeholder(ui, &file_name, &file_subject, &school_name, file_id, app);
+    }
+
+    // ── 文件信息弹窗（Metro Design） ──────────────────────────
+    if app.show_info_dialog {
+        let size_str = if file_size > 0 {
+            format!("{:.1} MB", file_size as f64 / 1048576.0)
+        } else {
+            "-".to_string()
+        };
+
+        // 消除窗口阴影（Metro Design 无阴影）
+        let mut style = (*ui.ctx().style()).clone();
+        style.visuals.window_shadow = egui::Shadow::NONE;
+        ui.ctx().set_style(style);
+
+        egui::Window::new("文件信息")
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ui.ctx(), |ui| {
+                ui.set_min_width(360.0);
+
+                let info_rect = ui.available_rect_before_wrap();
+
+                // 左侧强调色条（Metro Design 标志）
+                let accent_bar = egui::Rect::from_min_size(
+                    egui::pos2(info_rect.left() - ui.style().spacing.window_margin.left as f32, info_rect.top()),
+                    egui::vec2(3.0, ui.min_rect().height().max(260.0)),
+                );
+                ui.painter().rect_filled(accent_bar, egui::CornerRadius::ZERO, colors::primary());
+
+                ui.vertical_centered(|ui| {
+                    ui.add_space(8.0);
+                    ui.label(
+                        egui::RichText::new("📄")
+                            .font(FontId::new(36.0, egui::FontFamily::Proportional)),
+                    );
+                    ui.add_space(10.0);
+                });
+
+                let info_rows: &[(&str, &str)] = &[
+                    ("文件名", &file_name),
+                    ("学科", &file_subject),
+                    ("学校", &school_name),
+                    ("大小", &size_str),
+                    ("上传者", &create_by),
+                    ("文件ID", &file_id.to_string()),
+                ];
+
+                for (key, val) in info_rows {
+                    ui.horizontal(|ui| {
+                        ui.add_space(20.0);
+                        ui.label(
+                            egui::RichText::new(format!("{}:", key))
+                                .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                                .color(colors::text_secondary()),
+                        );
+                        ui.add_space(8.0);
+                        ui.label(
+                            egui::RichText::new(*val)
+                                .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                                .color(colors::text_primary()),
+                        );
+                    });
+                    ui.add_space(5.0);
                 }
+
+                ui.add_space(12.0);
+
+                // 关闭按钮 — Metro 纯色块风格
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let close_btn = egui::Button::new(
+                        egui::RichText::new("  关闭  ")
+                            .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                            .color(colors::text_on_primary()),
+                    )
+                    .fill(colors::primary())
+                    .stroke(egui::Stroke::NONE)
+                    .corner_radius(egui::CornerRadius::ZERO)
+                    .min_size(egui::vec2(80.0, 32.0));
+                    if ui.add(close_btn).clicked() {
+                        app.show_info_dialog = false;
+                    }
+                });
+                ui.add_space(4.0);
             });
 
-            // 信息侧栏
-            render_info_panel(ui, &file_name, &file_subject, &school_name, file_size, &create_by);
-        });
-    } else {
-        // 无信息侧栏：直接渲染 PDF 查看器，占满全高
-        if app.pdf_viewer.loaded {
-            let engine = app.pdf_engine.clone();
-            pdf::render_pdf_viewer(ui, &mut app.pdf_viewer, &engine);
-        } else {
-            render_pdf_placeholder(ui, &file_name, &file_subject, &school_name, file_id, app);
-        }
+        // 恢复窗口阴影（避免影响其他窗口）
+        let mut style = (*ui.ctx().style()).clone();
+        style.visuals.window_shadow = egui::Shadow::default();
+        ui.ctx().set_style(style);
     }
 
     // ── 举报对话框 ────────────────────────────────────────
@@ -449,48 +546,6 @@ fn render_pdf_placeholder(
         // 此分支只在点击文件行后一帧内出现，立即显示加载状态
         app.trigger_load_pdf_bytes(file_id);
     }
-}
-
-/// 文件信息侧栏
-fn render_info_panel(
-    ui: &mut egui::Ui,
-    file_name: &str,
-    file_subject: &str,
-    school_name: &str,
-    file_size: i64,
-    create_by: &str,
-) {
-    let size_str = if file_size > 0 {
-        format!("{:.1} MB", file_size as f64 / 1048576.0)
-    } else { "-".to_string() };
-
-    egui::Frame::new()
-        .fill(colors::bg_card())
-        .inner_margin(egui::Margin::symmetric(16, 16))
-        .stroke(egui::Stroke::new(1.0, colors::border()))
-        .show(ui, |ui| {
-            ui.set_min_width(220.0);
-            ui.set_max_width(260.0);
-            ui.set_min_height(ui.available_height());
-            ui.vertical_centered(|ui| {
-                ui.label(egui::RichText::new("📄").font(FontId::new(40.0, egui::FontFamily::Proportional)));
-            });
-            ui.add_space(12.0);
-            for (key, val) in &[("文件名", file_name), ("学科", file_subject),
-                ("学校", school_name), ("大小", size_str.as_str()), ("上传者", create_by)]
-            {
-                ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new(format!("{}:", key))
-                        .font(FontId::new(12.0, egui::FontFamily::Proportional))
-                        .color(colors::text_secondary()));
-                    ui.add_space(4.0);
-                    ui.label(egui::RichText::new(*val)
-                        .font(FontId::new(13.0, egui::FontFamily::Proportional))
-                        .color(colors::text_primary()));
-                });
-                ui.add_space(6.0);
-            }
-        });
 }
 
 /// 骨架屏
@@ -735,6 +790,10 @@ pub fn render_favorites(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                         let api = app.api.clone();
                                         let uid = app.current_user.as_ref().map(|u| u.user_id).unwrap_or(0);
                                         let fid = fav.file_id;
+                                        app.favorite_file_ids.remove(&fid);
+                                        if let Some(ref mut stats) = app.user_stats {
+                                            stats.favorite_count = (stats.favorite_count - 1).max(0);
+                                        }
                                         tokio::spawn(async move { let _ = api.remove_favorite(uid, fid).await; });
                                     }
                                     ui.add_space(4.0);
@@ -761,7 +820,7 @@ pub fn render_favorites(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 // ── 内部组件 ─────────────────────────────────────────────────────────────────
 
 /// 全宽纵向文件行，返回是否点击（打开预览）
-fn file_row(ui: &mut egui::Ui, file: &PaperFile, api: &ApiClient) -> bool {
+fn file_row(ui: &mut egui::Ui, file: &PaperFile, app: &PezMaxApp) -> bool {
     let size_str = if file.file_size > 0 {
         format!("{:.1} MB", file.file_size as f64 / 1048576.0)
     } else {
@@ -808,13 +867,14 @@ fn file_row(ui: &mut egui::Ui, file: &PaperFile, api: &ApiClient) -> bool {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.add_space(14.0);
                     if ui.small_button("⭐ 收藏").clicked() {
-                        let api = api.clone();
+                        let api = app.api.clone();
                         let fid = file.file_id;
-                        tokio::spawn(async move { let _ = api.add_favorite(fid).await; });
+                        let uid = app.current_user.as_ref().map(|u| u.user_id).unwrap_or(0);
+                        tokio::spawn(async move { let _ = api.add_favorite(uid, fid).await; });
                     }
                     ui.add_space(6.0);
                     if ui.small_button("📥 下载").clicked() {
-                        let api = api.clone();
+                        let api = app.api.clone();
                         let fid = file.file_id;
                         tokio::spawn(async move { let _ = api.download_paper(fid).await; });
                     }

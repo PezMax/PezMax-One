@@ -100,6 +100,9 @@ pub struct UserInfo {
     pub sex: String,
     #[serde(default)]
     pub status: String,
+    /// 上传数量（来自 getInfo 接口）
+    #[serde(default, deserialize_with = "null_to_default")]
+    pub upload_count: i64,
 }
 
 /// getInfo 响应结构（用户信息嵌套在 data.user 中）
@@ -333,4 +336,18 @@ pub struct ActionResponse {
     pub msg: String,
     #[serde(default)]
     pub data: Option<serde_json::Value>,
+}
+
+/// 书签收藏（桌面端）
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BookmarkFavorite {
+    #[serde(default)]
+    pub bookmark_id: i64,
+    #[serde(default)]
+    pub bookmark_name: String,
+    #[serde(default)]
+    pub user_id: i64,
+    #[serde(default)]
+    pub create_time: String,
 }

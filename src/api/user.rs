@@ -10,6 +10,11 @@ impl ApiClient {
         self.get("/datum/desktop/user/profile", None).await
     }
 
+    /// 获取当前用户信息（桌面端 getInfo，含 uploadCount）
+    pub async fn get_desktop_user_info(&self) -> Result<ApiResponse<UserInfo>> {
+        self.get("/datum/user/getInfo", None).await
+    }
+
     /// 获取用户统计
     pub async fn get_user_stats(&self) -> Result<ApiResponse<UserStats>> {
         self.get("/datum/desktop/user/profile/stats", None).await

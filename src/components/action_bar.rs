@@ -26,7 +26,7 @@ pub enum PreviewMode {
 }
 
 /// 渲染底部操作栏（TopBottomPanel 级别，左右贴边）
-pub fn render_bar(ctx: &egui::Context, file_name: &str, mode: PreviewMode) -> Action {
+pub fn render_bar(ctx: &egui::Context, file_name: &str, mode: PreviewMode, is_favorited: bool) -> Action {
     let mut action = Action::None;
     let bar_bg = Color32::from_rgb(0x1E, 0x1E, 0x2E);
 
@@ -35,6 +35,9 @@ pub fn render_bar(ctx: &egui::Context, file_name: &str, mode: PreviewMode) -> Ac
         PreviewMode::Away => "← 返回阅读",
         PreviewMode::None => "← 返回列表",
     };
+
+    let fav_emoji = if is_favorited { "★" } else { "☆" };
+    let fav_text = format!("{} 收藏", fav_emoji);
 
     egui::TopBottomPanel::bottom("preview_action_bar")
         .min_height(48.0)
@@ -67,7 +70,7 @@ pub fn render_bar(ctx: &egui::Context, file_name: &str, mode: PreviewMode) -> Ac
                     ui.add_space(8.0);
                     if bar_btn(ui, "🚩 举报", 14.0) { action = Action::Report; }
                     ui.add_space(8.0);
-                    if bar_btn(ui, "⭐ 收藏", 14.0) { action = Action::Favorite; }
+                    if bar_btn(ui, &fav_text, 14.0) { action = Action::Favorite; }
                     ui.add_space(8.0);
                     if bar_btn(ui, "📥 下载", 14.0) { action = Action::Download; }
                 });

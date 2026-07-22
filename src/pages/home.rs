@@ -74,13 +74,11 @@ fn render_metric_blocks(app: &PezMaxApp, ui: &mut egui::Ui) {
     let (fav, dl, ul) = app.user_stats.as_ref().map_or((0, 0, 0), |s| {
         (s.favorite_count, s.download_count, s.upload_count)
     });
-    let total = dl + ul + fav;
 
     let metrics = [
         (format!("{}", dl), "下载量", colors::primary()),
         (format!("{}", fav), "收藏数", colors::accent_orange()),
         (format!("{}", ul), "上传数", colors::accent_green()),
-        (format!("{}", total), "资源总数", colors::accent_teal()),
     ];
 
     let block_w = 160.0;

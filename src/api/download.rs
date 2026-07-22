@@ -32,14 +32,23 @@ impl ApiClient {
         self.get(&format!("/datum/desktop/favorite/list/{}", user_id), Some(query)).await
     }
 
-    /// 新增收藏
-    pub async fn add_favorite(&self, file_id: i64) -> Result<ApiResponse<serde_json::Value>> {
-        let body = serde_json::json!({ "fileId": file_id });
+    /// 新增收藏（需传入 userId 和 fileId）
+    pub async fn add_favorite(&self, user_id: i64, file_id: i64) -> Result<ApiResponse<serde_json::Value>> {
+        let body = serde_json::json!({ "fileId": file_id, "userId": user_id });
         self.post("/datum/favorite", &body).await
     }
 
     /// 删除收藏（需传入 userId）
     pub async fn remove_favorite(&self, user_id: i64, file_id: i64) -> Result<ApiResponse<serde_json::Value>> {
         self.delete(&format!("/datum/desktop/favorite/{}/{}", user_id, file_id)).await
+    }
+
+    /// 获取书签收藏列表（需传入 userId）
+    pub async fn get_bookmark_favorite_list(&self, user_id: i64, params: &PageParams) -> Result<PageResponse<BookmarkFavorite>> {
+        let query = vec![
+            ("pageNum", params.page_num.to_string()),
+            ("pageSize", params.page_size.to_string()),
+        ];
+        self.get(&format!("/datum/desktop/bookmark/favorite/list/{}", user_id), Some(query)).await
     }
 }

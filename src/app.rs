@@ -418,12 +418,18 @@ pub struct PezMaxApp {
     pub search_hint_anim: SpringAnim,
     pub search_was_focused: bool,
 
-    // 试卷详情面板：是否显示文件信息侧栏
-    pub show_info_panel: bool,
+    // 试卷详情面板：是否显示文件信息弹窗
+    pub show_info_dialog: bool,
+    // 已收藏的文件 ID 集合（用于工具栏收藏按钮状态）
+    pub favorite_file_ids: std::collections::HashSet<i64>,
+    pub favorite_ids_loaded: bool,
     // 预览模式下底部操作栏的待处理动作（每帧渲染后重置）
     pub preview_bar_action: action_bar::Action,
     // 预览模式，用于 app.rs 中控制边距/面板渲染
     pub preview_mode: bool,
+
+    // 已收藏文件 ID 加载
+    pub favorite_ids_rx: Option<oneshot::Receiver<anyhow::Result<std::collections::HashSet<i64>>>>,
 
     // 头像加载
     pub avatar_texture: Option<egui::TextureHandle>,
@@ -542,7 +548,10 @@ impl PezMaxApp {
             search_hint_anim: SpringAnim::new(0.25, 0.7, 0.0),
             search_was_focused: false,
 
-            show_info_panel: false,
+            show_info_dialog: false,
+            favorite_file_ids: std::collections::HashSet::new(),
+            favorite_ids_loaded: false,
+            favorite_ids_rx: None,
             preview_bar_action: action_bar::Action::None,
             preview_mode: false,
 
@@ -631,6 +640,7 @@ impl PezMaxApp {
         // 自动加载首页数据
         self.trigger_load_user_stats();
         self.trigger_load_recent_files();
+        self.trigger_load_favorite_ids();
         // 加载头像
         self.trigger_load_avatar();
     }
@@ -747,12 +757,45 @@ impl PezMaxApp {
         });
     }
 
-    /// 异步加载用户统计
+    /// 异步加载用户统计（客户端聚合模式，参考 PezMax-Desktop）：
+    /// - downloadCount: 下载记录列表 total
+    /// - favoriteCount: 文件收藏列表 total + 书签收藏列表 total
+    /// - uploadCount: getInfo 返回的 uploadCount
     pub fn trigger_load_user_stats(&mut self) {
         let api = self.api.clone();
-        self.user_stats_data.load(move || async move {
-            let resp = api.get_user_stats().await?;
-            resp.data.ok_or_else(|| anyhow::anyhow!("统计数据为空"))
+        let user_id = self.current_user.as_ref().map(|u| u.user_id).unwrap_or(0);
+        if user_id == 0 {
+            return;
+        }
+        self.user_stats_data.load(move || {
+            let api = api.clone();
+            async move {
+                let page_params = crate::api::models::PageParams {
+                    page_size: 1,
+                    ..Default::default()
+                };
+                // 并行：文件收藏 + 书签收藏 + 下载列表（仅取 total）
+                let (fav_res, bm_fav_res, dl_res, info_res) = tokio::join!(
+                    api.get_favorite_list(user_id, &page_params),
+                    api.get_bookmark_favorite_list(user_id, &page_params),
+                    api.get_download_list(user_id, &page_params),
+                    api.get_desktop_user_info(),
+                );
+                let favorite_count = fav_res.as_ref().map(|r| r.total).unwrap_or(0)
+                    + bm_fav_res.as_ref().map(|r| r.total).unwrap_or(0);
+                let download_count = dl_res.as_ref().map(|r| r.total).unwrap_or(0);
+                let upload_count = info_res
+                    .as_ref()
+                    .ok()
+                    .and_then(|r| r.data.as_ref())
+                    .map(|u| u.upload_count)
+                    .unwrap_or(0);
+                Ok(crate::api::models::UserStats {
+                    favorite_count,
+                    download_count,
+                    upload_count,
+                })
+            }
         });
     }
 
@@ -846,13 +889,32 @@ impl PezMaxApp {
         let api = self.api.clone();
         let user_id = self.current_user.as_ref().map(|u| u.user_id).unwrap_or(0);
         self.favorites_data.load(move || async move {
-            let params = PageParams { page_num: 1, page_size: 50, ..Default::default() };
+            let params = PageParams { page_num: 1, page_size: 200, ..Default::default() };
             let resp = api.get_favorite_list(user_id, &params).await?;
             if resp.code != 200 {
                 return Err(anyhow::anyhow!("收藏列表错误 {}: {}", resp.code, resp.msg));
             }
             Ok(resp.rows)
         });
+    }
+
+    /// 异步加载收藏 ID 集合（用于工具栏按钮状态，轻量级：pageSize=200 取全量 ID）
+    pub fn trigger_load_favorite_ids(&mut self) {
+        let api = self.api.clone();
+        let user_id = self.current_user.as_ref().map(|u| u.user_id).unwrap_or(0);
+        if user_id == 0 {
+            return;
+        }
+        let (tx, rx) = oneshot::channel();
+        tokio::spawn(async move {
+            let params = PageParams { page_num: 1, page_size: 200, ..Default::default() };
+            let result = match api.get_favorite_list(user_id, &params).await {
+                Ok(resp) => Ok(resp.rows.into_iter().map(|r| r.file_id).collect::<std::collections::HashSet<i64>>()),
+                Err(e) => Err(e),
+            };
+            tx.send(result).ok();
+        });
+        self.favorite_ids_rx = Some(rx);
     }
 
     /// 异步加载上传排行榜
@@ -1074,6 +1136,9 @@ impl PezMaxApp {
         self.token = None;
         self.current_user = None;
         self.user_stats = None;
+        self.favorite_file_ids.clear();
+        self.favorite_ids_loaded = false;
+        self.favorite_ids_rx = None;
         self.avatar_texture = None;
         self.avatar_load_rx = None;
         self.rank_avatar_textures.clear();
@@ -1201,6 +1266,22 @@ impl eframe::App for PezMaxApp {
                     }
                     Err(e) => {
                         log::info!("头像加载失败: {}", e);
+                    }
+                }
+            }
+        }
+
+        // 轮询收藏 ID 列表加载结果
+        if let Some(rx) = &mut self.favorite_ids_rx {
+            if let Ok(result) = rx.try_recv() {
+                self.favorite_ids_rx = None;
+                match result {
+                    Ok(ids) => {
+                        self.favorite_file_ids = ids;
+                        self.favorite_ids_loaded = true;
+                    }
+                    Err(e) => {
+                        log::info!("收藏 ID 列表加载失败: {}", e);
                     }
                 }
             }
@@ -1450,15 +1531,21 @@ impl eframe::App for PezMaxApp {
         self.preview_bar_action = action_bar::Action::None;
         if preview_mode {
             let file_name = self.selected_file.as_ref().map(|f| f.file_name.as_str()).unwrap_or("");
+            let file_id = self.selected_file.as_ref().map(|f| f.file_id).unwrap_or(0);
+            let is_favorited = self.favorite_file_ids.contains(&file_id);
             let bar_mode = if self.current_subsection == Subsection::ResourceManager {
                 action_bar::PreviewMode::Reading
             } else {
                 action_bar::PreviewMode::Away
             };
             // 保存当前帧操作栏按钮动作，供下一帧在子标签栏之前处理
-            let bar_action = action_bar::render_bar(ctx, file_name, bar_mode);
+            let bar_action = action_bar::render_bar(ctx, file_name, bar_mode, is_favorited);
+            // Back + Away：先导航回 ResourceManager，下一帧再处理 Back
+            // 其他动作：直接传递给 browse.rs 处理
             if bar_action == action_bar::Action::Back && bar_mode == action_bar::PreviewMode::Away {
                 // 标记"返回阅读"，下一帧在子标签渲染前切换回 ResourceManager
+                self.preview_bar_action = bar_action;
+            } else if bar_action != action_bar::Action::None {
                 self.preview_bar_action = bar_action;
             }
         }

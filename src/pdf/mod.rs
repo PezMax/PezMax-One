@@ -488,8 +488,8 @@ impl PdfViewer {
         self.pending_renders
             .retain(|t| !completed.contains(&t.page_idx));
 
-        // 有渲染完成 → 启动下一个待渲染页
-        if !completed.is_empty() {
+        // 有渲染完成 → 启动下一个待渲染页（每个完成的渲染启动一个新的）
+        for _ in 0..completed.len() {
             self.request_next_render(engine, ctx);
         }
 
