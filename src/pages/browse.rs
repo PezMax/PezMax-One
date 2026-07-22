@@ -1489,12 +1489,8 @@ fn bento_card_half(ui: &mut egui::Ui, title: &str, content: &str) {
         });
 }
 
-/// 我的收藏列表
+/// 我的收藏列表（含试卷收藏 / 书签收藏两个子标签）
 pub fn render_favorites(app: &mut PezMaxApp, ui: &mut egui::Ui) {
-    if !app.favorites_data.is_loaded() && !app.favorites_data.is_loading() {
-        app.trigger_load_favorites();
-    }
-
     ui.add_space(16.0);
     ui.label(
         egui::RichText::new("我的收藏")
@@ -1503,10 +1499,137 @@ pub fn render_favorites(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     );
     ui.add_space(16.0);
 
+    // 进入页面时预加载两种数据
+    if !app.favorites_data.is_loaded() && !app.favorites_data.is_loading() {
+        app.trigger_load_favorites();
+    }
+    if !app.bookmark_favorites_data.is_loaded() && !app.bookmark_favorites_data.is_loading() {
+        app.trigger_load_bookmark_favorites();
+    }
+
+    // ── 子标签切换：试卷收藏 | 书签收藏（弹簧动画） ──────────────
+    let tabs = ["试卷收藏", "书签收藏"];
+    let active_tab = app.favorites_tab_idx;
+    let mut tab_rects: Vec<egui::Rect> = Vec::with_capacity(2);
+
+    let _tab_clicked = ui.horizontal(|ui| {
+        ui.add_space(0.0);
+        for (i, label) in tabs.iter().enumerate() {
+            let is_active = i == active_tab;
+            let btn = egui::Button::new(
+                egui::RichText::new(*label)
+                    .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                    .color(if is_active { colors::primary() } else { colors::text_secondary() }),
+            )
+            .fill(egui::Color32::TRANSPARENT)
+            .stroke(egui::Stroke::NONE)
+            .corner_radius(CornerRadius::ZERO)
+            .min_size(egui::vec2(80.0, 32.0));
+            let resp = ui.add(btn);
+            tab_rects.push(resp.rect);
+            if resp.clicked() && !is_active {
+                app.favorites_tab_idx = i;
+                app.favorites_tab_anim.set_target(i as f64);
+                // 切换标签时强制刷新书签收藏数据
+                if i == 1 {
+                    app.bookmark_favorites_data.reset();
+                } else {
+                    app.favorites_data.reset();
+                }
+            }
+            ui.add_space(16.0);
+        }
+    });
+
+    // 弹簧插值下划线
+    if tab_rects.len() == 2 {
+        let idx_f = app.favorites_tab_anim.value();
+        let lo = (idx_f.floor() as usize).min(1);
+        let hi = (idx_f.ceil() as usize).min(1);
+        let t = idx_f.fract() as f32;
+        let r_lo = tab_rects[lo];
+        let r_hi = tab_rects[hi];
+        let x0 = egui::lerp(r_lo.left()..=r_hi.left(), t);
+        let x1 = egui::lerp(r_lo.right()..=r_hi.right(), t);
+        let y = r_lo.bottom();
+        ui.painter().line_segment(
+            [egui::pos2(x0, y), egui::pos2(x1, y)],
+            egui::Stroke::new(2.0, colors::primary()),
+        );
+    } else if let Some(&r) = tab_rects.first() {
+        ui.painter().line_segment(
+            [egui::pos2(r.left(), r.bottom()), egui::pos2(r.right(), r.bottom())],
+            egui::Stroke::new(2.0, colors::primary()),
+        );
+    }
+
+    if !app.favorites_tab_anim.is_steady() {
+        ui.ctx().request_repaint();
+    }
+
+    ui.add_space(12.0);
+    ui.separator();
+    ui.add_space(8.0);
+
+    match app.favorites_tab_idx {
+        0 => render_paper_favorites(app, ui),
+        1 => render_bookmark_favorites(app, ui),
+        _ => {}
+    }
+}
+
+/// 试卷收藏列表
+fn render_paper_favorites(app: &mut PezMaxApp, ui: &mut egui::Ui) {
+    if !app.favorites_data.is_loaded() && !app.favorites_data.is_loading() {
+        app.trigger_load_favorites();
+    }
+
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new("试卷收藏")
+                .font(FontId::new(16.0, egui::FontFamily::Proportional))
+                .color(colors::text_primary()),
+        );
+        if let Some(ref list) = app.favorites_data.data {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.label(
+                    egui::RichText::new(format!("共 {} 项", list.len()))
+                        .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                        .color(colors::text_secondary()),
+                );
+            });
+        }
+    });
+    ui.add_space(8.0);
+
     egui::ScrollArea::vertical()
         .id_salt("favorites_scroll")
         .show(ui, |ui| {
+            if app.favorites_data.is_loading() {
+                ui.add_space(40.0);
+                ui.vertical_centered(|ui| {
+                    ui.label(
+                        egui::RichText::new("加载中...")
+                            .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                            .color(colors::text_secondary()),
+                    );
+                });
+                ui.ctx().request_repaint();
+                return;
+            }
+
             if let Some(ref list) = app.favorites_data.data {
+                if list.is_empty() {
+                    ui.add_space(40.0);
+                    ui.vertical_centered(|ui| {
+                        ui.label(
+                            egui::RichText::new("暂无试卷收藏")
+                                .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                                .color(colors::text_secondary()),
+                        );
+                    });
+                    return;
+                }
                 for fav in list {
                     egui::Frame::new()
                         .fill(colors::bg_card())
@@ -1556,11 +1679,148 @@ pub fn render_favorites(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                     ui.add_space(6.0);
                 }
             } else {
+                ui.add_space(40.0);
+                ui.vertical_centered(|ui| {
+                    ui.label(
+                        egui::RichText::new("暂无试卷收藏")
+                            .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                            .color(colors::text_secondary()),
+                    );
+                });
+            }
+        });
+}
+
+/// 书签收藏列表
+fn render_bookmark_favorites(app: &mut PezMaxApp, ui: &mut egui::Ui) {
+    if !app.bookmark_favorites_data.is_loaded() && !app.bookmark_favorites_data.is_loading() {
+        app.trigger_load_bookmark_favorites();
+    }
+
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new("书签收藏")
+                .font(FontId::new(16.0, egui::FontFamily::Proportional))
+                .color(colors::text_primary()),
+        );
+        if let Some(ref list) = app.bookmark_favorites_data.data {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.label(
-                    egui::RichText::new(if app.favorites_data.is_loading() { "加载中..." } else { "暂无收藏" })
-                        .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                    egui::RichText::new(format!("共 {} 项", list.len()))
+                        .font(FontId::new(12.0, egui::FontFamily::Proportional))
                         .color(colors::text_secondary()),
                 );
+            });
+        }
+    });
+    ui.add_space(8.0);
+
+    egui::ScrollArea::vertical()
+        .id_salt("bookmark_favorites_scroll")
+        .show(ui, |ui| {
+            if app.bookmark_favorites_data.is_loading() {
+                ui.add_space(40.0);
+                ui.vertical_centered(|ui| {
+                    ui.label(
+                        egui::RichText::new("加载中...")
+                            .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                            .color(colors::text_secondary()),
+                    );
+                });
+                ui.ctx().request_repaint();
+                return;
+            }
+
+            let list_clone = app.bookmark_favorites_data.data.clone().unwrap_or_default();
+            if list_clone.is_empty() {
+                ui.add_space(40.0);
+                ui.vertical_centered(|ui| {
+                    ui.label(
+                        egui::RichText::new("暂无书签收藏")
+                            .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                            .color(colors::text_secondary()),
+                    );
+                });
+                return;
+            }
+            for bm_fav in &list_clone {
+                let bm_id = bm_fav.bookmark_id;
+                let bm_name = bm_fav.bookmark_name.clone();
+                let bm_time = bm_fav.create_time.clone();
+                let mut btn_clicked = false;
+
+                egui::Frame::new()
+                    .fill(colors::bg_card())
+                    .corner_radius(CornerRadius::same(0))
+                    .stroke(egui::Stroke::new(1.0, colors::border()))
+                    .show(ui, |ui| {
+                        ui.set_min_width(ui.available_width());
+                        ui.horizontal(|ui| {
+                            ui.add_space(12.0);
+                            ui.label(egui::RichText::new("🔖").font(FontId::new(18.0, egui::FontFamily::Proportional)));
+                            ui.add_space(10.0);
+                            ui.vertical(|ui| {
+                                ui.add_space(8.0);
+                                ui.label(
+                                    egui::RichText::new(&bm_name)
+                                        .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                                        .color(colors::text_primary()),
+                                );
+                                ui.label(
+                                    egui::RichText::new(format!("收藏于 {}", bm_time))
+                                        .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                                        .color(colors::text_secondary()),
+                                );
+                                ui.add_space(8.0);
+                            });
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                ui.add_space(12.0);
+                                if ui.small_button("取消收藏").clicked() {
+                                    btn_clicked = true;
+                                    let api = app.api.clone();
+                                    let uid = app.current_user.as_ref().map(|u| u.user_id).unwrap_or(0);
+                                    app.favorite_bookmark_ids.remove(&bm_id);
+                                    if let Some(ref mut stats) = app.user_stats {
+                                        stats.favorite_count = (stats.favorite_count - 1).max(0);
+                                    }
+                                    tokio::spawn(async move {
+                                        let _ = api.remove_bookmark_favorite(uid, bm_id).await;
+                                    });
+                                }
+                            });
+                        });
+                    });
+
+                // 整行点击 → 跳转书签详情（仅当未点击按钮时）
+                if !btn_clicked {
+                    let row_rect = ui.response().rect;
+                    let click_id = ui.next_auto_id();
+                    if ui.interact(row_rect, click_id, egui::Sense::click()).clicked() {
+                        // 查找已加载的书签数据
+                        let found = app.bookmarks_data.data.as_ref()
+                            .and_then(|list| list.iter().find(|b| b.id == bm_id).cloned());
+                        if let Some(bookmark) = found {
+                            app.selected_bookmark = Some(bookmark);
+                            app.bookmark_detail_anim = crate::sokuou::SpringAnim::with_target(
+                                0.4, 0.8, 0.0, 0.0, 1.0,
+                            );
+                            app.navigate_to(crate::app::Section::Browse, crate::app::Subsection::ExternalBookmarks);
+                        } else {
+                            // 书签列表未加载：用已有信息构造一个部分 Bookmark 再导航
+                            app.selected_bookmark = Some(crate::api::models::Bookmark {
+                                id: bm_id,
+                                title: bm_name.clone(),
+                                ..Default::default()
+                            });
+                            app.bookmark_detail_anim = crate::sokuou::SpringAnim::with_target(
+                                0.4, 0.8, 0.0, 0.0, 1.0,
+                            );
+                            app.trigger_load_bookmarks();
+                            app.navigate_to(crate::app::Section::Browse, crate::app::Subsection::ExternalBookmarks);
+                        }
+                    }
+                }
+                ui.add_space(6.0);
             }
         });
 }

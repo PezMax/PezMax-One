@@ -343,6 +343,9 @@ pub struct PezMaxApp {
     pub schools_data: AsyncData<Vec<String>>,
     pub bookmarks_data: AsyncData<Vec<Bookmark>>,
     pub favorites_data: AsyncData<Vec<FavoriteRecord>>,
+    pub bookmark_favorites_data: AsyncData<Vec<BookmarkFavorite>>,
+    pub favorites_tab_idx: usize, // 0=试卷收藏, 1=书签收藏
+    pub favorites_tab_anim: SpringAnim,
     // Community 页面
     pub user_rank_data: AsyncData<Vec<UserRankItem>>,
     pub my_reports_data: AsyncData<Vec<Report>>,
@@ -514,6 +517,9 @@ impl PezMaxApp {
             schools_data: AsyncData::new(),
             bookmarks_data: AsyncData::new(),
             favorites_data: AsyncData::new(),
+            bookmark_favorites_data: AsyncData::new(),
+            favorites_tab_idx: 0,
+            favorites_tab_anim: SpringAnim::new(0.3, 0.8, 0.0),
             user_rank_data: AsyncData::new(),
             my_reports_data: AsyncData::new(),
             rank_avatar_textures: HashMap::new(),
@@ -939,6 +945,20 @@ impl PezMaxApp {
         });
     }
 
+    /// 异步加载书签收藏列表
+    pub fn trigger_load_bookmark_favorites(&mut self) {
+        let api = self.api.clone();
+        let user_id = self.current_user.as_ref().map(|u| u.user_id).unwrap_or(0);
+        self.bookmark_favorites_data.load(move || async move {
+            let params = PageParams { page_num: 1, page_size: 200, ..Default::default() };
+            let resp = api.get_bookmark_favorite_list(user_id, &params).await?;
+            if resp.code != 200 {
+                return Err(anyhow::anyhow!("书签收藏列表错误 {}: {}", resp.code, resp.msg));
+            }
+            Ok(resp.rows)
+        });
+    }
+
     /// 异步加载收藏 ID 集合（用于工具栏按钮状态，轻量级：pageSize=200 取全量 ID）
     pub fn trigger_load_favorite_ids(&mut self) {
         let api = self.api.clone();
@@ -1261,6 +1281,8 @@ impl PezMaxApp {
         self.user_stats_data = AsyncData::new();
         self.user_rank_data = AsyncData::new();
         self.my_reports_data = AsyncData::new();
+        self.favorites_data = AsyncData::new();
+        self.bookmark_favorites_data = AsyncData::new();
     }
 
     /// 异步加载 PDF 文件字节（用于预览）
@@ -1339,6 +1361,7 @@ impl eframe::App for PezMaxApp {
         self.subtab_indicator_anim.update(dt);
         self.preview_anim.update(dt);
         self.bookmark_detail_anim.update(dt);
+        self.favorites_tab_anim.update(dt);
         self.page_enter_anim.update(dt);
         self.auth_anim.update(dt);
         self.search_hint_anim.update(dt);
@@ -1508,6 +1531,7 @@ impl eframe::App for PezMaxApp {
             || !self.subtab_indicator_anim.is_steady()
             || !self.preview_anim.is_steady()
             || !self.bookmark_detail_anim.is_steady()
+            || !self.favorites_tab_anim.is_steady()
             || !self.page_enter_anim.is_steady()
             || !self.auth_anim.is_steady()
             || !self.search_hint_anim.is_steady()
@@ -1686,6 +1710,7 @@ impl eframe::App for PezMaxApp {
                 }
             }
             self.favorites_data.poll();
+            self.bookmark_favorites_data.poll();
             self.user_rank_data.poll();
             // 排行榜数据加载完成后，触发头像加载
             if self.user_rank_data.is_loaded() {
