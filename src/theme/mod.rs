@@ -2,9 +2,11 @@
 // Metro Design 风格：扁平、大字体、内容优先、色块分区
 // 支持浅色 / 深色 / 跟随系统，以及 Ncrust 同款强调色预设
 
+use crate::sokuou::{EasingMode, MetroAnim, UwpEasing};
 use egui::{FontFamily, FontId, TextStyle, Vec2};
 use std::borrow::Cow;
 use std::cell::Cell;
+use std::cell::RefCell;
 use std::sync::Arc;
 
 // ── 外观模式 ─────────────────────────────────────────────────────────────────
@@ -38,6 +40,8 @@ pub const ACCENT_PRESETS: &[AccentPreset] = &[
 thread_local! {
     static IS_DARK:     Cell<bool>  = const { Cell::new(false) };
     static ACCENT_IDX:  Cell<usize> = const { Cell::new(0) };
+    static ACCENT_TRANSITION: RefCell<AccentTransition> = const { RefCell::new(AccentTransition::idle()) };
+    static DARK_TRANSITION:   RefCell<DarkTransition>   = const { RefCell::new(DarkTransition::idle()) };
 }
 
 pub fn set_dark(dark: bool) {
@@ -56,6 +60,104 @@ pub fn accent_idx() -> usize {
     ACCENT_IDX.with(|i| i.get())
 }
 
+// ── 强调色过渡动画（MetroAnim 驱动）────────────────────────────────────────
+
+/// 强调色过渡状态：在 old ↔ new 两个预设之间插值 RGB。
+/// 使用 UWP Quadratic/EaseOut 曲线，0.3s 时长。
+pub struct AccentTransition {
+    anim: MetroAnim,
+    from_r: u8,
+    from_g: u8,
+    from_b: u8,
+    to_r: u8,
+    to_g: u8,
+    to_b: u8,
+    active: bool,
+}
+
+impl AccentTransition {
+    const fn idle() -> Self {
+        // 用 const 兼容的构造避开 MetroAnim::new（非 const fn）
+        Self {
+            anim: MetroAnim::new(0.3, UwpEasing::Quadratic, EasingMode::EaseOut),
+            from_r: 0,
+            from_g: 0,
+            from_b: 0,
+            to_r: 0,
+            to_g: 0,
+            to_b: 0,
+            active: false,
+        }
+    }
+}
+
+/// 开始强调色过渡：从当前颜色平滑过渡到 new_idx 对应的预设。
+/// 如果已有过渡进行中，从中断位置开始（interrupt-safe）。
+pub fn start_accent_transition(new_idx: usize) {
+    let new_idx = new_idx.min(ACCENT_PRESETS.len().saturating_sub(1));
+    let new_p = &ACCENT_PRESETS[new_idx];
+    ACCENT_TRANSITION.with(|t| {
+        let mut t = t.borrow_mut();
+        // 当前显示的颜色（过渡中则取插值，否则取预设）
+        let (cr, cg, cb) = if t.active {
+            let v = t.anim.value();
+            (
+                (t.from_r as f64 + (t.to_r as f64 - t.from_r as f64) * v).round().clamp(0.0, 255.0) as u8,
+                (t.from_g as f64 + (t.to_g as f64 - t.from_g as f64) * v).round().clamp(0.0, 255.0) as u8,
+                (t.from_b as f64 + (t.to_b as f64 - t.from_b as f64) * v).round().clamp(0.0, 255.0) as u8,
+            )
+        } else {
+            let old_p = &ACCENT_PRESETS[accent_idx()];
+            (old_p.r, old_p.g, old_p.b)
+        };
+        t.from_r = cr;
+        t.from_g = cg;
+        t.from_b = cb;
+        t.to_r = new_p.r;
+        t.to_g = new_p.g;
+        t.to_b = new_p.b;
+        t.anim.jump_to(0.0);
+        t.anim.set_target(1.0);
+        t.active = true;
+    });
+}
+
+/// 每帧推进过渡动画，应在 app.rs update() 中调用。
+pub fn update_accent_transition(dt: f64) {
+    ACCENT_TRANSITION.with(|t| {
+        let mut t = t.borrow_mut();
+        if t.active {
+            t.anim.update(dt);
+            if t.anim.is_steady() {
+                t.active = false;
+            }
+        }
+    });
+}
+
+/// 过渡动画是否仍在进行中。
+pub fn is_transitioning() -> bool {
+    ACCENT_TRANSITION.with(|t| t.borrow().active)
+}
+
+/// 获取当前应显示的强调色 RGB（过渡中则返回插值，否则返回预设）。
+fn current_accent_rgb() -> (u8, u8, u8) {
+    ACCENT_TRANSITION.with(|t| {
+        let t = t.borrow();
+        if t.active {
+            let v = t.anim.value();
+            (
+                (t.from_r as f64 + (t.to_r as f64 - t.from_r as f64) * v).round().clamp(0.0, 255.0) as u8,
+                (t.from_g as f64 + (t.to_g as f64 - t.from_g as f64) * v).round().clamp(0.0, 255.0) as u8,
+                (t.from_b as f64 + (t.to_b as f64 - t.from_b as f64) * v).round().clamp(0.0, 255.0) as u8,
+            )
+        } else {
+            let p = &ACCENT_PRESETS[accent_idx()];
+            (p.r, p.g, p.b)
+        }
+    })
+}
+
 /// ThemeMode::System 时查询 egui 的系统主题；Light/Dark 直接返回
 pub fn effective_dark(ctx: &egui::Context) -> bool {
     // 注意：ThemeMode 本身不存在线程局部，由 PezMaxApp.theme_mode 持有
@@ -64,29 +166,104 @@ pub fn effective_dark(ctx: &egui::Context) -> bool {
     ctx.system_theme().map(|t| t == egui::Theme::Dark).unwrap_or(false)
 }
 
+// ── 深色模式过渡动画（MetroAnim 驱动）────────────────────────────────────────
+
+/// 深色模式过渡状态：0.0 = 浅色，1.0 = 深色，中间值插值所有颜色。
+/// 使用 UWP Quadratic/EaseOut 曲线，0.3s 时长。
+struct DarkTransition {
+    anim: MetroAnim,
+    active: bool,
+    /// true = 正在过渡到深色，false = 正在过渡到浅色
+    target_dark: bool,
+}
+
+impl DarkTransition {
+    const fn idle() -> Self {
+        Self {
+            anim: MetroAnim::new(0.3, UwpEasing::Quadratic, EasingMode::EaseOut),
+            active: false,
+            target_dark: false,
+        }
+    }
+}
+
+/// 开始深色模式过渡动画。
+/// 从当前显示状态平滑过渡到目标模式。
+pub fn start_dark_transition(target_dark: bool) {
+    DARK_TRANSITION.with(|t| {
+        let mut t = t.borrow_mut();
+        t.anim.jump_to(0.0);
+        t.anim.set_target(1.0);
+        t.target_dark = target_dark;
+        t.active = true;
+    });
+}
+
+/// 每帧推进深色模式过渡动画，应在 app.rs update() 中调用。
+pub fn update_dark_transition(dt: f64) {
+    DARK_TRANSITION.with(|t| {
+        let mut t = t.borrow_mut();
+        if t.active {
+            t.anim.update(dt);
+            if t.anim.is_steady() {
+                t.active = false;
+            }
+        }
+    });
+}
+
+/// 深色模式过渡是否仍在进行中。
+pub fn is_dark_transitioning() -> bool {
+    DARK_TRANSITION.with(|t| t.borrow().active)
+}
+
+/// 深色模式过渡进度：0.0 = 完全浅色，1.0 = 完全深色。
+/// 过渡中返回插值，否则返回静态状态。
+fn dark_progress() -> f64 {
+    DARK_TRANSITION.with(|t| {
+        let t = t.borrow();
+        if t.active {
+            if t.target_dark { t.anim.value() } else { 1.0 - t.anim.value() }
+        } else {
+            if is_dark() { 1.0 } else { 0.0 }
+        }
+    })
+}
+
 // ── 调色板（函数化，运行时读取模式）────────────────────────────────────────
 
 pub mod colors {
     use egui::Color32;
-    use super::{accent_idx, is_dark, ACCENT_PRESETS};
 
-    // ── 强调色（从当前预设读取）────────────────────────────────────────────
+    // ── 深浅色过渡插值辅助 ──────────────────────────────────────────────
+    fn lerp_dark(light: Color32, dark: Color32) -> Color32 {
+        let t = super::dark_progress();
+        if t <= 0.0 { return light; }
+        if t >= 1.0 { return dark; }
+        Color32::from_rgb(
+            (light.r() as f64 + (dark.r() as f64 - light.r() as f64) * t).round().clamp(0.0, 255.0) as u8,
+            (light.g() as f64 + (dark.g() as f64 - light.g() as f64) * t).round().clamp(0.0, 255.0) as u8,
+            (light.b() as f64 + (dark.b() as f64 - light.b() as f64) * t).round().clamp(0.0, 255.0) as u8,
+        )
+    }
+
+    // ── 强调色（从当前预设读取，过渡时取插值）────────────────────────────
     pub fn primary() -> Color32 {
-        let p = &ACCENT_PRESETS[accent_idx()];
-        Color32::from_rgb(p.r, p.g, p.b)
+        let (r, g, b) = super::current_accent_rgb();
+        Color32::from_rgb(r, g, b)
     }
 
     pub fn primary_dark() -> Color32 {
-        let p = &ACCENT_PRESETS[accent_idx()];
-        Color32::from_rgb(p.r * 7 / 10, p.g * 7 / 10, p.b * 7 / 10)
+        let (r, g, b) = super::current_accent_rgb();
+        Color32::from_rgb(r * 7 / 10, g * 7 / 10, b * 7 / 10)
     }
 
     pub fn primary_light() -> Color32 {
-        let p = &ACCENT_PRESETS[accent_idx()];
+        let (r, g, b) = super::current_accent_rgb();
         Color32::from_rgb(
-            (p.r as u16 * 7 / 10 + 255 * 3 / 10) as u8,
-            (p.g as u16 * 7 / 10 + 255 * 3 / 10) as u8,
-            (p.b as u16 * 7 / 10 + 255 * 3 / 10) as u8,
+            (r as u16 * 7 / 10 + 255 * 3 / 10) as u8,
+            (g as u16 * 7 / 10 + 255 * 3 / 10) as u8,
+            (b as u16 * 7 / 10 + 255 * 3 / 10) as u8,
         )
     }
 
@@ -98,78 +275,98 @@ pub mod colors {
 
     // ── 文本色 ──────────────────────────────────────────────────────────────
     pub fn text_primary() -> Color32 {
-        if is_dark() { Color32::from_rgb(0xF0, 0xF0, 0xF2) }
-        else         { Color32::from_rgb(0x1A, 0x1A, 0x2E) }
+        lerp_dark(
+            Color32::from_rgb(0x1A, 0x1A, 0x2E),  // light
+            Color32::from_rgb(0xF0, 0xF0, 0xF2),  // dark
+        )
     }
     pub fn text_secondary() -> Color32 {
-        if is_dark() { Color32::from_rgb(0x9A, 0x9A, 0xAA) }
-        else         { Color32::from_rgb(0x60, 0x60, 0x70) }
+        lerp_dark(
+            Color32::from_rgb(0x60, 0x60, 0x70),
+            Color32::from_rgb(0x9A, 0x9A, 0xAA),
+        )
     }
     pub fn text_on_primary() -> Color32 { Color32::WHITE }
 
     // ── 背景色 ──────────────────────────────────────────────────────────────
     pub fn bg_white() -> Color32 {
-        if is_dark() { Color32::from_rgb(0x1C, 0x1C, 0x1C) }
-        else         { Color32::from_rgb(0xF5, 0xF0, 0xE8) }
+        lerp_dark(
+            Color32::from_rgb(0xF5, 0xF0, 0xE8),
+            Color32::from_rgb(0x1C, 0x1C, 0x1C),
+        )
     }
     pub fn bg_card() -> Color32 {
-        if is_dark() { Color32::from_rgb(0x26, 0x26, 0x26) }
-        else         { Color32::from_rgb(0xFA, 0xF7, 0xF0) }
+        lerp_dark(
+            Color32::from_rgb(0xFA, 0xF7, 0xF0),
+            Color32::from_rgb(0x26, 0x26, 0x26),
+        )
     }
     pub fn bg_sidebar() -> Color32 {
-        if is_dark() { Color32::from_rgb(0x14, 0x14, 0x1E) }
-        else         { Color32::from_rgb(0xC0, 0xB0, 0x9C) }
+        lerp_dark(
+            Color32::from_rgb(0xC0, 0xB0, 0x9C),
+            Color32::from_rgb(0x14, 0x14, 0x1E),
+        )
     }
     pub fn bg_hover() -> Color32 {
-        if is_dark() { Color32::from_rgb(0x2E, 0x2E, 0x3A) }
-        else         { Color32::from_rgb(0xE8, 0xE0, 0xD5) }
+        lerp_dark(
+            Color32::from_rgb(0xE8, 0xE0, 0xD5),
+            Color32::from_rgb(0x2E, 0x2E, 0x3A),
+        )
     }
     pub fn bg_selected() -> Color32 {
-        if is_dark() { Color32::from_rgb(0x35, 0x35, 0x5A) }
-        else         { Color32::from_rgb(0xDD, 0xD3, 0xC5) }
+        lerp_dark(
+            Color32::from_rgb(0xDD, 0xD3, 0xC5),
+            Color32::from_rgb(0x35, 0x35, 0x5A),
+        )
     }
     pub fn bg_input() -> Color32 {
-        if is_dark() { Color32::from_rgb(0x20, 0x20, 0x20) }
-        else         { Color32::from_rgb(0xEE, 0xE8, 0xDE) }
+        lerp_dark(
+            Color32::from_rgb(0xEE, 0xE8, 0xDE),
+            Color32::from_rgb(0x20, 0x20, 0x20),
+        )
     }
 
     /// 搜索框/输入框背景：强调色去饱和后的深/浅灰调
     /// 15% 强调色 + 85% 底色，保留微弱色彩倾向
     pub fn bg_search() -> Color32 {
-        let p = &ACCENT_PRESETS[accent_idx()];
-        let (r, g, b) = (p.r as u16, p.g as u16, p.b as u16);
-        if is_dark() {
-            let base = 0x1C_u16;
-            Color32::from_rgb(
-                ((r * 15 + base * 85) / 100) as u8,
-                ((g * 15 + base * 85) / 100) as u8,
-                ((b * 15 + base * 85) / 100) as u8,
-            )
-        } else {
+        let (r, g, b) = super::current_accent_rgb();
+        let (r, g, b) = (r as u16, g as u16, b as u16);
+        let light = {
             let base = 0xF2_u16;
             Color32::from_rgb(
                 ((r * 10 + base * 90) / 100) as u8,
                 ((g * 10 + base * 90) / 100) as u8,
                 ((b * 10 + base * 90) / 100) as u8,
             )
-        }
+        };
+        let dark = {
+            let base = 0x1C_u16;
+            Color32::from_rgb(
+                ((r * 15 + base * 85) / 100) as u8,
+                ((g * 15 + base * 85) / 100) as u8,
+                ((b * 15 + base * 85) / 100) as u8,
+            )
+        };
+        lerp_dark(light, dark)
     }
 
     // ── 边框 ────────────────────────────────────────────────────────────────
     pub fn border() -> Color32 {
-        if is_dark() { Color32::from_rgb(0x3A, 0x3A, 0x3A) }
-        else         { Color32::from_rgb(0xD4, 0xC8, 0xB8) }
+        lerp_dark(
+            Color32::from_rgb(0xD4, 0xC8, 0xB8),
+            Color32::from_rgb(0x3A, 0x3A, 0x3A),
+        )
     }
 
     // ── 骨架屏占位色 ────────────────────────────────────────────────────────
     pub fn skeleton_base() -> Color32 {
-        if is_dark() { Color32::from_gray(50) } else { Color32::from_gray(220) }
+        lerp_dark(Color32::from_gray(220), Color32::from_gray(50))
     }
     pub fn skeleton_line() -> Color32 {
-        if is_dark() { Color32::from_gray(43) } else { Color32::from_gray(215) }
+        lerp_dark(Color32::from_gray(215), Color32::from_gray(43))
     }
     pub fn skeleton_line_alt() -> Color32 {
-        if is_dark() { Color32::from_gray(55) } else { Color32::from_gray(225) }
+        lerp_dark(Color32::from_gray(225), Color32::from_gray(55))
     }
 
     // ── 状态色（固定）───────────────────────────────────────────────────────

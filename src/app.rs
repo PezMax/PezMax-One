@@ -1209,16 +1209,27 @@ impl eframe::App for PezMaxApp {
             );
         }
 
-        // 外观同步：每帧解析有效深色模式 + 强调色，变化时重新应用主题
+        // 外观同步：每帧解析有效深色模式 + 强调色，变化时触发过渡动画
         let effective_dark = match self.theme_mode {
             theme::ThemeMode::Light  => false,
             theme::ThemeMode::Dark   => true,
             theme::ThemeMode::System => theme::effective_dark(ctx),
         };
-        if theme::is_dark() != effective_dark || theme::accent_idx() != self.accent_idx {
-            theme::set_dark(effective_dark);
+
+        // 强调色变化 → 启动平滑过渡（MetroAnim 驱动 0.3s）
+        if theme::accent_idx() != self.accent_idx {
+            theme::start_accent_transition(self.accent_idx);
             theme::set_accent(self.accent_idx);
+        }
+        // 深色模式变化 → 启动平滑过渡（MetroAnim 驱动 0.3s）
+        if theme::is_dark() != effective_dark {
+            theme::start_dark_transition(effective_dark);
+            theme::set_dark(effective_dark);
+        }
+        // 任意过渡（强调色/深色）进行中 → 每帧刷新主题（颜色插值）并保持重绘
+        if theme::is_transitioning() || theme::is_dark_transitioning() {
             theme::apply_metro_theme(ctx);
+            ctx.request_repaint();
         }
 
         let dt = ctx.input(|i| i.stable_dt) as f64;
@@ -1232,6 +1243,8 @@ impl eframe::App for PezMaxApp {
         self.auth_anim.update(dt);
         self.search_hint_anim.update(dt);
         self.pdf_viewer.update_animations(dt);
+        theme::update_accent_transition(dt);
+        theme::update_dark_transition(dt);
         for toast in &mut self.toasts {
             toast.enter.update(dt);
             toast.exit.update(dt);
@@ -1345,6 +1358,7 @@ impl eframe::App for PezMaxApp {
             || !self.page_enter_anim.is_steady()
             || !self.auth_anim.is_steady()
             || !self.search_hint_anim.is_steady()
+            || theme::is_transitioning()
             || self.pdf_viewer.is_animating()
             || self.pdf_viewer.is_loading()
             || self.toasts.iter().any(|t| !t.enter.is_steady() || !t.exit.is_steady())
