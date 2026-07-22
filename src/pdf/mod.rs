@@ -13,7 +13,29 @@ use egui::{ColorImage, TextureHandle, TextureOptions, Vec2};
 use pdfium_render::prelude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::OnceLock;
+use std::thread;
 use tokio::sync::oneshot;
+
+/// pdfium 不是线程安全的——所有 FPDF_* 调用必须串行化。
+/// 使用 std::thread::spawn 而非 tokio::task::spawn_blocking，
+/// 避免占用 tokio blocking pool 导致 reqwest DNS 解析超时。
+fn pdfium_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+}
+
+/// 在独立线程中执行 pdfium 操作，不占用 tokio blocking pool。
+fn spawn_pdfium<F>(f: F)
+where
+    F: FnOnce() + Send + 'static,
+{
+    thread::Builder::new()
+        .name("pdfium-worker".into())
+        .spawn(f)
+        .ok();
+}
 
 // ── 常量 ──────────────────────────────────────────────────────────────────
 
@@ -35,7 +57,7 @@ const OVERVIEW_THUMB_WIDTH: f32 = 120.0;
 const OVERVIEW_PANEL_WIDTH: f32 = 150.0;
 
 /// 最大并发渲染数（避免 pdfium 同时加载过多文档导致崩溃）
-const MAX_CONCURRENT_RENDERS: usize = 3;
+const MAX_CONCURRENT_RENDERS: usize = 1;
 
 /// 视图模式
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -118,12 +140,14 @@ impl PdfEngine {
 
     /// 后台渲染一页 PDF：传入 PDF 字节 + 页码 + 缩放，返回 ColorImage
     /// 文档在后台线程内创建和销毁，无 lifetime 问题
+    /// 注意：pdfium 不是线程安全的，通过全局 Mutex 串行化所有渲染
     pub fn render_page(
         self: &Arc<Self>,
         pdf_bytes: Vec<u8>,
         page_idx: usize,
         scale: f32,
     ) -> Result<ColorImage, String> {
+        let _lock = pdfium_lock().lock().unwrap();
         let pdfium = self.inner.as_ref().ok_or("PDF 引擎未初始化")?;
         let doc = pdfium
             .load_pdf_from_byte_vec(pdf_bytes, None)
@@ -167,6 +191,7 @@ impl PdfEngine {
 
     /// 获取 PDF 页数（在后台线程执行）
     pub fn get_page_count(self: &Arc<Self>, pdf_bytes: Vec<u8>) -> Result<usize, String> {
+        let _lock = pdfium_lock().lock().unwrap();
         let pdfium = self.inner.as_ref().ok_or("PDF 引擎未初始化")?;
         let doc = pdfium
             .load_pdf_from_byte_vec(pdf_bytes, None)
@@ -179,6 +204,7 @@ impl PdfEngine {
         self: &Arc<Self>,
         pdf_bytes: Vec<u8>,
     ) -> Result<(f32, f32), String> {
+        let _lock = pdfium_lock().lock().unwrap();
         let pdfium = self.inner.as_ref().ok_or("PDF 引擎未初始化")?;
         let doc = pdfium
             .load_pdf_from_byte_vec(pdf_bytes, None)
@@ -370,7 +396,7 @@ impl PdfViewer {
         }
     }
 
-    /// 请求渲染所有页面的缩略图（限制并发数）
+    /// 请求渲染所有页面的缩略图（限制并发数，避免撑爆 tokio blocking pool 导致其他 HTTP 请求超时）
     fn request_all_thumbnails(&mut self, engine: &Arc<PdfEngine>, _ctx: &Context) {
         let bytes = match &self.pdf_bytes {
             Some(b) => b.clone(),
@@ -378,6 +404,7 @@ impl PdfViewer {
         };
         let page_width = self.page_width;
 
+        let mut spawned = 0;
         for i in 0..self.page_count {
             if self.thumbnails.contains_key(&i) {
                 continue;
@@ -385,12 +412,15 @@ impl PdfViewer {
             if self.pending_thumbnails.iter().any(|t| t.page_idx == i) {
                 continue;
             }
+            if spawned >= MAX_CONCURRENT_RENDERS {
+                break;
+            }
 
             let engine = engine.clone();
             let bytes = bytes.clone();
             let (tx, rx) = oneshot::channel();
 
-            tokio::spawn(async move {
+            spawn_pdfium(move || {
                 let result = engine.render_thumbnail(
                     bytes, i, THUMB_WIDTH, page_width,
                 );
@@ -400,7 +430,6 @@ impl PdfViewer {
                     }
                     Err(e) => {
                         log::error!("PDF thumbnail page {}: {}", i, e);
-                        // 发送占位图，避免 oneshot 永远不会被 resolve
                         let placeholder = ColorImage::new([2, 2], egui::Color32::from_gray(200));
                         tx.send((i, placeholder)).ok();
                     }
@@ -408,6 +437,7 @@ impl PdfViewer {
             });
 
             self.pending_thumbnails.push(ThumbnailTask { rx, page_idx: i });
+            spawned += 1;
         }
     }
 
@@ -439,7 +469,7 @@ impl PdfViewer {
         let scale = RENDER_SCALE * self.scale;
         let (tx, rx) = oneshot::channel();
 
-        tokio::spawn(async move {
+        spawn_pdfium(move || {
             let result = engine.render_page(bytes, page_idx, scale);
             match result {
                 Ok(img) => {
@@ -447,7 +477,6 @@ impl PdfViewer {
                 }
                 Err(e) => {
                     log::error!("PDF render page {}: {}", page_idx, e);
-                    // 发送灰色占位图，避免红色闪烁
                     let placeholder = ColorImage::new([2, 2], egui::Color32::from_gray(220));
                     tx.send((page_idx, placeholder)).ok();
                 }

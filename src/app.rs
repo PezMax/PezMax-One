@@ -1792,7 +1792,7 @@ impl eframe::App for PezMaxApp {
         egui::CentralPanel::default()
             .frame(egui::Frame::new()
                 .fill(theme::colors::bg_white())
-                .inner_margin(if preview_mode { egui::Margin::ZERO } else { egui::Margin::symmetric(20, 0) })
+                .inner_margin(if preview_mode && self.current_subsection == Subsection::ResourceManager { egui::Margin::ZERO } else { egui::Margin::symmetric(20, 0) })
                 .stroke(egui::Stroke::NONE),
             )
             .show(ctx, |ui| {

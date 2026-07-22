@@ -366,7 +366,7 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
         render_pdf_placeholder(ui, &file_name, &file_subject, &school_name, file_id, app);
     }
 
-    // ── 文件信息弹窗（Metro Design） ──────────────────────────
+    // ── 文件信息弹窗（固定尺寸，无动画） ──────────────────────
     if app.show_info_dialog {
         let size_str = if file_size > 0 {
             format!("{:.1} MB", file_size as f64 / 1048576.0)
@@ -374,35 +374,50 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
             "-".to_string()
         };
 
-        // 消除窗口阴影（Metro Design 无阴影）
-        let mut style = (*ui.ctx().style()).clone();
-        style.visuals.window_shadow = egui::Shadow::NONE;
-        ui.ctx().set_style(style);
-
         egui::Window::new("文件信息")
             .collapsible(false)
             .resizable(false)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .fixed_size(egui::vec2(380.0, 280.0))
+            .title_bar(false)
+            .frame(egui::Frame::new()
+                .fill(colors::bg_card())
+                .corner_radius(egui::CornerRadius::ZERO)
+                .stroke(egui::Stroke::new(1.0, colors::border())))
             .show(ui.ctx(), |ui| {
-                ui.set_min_width(360.0);
-
-                let info_rect = ui.available_rect_before_wrap();
-
-                // 左侧强调色条（Metro Design 标志）
-                let accent_bar = egui::Rect::from_min_size(
-                    egui::pos2(info_rect.left() - ui.style().spacing.window_margin.left as f32, info_rect.top()),
-                    egui::vec2(3.0, ui.min_rect().height().max(260.0)),
+                // 左侧强调色条
+                ui.painter().rect_filled(
+                    egui::Rect::from_min_size(
+                        ui.max_rect().left_top(),
+                        egui::vec2(3.0, ui.max_rect().height()),
+                    ),
+                    egui::CornerRadius::ZERO,
+                    colors::primary(),
                 );
-                ui.painter().rect_filled(accent_bar, egui::CornerRadius::ZERO, colors::primary());
 
-                ui.vertical_centered(|ui| {
+                ui.add_space(16.0);
+                ui.horizontal(|ui| {
                     ui.add_space(8.0);
                     ui.label(
-                        egui::RichText::new("📄")
-                            .font(FontId::new(36.0, egui::FontFamily::Proportional)),
+                        egui::RichText::new("📄 文件信息")
+                            .font(FontId::new(16.0, egui::FontFamily::Proportional))
+                            .color(colors::text_primary()),
                     );
-                    ui.add_space(10.0);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let close_btn = egui::Button::new(
+                            egui::RichText::new("✕")
+                                .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                                .color(colors::text_secondary()),
+                        )
+                        .fill(egui::Color32::TRANSPARENT)
+                        .stroke(egui::Stroke::NONE)
+                        .min_size(egui::vec2(24.0, 24.0));
+                        if ui.add(close_btn).clicked() {
+                            app.show_info_dialog = false;
+                        }
+                    });
                 });
+                ui.add_space(12.0);
 
                 let info_rows: &[(&str, &str)] = &[
                     ("文件名", &file_name),
@@ -415,7 +430,7 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 
                 for (key, val) in info_rows {
                     ui.horizontal(|ui| {
-                        ui.add_space(20.0);
+                        ui.add_space(24.0);
                         ui.label(
                             egui::RichText::new(format!("{}:", key))
                                 .font(FontId::new(12.0, egui::FontFamily::Proportional))
@@ -428,13 +443,12 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                 .color(colors::text_primary()),
                         );
                     });
-                    ui.add_space(5.0);
+                    ui.add_space(6.0);
                 }
 
-                ui.add_space(12.0);
-
-                // 关闭按钮 — Metro 纯色块风格
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.add_space(16.0);
+                ui.horizontal_centered(|ui| {
+                    ui.add_space(ui.available_width() * 0.25);
                     let close_btn = egui::Button::new(
                         egui::RichText::new("  关闭  ")
                             .font(FontId::new(14.0, egui::FontFamily::Proportional))
@@ -448,13 +462,7 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                         app.show_info_dialog = false;
                     }
                 });
-                ui.add_space(4.0);
             });
-
-        // 恢复窗口阴影（避免影响其他窗口）
-        let mut style = (*ui.ctx().style()).clone();
-        style.visuals.window_shadow = egui::Shadow::default();
-        ui.ctx().set_style(style);
     }
 
     // ── 举报对话框 ────────────────────────────────────────
@@ -1604,21 +1612,7 @@ fn file_row(ui: &mut egui::Ui, file: &PaperFile, app: &PezMaxApp) -> bool {
                     );
                     ui.add_space(10.0);
                 });
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.add_space(14.0);
-                    if ui.small_button("⭐ 收藏").clicked() {
-                        let api = app.api.clone();
-                        let fid = file.file_id;
-                        let uid = app.current_user.as_ref().map(|u| u.user_id).unwrap_or(0);
-                        tokio::spawn(async move { let _ = api.add_favorite(uid, fid).await; });
-                    }
-                    ui.add_space(6.0);
-                    if ui.small_button("📥 下载").clicked() {
-                        let api = app.api.clone();
-                        let fid = file.file_id;
-                        tokio::spawn(async move { let _ = api.download_paper(fid).await; });
-                    }
-                });
+                // 列表项不再显示下载/收藏按钮，仅在内部预览面板操作
             });
         })
         .response
