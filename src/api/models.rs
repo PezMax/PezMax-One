@@ -200,7 +200,8 @@ pub struct FileTreeNode {
 }
 
 /// 书签
-/// 后端返回: id, title, description, resourceType, coverImage, createBy, createTime, collection
+/// 后端返回: id, title, description, url, resourceType, coverImage, createBy, createTime,
+///            collection, subject, remark, status
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Bookmark {
@@ -211,8 +212,10 @@ pub struct Bookmark {
     #[serde(default, deserialize_with = "null_to_default")]
     pub description: String,
     #[serde(default, deserialize_with = "null_to_default")]
+    pub url: String,
+    #[serde(default, deserialize_with = "null_to_default")]
     pub resource_type: String,
-    #[serde(rename = "coverImage", default, deserialize_with = "null_to_default")]
+    #[serde(rename = "coverImage", alias = "cover_image", default, deserialize_with = "null_to_default")]
     pub cover_url: String,
     #[serde(default, deserialize_with = "null_to_default")]
     pub create_by: String,
@@ -220,6 +223,10 @@ pub struct Bookmark {
     pub create_time: String,
     #[serde(default, deserialize_with = "null_to_default")]
     pub collection: String,
+    #[serde(default, deserialize_with = "null_to_default")]
+    pub subject: String,
+    #[serde(default, deserialize_with = "null_to_default")]
+    pub remark: String,
     #[serde(default, deserialize_with = "null_to_default")]
     pub status: i64,
 }

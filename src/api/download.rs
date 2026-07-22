@@ -51,4 +51,15 @@ impl ApiClient {
         ];
         self.get(&format!("/datum/desktop/bookmark/favorite/list/{}", user_id), Some(query)).await
     }
+
+    /// 新增书签收藏
+    pub async fn add_bookmark_favorite(&self, user_id: i64, bookmark_id: i64) -> Result<ApiResponse<serde_json::Value>> {
+        let body = serde_json::json!({ "bookmarkId": bookmark_id, "userId": user_id });
+        self.post("/datum/bookmark/favorite", &body).await
+    }
+
+    /// 删除书签收藏
+    pub async fn remove_bookmark_favorite(&self, user_id: i64, bookmark_id: i64) -> Result<ApiResponse<serde_json::Value>> {
+        self.delete(&format!("/datum/desktop/bookmark/favorite/{}/{}", user_id, bookmark_id)).await
+    }
 }

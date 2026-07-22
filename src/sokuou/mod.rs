@@ -8,6 +8,7 @@ pub mod animator;
 pub mod easing;
 pub mod progress;
 pub mod spring;
+pub mod uwp;
 
 pub use animator::{Animation, Animator};
 pub use easing::{
@@ -15,6 +16,7 @@ pub use easing::{
 };
 pub use progress::Progress;
 pub use spring::SpringAnim;
+pub use uwp::{EasingMode, MetroAnim, UwpEasing};
 
 /// 将 progress [0.0, 1.0] 映射到任意值域 [from, to]。
 ///

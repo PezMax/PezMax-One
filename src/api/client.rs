@@ -236,7 +236,14 @@ impl ApiClient {
         }
         let token = self.get_token().await;
         let full_url = if url.starts_with("http://") || url.starts_with("https://") {
-            url.to_string()
+            // 替换 Docker 内部主机名（如 http://minio:9000/...）为公网后端地址
+            // 使用纯字符串替换，避免 url::Url::parse 对中文路径进行解码
+            // 参考 Electron 版 normalizeFileUrl 的逻辑
+            let rewritten = url
+                .replace("minio:9000", "154.8.139.48:8080")
+                .replace("localhost:9000", "154.8.139.48:8080")
+                .replace("127.0.0.1:9000", "154.8.139.48:8080");
+            rewritten
         } else {
             format!("{}{}", self.base_url, url)
         };
@@ -247,5 +254,10 @@ impl ApiClient {
             .send()
             .await?;
         Ok(resp.bytes().await?.to_vec())
+    }
+
+    /// 下载任意 URL 的原始字节（别名，供封面图等使用）
+    pub async fn download_bytes(&self, url: &str) -> anyhow::Result<Vec<u8>> {
+        self.download_raw_url(url).await
     }
 }

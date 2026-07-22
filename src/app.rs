@@ -36,6 +36,12 @@ fn avatar_cache_dir() -> std::path::PathBuf {
     dir
 }
 
+fn bookmark_cover_cache_dir() -> std::path::PathBuf {
+    let dir = get_data_dir().join("bookmark_cover_cache");
+    let _ = std::fs::create_dir_all(&dir);
+    dir
+}
+
 fn credentials_path() -> std::path::PathBuf {
     get_data_dir().join("credentials.json")
 }
@@ -391,9 +397,26 @@ pub struct PezMaxApp {
     pub toasts: Vec<AnimatedToast>,
     pub unread_notifications: i32,
 
-    // 书签创建表单
+    // 书签
+    pub selected_bookmark: Option<Bookmark>,
+    pub bookmark_detail_anim: SpringAnim,
     pub bookmark_form_name: String,
     pub bookmark_form_url: String,
+    pub bookmark_form_resource_type: String,
+    pub bookmark_form_collection: String,
+    pub bookmark_form_subject: String,
+    pub bookmark_form_description: String,
+    pub bookmark_edit_target: Option<Bookmark>, // Some=编辑模式, None=新建模式
+    pub show_bookmark_form: bool,
+    pub favorite_bookmark_ids: HashSet<i64>,       // 已收藏的书签 ID
+    pub bookmark_fav_data: Vec<(i64, bool)>,        // (bookmark_id, is_add) 待处理的收藏操作
+    pub bookmark_favorite_ids_rx: Option<oneshot::Receiver<anyhow::Result<HashSet<i64>>>>,
+    pub bookmark_cover_textures: HashMap<i64, egui::TextureHandle>,  // 书签封面纹理缓存
+    pub bookmark_cover_requested: HashSet<i64>,                 // 已请求封面的书签
+    pub bookmark_cover_rx: Option<tokio::sync::oneshot::Receiver<anyhow::Result<Vec<u8>>>>,
+    pub bookmark_cover_pending_id: Option<i64>,                 // 当前等待中的封面请求 ID
+    pub bookmark_cover_bulk_rx: Option<tokio::sync::mpsc::UnboundedReceiver<(i64, anyhow::Result<Vec<u8>>)>>,
+    pub bookmark_covers_triggered: bool,  // 防止每帧重复创建封面加载通道
 
     // 贡献文件元数据表单
     pub contribute_subject: String,
@@ -522,6 +545,8 @@ impl PezMaxApp {
             selected_file: None,
             preview_visible: false,
             preview_anim: SpringAnim::new(0.4, 0.8, 0.0),
+            selected_bookmark: None,
+            bookmark_detail_anim: SpringAnim::new(0.4, 0.8, 0.0),
             browse_selected_idx: None,
             page_enter_anim: SpringAnim::new(0.4, 0.8, 1.0), // 初始稳态
             auth_anim: {
@@ -533,6 +558,21 @@ impl PezMaxApp {
             unread_notifications: 0,
             bookmark_form_name: String::new(),
             bookmark_form_url: String::new(),
+            bookmark_form_resource_type: String::new(),
+            bookmark_form_collection: String::new(),
+            bookmark_form_subject: String::new(),
+            bookmark_form_description: String::new(),
+            bookmark_edit_target: None,
+            show_bookmark_form: false,
+            favorite_bookmark_ids: HashSet::new(),
+            bookmark_fav_data: Vec::new(),
+            bookmark_favorite_ids_rx: None,
+            bookmark_cover_textures: HashMap::new(),
+            bookmark_cover_requested: HashSet::new(),
+            bookmark_cover_rx: None,
+            bookmark_cover_pending_id: None,
+            bookmark_cover_bulk_rx: None,
+            bookmark_covers_triggered: false,
             contribute_subject: String::new(),
             contribute_school: String::new(),
             contribute_year: String::new(),
@@ -641,6 +681,7 @@ impl PezMaxApp {
         self.trigger_load_user_stats();
         self.trigger_load_recent_files();
         self.trigger_load_favorite_ids();
+        self.trigger_load_bookmark_favorite_ids();
         // 加载头像
         self.trigger_load_avatar();
     }
@@ -917,6 +958,25 @@ impl PezMaxApp {
         self.favorite_ids_rx = Some(rx);
     }
 
+    /// 异步加载书签收藏 ID 集合（用于列表星标状态）
+    pub fn trigger_load_bookmark_favorite_ids(&mut self) {
+        let api = self.api.clone();
+        let user_id = self.current_user.as_ref().map(|u| u.user_id).unwrap_or(0);
+        if user_id == 0 {
+            return;
+        }
+        let (tx, rx) = oneshot::channel();
+        tokio::spawn(async move {
+            let params = PageParams { page_num: 1, page_size: 200, ..Default::default() };
+            let result = match api.get_bookmark_favorite_list(user_id, &params).await {
+                Ok(resp) => Ok(resp.rows.into_iter().map(|r| r.bookmark_id).collect::<std::collections::HashSet<i64>>()),
+                Err(e) => Err(e),
+            };
+            tx.send(result).ok();
+        });
+        self.bookmark_favorite_ids_rx = Some(rx);
+    }
+
     /// 异步加载上传排行榜
     pub fn trigger_load_user_rank(&mut self) {
         let api = self.api.clone();
@@ -1064,6 +1124,29 @@ impl PezMaxApp {
         // 所有解码方式都失败
         self.rank_avatar_failed.insert(user_id);
         false
+    }
+
+    /// 处理书签封面下载结果
+    fn process_bookmark_cover_result(&mut self, ctx: &egui::Context, bookmark_id: i64, bytes: &[u8]) {
+        log::info!("处理书签封面 {}, {} bytes", bookmark_id, bytes.len());
+        match image::load_from_memory(bytes) {
+            Ok(img) => {
+                let rgba = img.to_rgba8();
+                let (w, h) = rgba.dimensions();
+                if w > 0 && h > 0 {
+                    let pixels = rgba.into_raw();
+                    let color_image = egui::ColorImage::from_rgba_unmultiplied(
+                        [w as usize, h as usize], &pixels,
+                    );
+                    let tex_name = format!("bookmark_cover_{}", bookmark_id);
+                    let tex = ctx.load_texture(&tex_name, color_image, egui::TextureOptions::LINEAR);
+                    self.bookmark_cover_textures.insert(bookmark_id, tex);
+                }
+            }
+            Err(e) => {
+                log::info!("书签封面解码失败 (bookmark={}): {}", bookmark_id, e);
+            }
+        }
     }
 
     /// 异步加载我的举报列表
@@ -1239,6 +1322,7 @@ impl eframe::App for PezMaxApp {
         self.sidebar_indicator_anim.update(dt);
         self.subtab_indicator_anim.update(dt);
         self.preview_anim.update(dt);
+        self.bookmark_detail_anim.update(dt);
         self.page_enter_anim.update(dt);
         self.auth_anim.update(dt);
         self.search_hint_anim.update(dt);
@@ -1300,6 +1384,21 @@ impl eframe::App for PezMaxApp {
             }
         }
 
+        // 轮询书签收藏 ID 列表加载结果
+        if let Some(rx) = &mut self.bookmark_favorite_ids_rx {
+            if let Ok(result) = rx.try_recv() {
+                self.bookmark_favorite_ids_rx = None;
+                match result {
+                    Ok(ids) => {
+                        self.favorite_bookmark_ids = ids;
+                    }
+                    Err(e) => {
+                        log::info!("书签收藏 ID 列表加载失败: {}", e);
+                    }
+                }
+            }
+        }
+
         // 轮询排行头像下载结果（先收集再处理，避免双重 mutable borrow）
         let mut results: Vec<(i64, Vec<u8>)> = Vec::new();
         if let Some(rx) = &mut self.rank_avatar_rx {
@@ -1312,6 +1411,43 @@ impl eframe::App for PezMaxApp {
         }
         for (user_id, bytes) in results {
             self.process_rank_avatar_result(ctx, user_id, bytes);
+        }
+
+        // 轮询书签封面加载结果（详情页）
+        if let Some(rx) = &mut self.bookmark_cover_rx {
+            if let Ok(result) = rx.try_recv() {
+                let pending_id = self.bookmark_cover_pending_id.take();
+                self.bookmark_cover_rx = None;
+                match result {
+                    Ok(bytes) => {
+                        if let Some(id) = pending_id {
+                            self.process_bookmark_cover_result(ctx, id, &bytes);
+                        }
+                    }
+                    Err(e) => {
+                        log::info!("书签封面加载失败: {}", e);
+                    }
+                }
+            }
+        }
+
+        // 轮询书签封面批量加载结果（列表页，mpsc channel）
+        // 先收集再处理，避免双重可变借用
+        {
+            let mut cover_results: Vec<(i64, Vec<u8>)> = Vec::new();
+            if let Some(rx) = &mut self.bookmark_cover_bulk_rx {
+                while let Ok((id, result)) = rx.try_recv() {
+                    match result {
+                        Ok(bytes) => cover_results.push((id, bytes)),
+                        Err(e) => {
+                            log::info!("书签封面加载失败 (bookmark={}): {}", id, e);
+                        }
+                    }
+                }
+            }
+            for (id, bytes) in cover_results {
+                self.process_bookmark_cover_result(ctx, id, &bytes);
+            }
         }
 
         // 更新 GIF 动图帧
@@ -1355,6 +1491,7 @@ impl eframe::App for PezMaxApp {
             || !self.sidebar_indicator_anim.is_steady()
             || !self.subtab_indicator_anim.is_steady()
             || !self.preview_anim.is_steady()
+            || !self.bookmark_detail_anim.is_steady()
             || !self.page_enter_anim.is_steady()
             || !self.auth_anim.is_steady()
             || !self.search_hint_anim.is_steady()
@@ -1364,6 +1501,8 @@ impl eframe::App for PezMaxApp {
             || self.toasts.iter().any(|t| !t.enter.is_steady() || !t.exit.is_steady())
             || self.avatar_load_rx.is_some()
             || self.rank_avatar_rx.is_some()
+            || self.bookmark_cover_rx.is_some()
+            || self.bookmark_cover_bulk_rx.is_some()
             || self.rank_avatar_delays.values().any(|d| d.len() > 1)
         {
             ctx.request_repaint();
@@ -1462,6 +1601,73 @@ impl eframe::App for PezMaxApp {
             self.subjects_data.poll();
             self.schools_data.poll();
             self.bookmarks_data.poll();
+            // 如果书签数据被重置，也重置封面加载标记
+            // 如果书签数据被重置，也重置封面加载标记
+            if !self.bookmarks_data.is_loading() && !self.bookmarks_data.is_loaded() {
+                self.bookmark_covers_triggered = false;
+            }
+            // 书签数据加载完成后，触发封面加载（仅一次）
+            if self.bookmarks_data.is_loaded() && !self.bookmark_covers_triggered {
+                self.bookmark_covers_triggered = true;
+                let bookmarks = self.bookmarks_data.data.clone();
+                if let Some(ref list) = bookmarks {
+                    log::info!("触发书签封面加载: {} 条书签", list.len());
+                    let cache_dir = bookmark_cover_cache_dir();
+                    let (tx, rx) = mpsc::unbounded_channel();
+                    for bm in list {
+                        if !bm.cover_url.is_empty()
+                            && !self.bookmark_cover_requested.contains(&bm.id)
+                        {
+                            self.bookmark_cover_requested.insert(bm.id);
+                            let api = self.api.clone();
+                            let id = bm.id;
+                            let url = bm.cover_url.clone();
+                            let txc = tx.clone();
+                            let cache_path = cache_dir.join(format!("bm_cover_{}.cache", id));
+                            log::info!("书签 {} 封面URL: {}", id, url);
+                            tokio::spawn(async move {
+                                // 优先读磁盘缓存
+                                if cache_path.exists() {
+                                    if let Ok(cached) = std::fs::read(&cache_path) {
+                                        if !cached.is_empty() {
+                                            log::info!("书签 {} 封面命中磁盘缓存 ({} bytes)", id, cached.len());
+                                            let _ = txc.send((id, Ok(cached)));
+                                            return;
+                                        }
+                                    }
+                                }
+                                let result = api.download_bytes(&url).await;
+                                // 成功后写磁盘缓存
+                                if let Ok(ref bytes) = result {
+                                    if !bytes.is_empty() {
+                                        let _ = std::fs::write(&cache_path, bytes);
+                                        log::info!("书签 {} 封面下载成功 {} bytes, 已缓存", id, bytes.len());
+                                    }
+                                } else if let Err(ref e) = result {
+                                    log::info!("书签 {} 封面下载失败: {}", id, e);
+                                }
+                                let _ = txc.send((id, result));
+                            });
+                        }
+                    }
+                    drop(tx);
+                    self.bookmark_cover_bulk_rx = Some(rx);
+                }
+            }
+            // 处理书签收藏队列
+            {
+                let user_id = self.current_user.as_ref().map(|u| u.user_id).unwrap_or(0);
+                for (bookmark_id, is_add) in std::mem::take(&mut self.bookmark_fav_data) {
+                    let api = self.api.clone();
+                    tokio::spawn(async move {
+                        if is_add {
+                            let _ = api.add_bookmark_favorite(user_id, bookmark_id).await;
+                        } else {
+                            let _ = api.remove_bookmark_favorite(user_id, bookmark_id).await;
+                        }
+                    });
+                }
+            }
             self.favorites_data.poll();
             self.user_rank_data.poll();
             // 排行榜数据加载完成后，触发头像加载
