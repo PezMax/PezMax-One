@@ -139,47 +139,9 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                 ui.painter().rect_filled(bar, egui::CornerRadius::ZERO, colors::primary());
             }
 
-            // ── 底部：退出登录 ────────────────────────────────────
+            // ── 底部 ────────────────────────────────────────
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                 ui.add_space(8.0);
-                let logout = Frame::new()
-                    .corner_radius(CornerRadius::same(0))
-                    .show(ui, |ui| {
-                        ui.set_min_width(width);
-                        ui.horizontal(|ui| {
-                            ui.add_space(13.0);
-                            ui.label(
-                                egui::RichText::new("🔓")
-                                    .font(egui::FontId::new(20.0, egui::FontFamily::Proportional))
-                                    .color(sidebar_fg_muted),
-                            );
-                            if label_alpha > 0.0 {
-                                ui.add_space(10.0 + label_offset);
-                                ui.set_opacity(label_alpha);
-                                ui.label(
-                                    egui::RichText::new("退出登录")
-                                        .font(egui::FontId::new(
-                                            14.0,
-                                            egui::FontFamily::Proportional,
-                                        ))
-                                        .color(sidebar_fg_muted),
-                                );
-                            }
-                        });
-                        ui.add_space(4.0);
-                    })
-                    .response
-                    .interact(egui::Sense::click())
-                    .on_hover_cursor(egui::CursorIcon::PointingHand);
-
-                let logout_clicked = logout.clicked();
-                if label_alpha < 0.5 {
-                    logout.on_hover_text("退出登录");
-                }
-
-                if logout_clicked {
-                    app.logout();
-                }
             });
         });
 }

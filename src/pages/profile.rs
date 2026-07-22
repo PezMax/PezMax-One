@@ -297,6 +297,67 @@ fn render_account_settings_list(app: &mut PezMaxApp, ui: &mut egui::Ui) {
             app.account_edit_section = AccountEditSection::Password;
         }
     });
+
+    ui.add_space(12.0);
+
+    // ── 退出登录 ─────────────────────────────────────
+    let (rect, _) = ui.allocate_exact_size(
+        Vec2::new(ui.available_width(), 64.0),
+        egui::Sense::hover(),
+    );
+    ui.painter().rect_filled(rect, CornerRadius::ZERO, colors::bg_card());
+    ui.painter().rect_stroke(
+        rect,
+        CornerRadius::ZERO,
+        Stroke::new(1.0, colors::border()),
+        StrokeKind::Outside,
+    );
+    // 左边缘 3px 强调色条
+    ui.painter().rect_filled(
+        Rect::from_min_max(pos2(rect.left(), rect.top()), pos2(rect.left() + 3.0, rect.bottom())),
+        CornerRadius::ZERO,
+        colors::primary(),
+    );
+
+    // 左侧：标签 + 描述
+    let left_rect = Rect::from_min_max(
+        pos2(rect.left() + 20.0, rect.top() + 6.0),
+        pos2(rect.right() - 76.0, rect.bottom()),
+    );
+    ui.allocate_ui_at_rect(left_rect, |ui| {
+        ui.label(
+            egui::RichText::new("退出登录")
+                .font(FontId::new(15.0, egui::FontFamily::Proportional))
+                .color(colors::text_primary()),
+        );
+        ui.label(
+            egui::RichText::new("退出当前账号，返回登录页面")
+                .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                .color(colors::text_secondary()),
+        );
+    });
+
+    // 右侧：退出按钮
+    let btn_rect = Rect::from_min_size(
+        pos2(rect.right() - 70.0, rect.top() + 14.0),
+        Vec2::new(60.0, 28.0),
+    );
+    ui.allocate_ui_at_rect(btn_rect, |ui| {
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let btn = egui::Button::new(
+                egui::RichText::new("退出")
+                    .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                    .color(colors::primary()),
+            )
+            .fill(Color32::TRANSPARENT)
+            .corner_radius(CornerRadius::ZERO)
+            .min_size(Vec2::new(56.0, 28.0))
+            .stroke(Stroke::new(1.0, colors::primary()));
+            if ui.add(btn).clicked() {
+                app.logout();
+            }
+        });
+    });
 }
 
 /// 设置项卡片行（带左强调色条 + 标签 + 左侧内容 + 右侧按钮）
