@@ -294,6 +294,45 @@ pub struct PezMaxApp {
     pub login_rx: Option<oneshot::Receiver<anyhow::Result<LoginResult>>>,
     pub auto_login_rx: Option<oneshot::Receiver<anyhow::Result<(UserInfo, String)>>>,
 
+    // 注册流程（4 步：账号密码 → 3 个密保 → 昵称 → 验证码 & 免责声明）
+    pub register_step: i32,
+    pub register_username: String,
+    pub register_password: String,
+    pub register_confirm_password: String,
+    pub register_nickname: String,
+    pub register_captcha: String,
+    pub register_captcha_uuid: String,
+    pub register_captcha_img: String,
+    pub register_captcha_texture: Option<egui::TextureHandle>,
+    pub register_captcha_enabled: bool,
+    pub register_security_questions: Vec<SecurityQuestion>,
+    pub register_loading: bool,
+    pub register_error: String,
+    pub register_disclaimer_open: bool,
+    pub register_disclaimer_countdown: crate::sokuou::Progress,
+    pub register_captcha_rx: Option<oneshot::Receiver<anyhow::Result<CaptchaResponse>>>,
+    pub register_rx: Option<oneshot::Receiver<anyhow::Result<()>>>,
+
+    // 找回密码流程（3 步：用户名+验证码 → 三个密保答题 → 新密码）
+    pub forget_step: i32,
+    pub forget_username: String,
+    pub forget_captcha: String,
+    pub forget_captcha_uuid: String,
+    pub forget_captcha_img: String,
+    pub forget_captcha_texture: Option<egui::TextureHandle>,
+    pub forget_captcha_enabled: bool,
+    pub forget_questions: Vec<SecurityQuestion>, // question 从后端拿，answer 用户填
+    pub forget_new_password: String,
+    pub forget_confirm_password: String,
+    pub forget_loading: bool,
+    pub forget_error: String,
+    pub forget_captcha_rx: Option<oneshot::Receiver<anyhow::Result<CaptchaResponse>>>,
+    pub forget_questions_rx: Option<oneshot::Receiver<anyhow::Result<Vec<SecurityQuestion>>>>,
+    pub forget_reset_rx: Option<oneshot::Receiver<anyhow::Result<()>>>,
+
+    // Auth 步骤指示器动画（0..=3）
+    pub auth_step_anim: SpringAnim,
+
     // 异步数据加载器
     pub notifications: AsyncData<Vec<Notification>>,
     pub download_records: AsyncData<Vec<DownloadRecord>>,
@@ -396,11 +435,34 @@ pub struct PezMaxApp {
     pub contribute_school: String,
     pub contribute_year: String,
     pub contribute_file_path: Option<String>,
+    // 从选中文件解析出的元数据
+    pub contribute_file_name: Option<String>,
+    pub contribute_file_format: Option<String>,
+    pub contribute_file_size: Option<u64>,
+    // 上传流程 rx & 进度动画
+    pub contribute_upload_rx: Option<oneshot::Receiver<anyhow::Result<PaperFile>>>,
+    pub contribute_uploading: bool,
 
-    // 举报表单
-    pub report_content: String,
-    pub report_type: String,
+    // 举报对话框（新 · 覆盖旧的 report_content/report_type）
+    pub report_content: String,           // 保留：旧 UI 兼容，后续移除
+    pub report_type: String,              // 保留：旧 UI 兼容，后续移除
     pub show_report_dialog: bool,
+    pub report_target_file_id: Option<i64>,
+    pub report_target_user_id: Option<i64>,
+    pub report_target_file_name: String,
+    pub report_reason: String,
+    pub report_remark: String,
+    pub report_submit_rx: Option<oneshot::Receiver<anyhow::Result<()>>>,
+
+    // 举报记录：分页 + 状态筛选 + 时间线弹窗
+    pub report_status_filter: Option<i64>, // 0/1/2/3/None
+    pub report_page_num: i64,
+    pub report_has_more: bool,
+    pub selected_report_id: Option<i64>,
+    pub show_report_timeline: bool,
+    pub report_timeline_data: Option<serde_json::Value>,
+    pub report_timeline_rx: Option<oneshot::Receiver<anyhow::Result<serde_json::Value>>>,
+    pub report_timeline_anim: SpringAnim,
 
     // 设置开关
     pub setting_auto_launch: bool,
@@ -460,6 +522,15 @@ pub struct PezMaxApp {
     pub account_edit_success: String,
     pub account_edit_message_timer: f32,
 
+    // 密码 / 密保编辑的 2 步验证网关
+    pub password_verify_step: u8, // 0=verify old, 1=set new
+    pub password_verify_rx: Option<oneshot::Receiver<anyhow::Result<bool>>>,
+    pub security_verify_step: u8, // 0=verify password → 1=edit
+    pub security_preload_rx: Option<oneshot::Receiver<anyhow::Result<Vec<SecurityQuestion>>>>,
+
+    // 通知已读集合（客户端持久化）
+    pub read_notification_ids: HashSet<i64>,
+
     // PDF 引擎（全局单例，Arc<Sync>）
     pub pdf_engine: Arc<PdfEngine>,
     // PDF 查看器（当前打开的 PDF 文档状态）
@@ -500,6 +571,48 @@ impl PezMaxApp {
             captcha_rx: None,
             login_rx: None,
             auto_login_rx: None,
+
+            // 注册流程默认
+            register_step: 1,
+            register_username: String::new(),
+            register_password: String::new(),
+            register_confirm_password: String::new(),
+            register_nickname: String::new(),
+            register_captcha: String::new(),
+            register_captcha_uuid: String::new(),
+            register_captcha_img: String::new(),
+            register_captcha_texture: None,
+            register_captcha_enabled: true,
+            register_security_questions: vec![
+                SecurityQuestion { question: String::new(), answer: String::new() },
+                SecurityQuestion { question: String::new(), answer: String::new() },
+                SecurityQuestion { question: String::new(), answer: String::new() },
+            ],
+            register_loading: false,
+            register_error: String::new(),
+            register_disclaimer_open: false,
+            register_disclaimer_countdown: Progress::with_easing(1.0, Easing::Linear),
+            register_captcha_rx: None,
+            register_rx: None,
+
+            // 找回密码流程默认
+            forget_step: 1,
+            forget_username: String::new(),
+            forget_captcha: String::new(),
+            forget_captcha_uuid: String::new(),
+            forget_captcha_img: String::new(),
+            forget_captcha_texture: None,
+            forget_captcha_enabled: true,
+            forget_questions: vec![],
+            forget_new_password: String::new(),
+            forget_confirm_password: String::new(),
+            forget_loading: false,
+            forget_error: String::new(),
+            forget_captcha_rx: None,
+            forget_questions_rx: None,
+            forget_reset_rx: None,
+
+            auth_step_anim: SpringAnim::new(0.3, 0.85, 0.0),
 
             notifications: AsyncData::new(),
             download_records: AsyncData::new(),
@@ -583,9 +696,28 @@ impl PezMaxApp {
             contribute_school: String::new(),
             contribute_year: String::new(),
             contribute_file_path: None,
+            contribute_file_name: None,
+            contribute_file_format: None,
+            contribute_file_size: None,
+            contribute_upload_rx: None,
+            contribute_uploading: false,
             report_content: String::new(),
             report_type: String::new(),
             show_report_dialog: false,
+            report_target_file_id: None,
+            report_target_user_id: None,
+            report_target_file_name: String::new(),
+            report_reason: String::new(),
+            report_remark: String::new(),
+            report_submit_rx: None,
+            report_status_filter: None,
+            report_page_num: 1,
+            report_has_more: true,
+            selected_report_id: None,
+            show_report_timeline: false,
+            report_timeline_data: None,
+            report_timeline_rx: None,
+            report_timeline_anim: SpringAnim::new(0.4, 0.8, 0.0),
             show_about_dialog: false,
             setting_auto_launch: settings.setting_auto_launch,
             setting_silent_download: settings.setting_silent_download,
@@ -624,6 +756,13 @@ impl PezMaxApp {
             account_edit_success: String::new(),
             account_edit_message_timer: 0.0,
 
+            password_verify_step: 0,
+            password_verify_rx: None,
+            security_verify_step: 0,
+            security_preload_rx: None,
+
+            read_notification_ids: cache_manager.load_read_notifications(),
+
             pdf_engine,
             pdf_viewer: PdfViewer::new(),
             pdf_loading: false,
@@ -649,6 +788,12 @@ impl PezMaxApp {
         if let Some(creds) = self.cache_manager.load_credentials() {
             self.login_username = creds.username;
             self.login_remember = creds.remember_me;
+            // 记住我时把混淆密码解密回填，用户回到登录页可看到已填
+            if let Some(cipher) = &creds.password_encrypted {
+                if let Some(plain) = crate::api::crypto::deobfuscate(cipher) {
+                    self.login_password = plain;
+                }
+            }
             // 设置 token 并异步验证
             let api = self.api.clone();
             let saved_token = creds.token.clone();
@@ -680,10 +825,15 @@ impl PezMaxApp {
         self.page_enter_anim = SpringAnim::with_target(0.4, 0.8, 0.0, 0.0, 1.0);
         self.sidebar_indicator_anim.set_target(0.0); // Home
 
-        // 保存凭证（如果勾选了"记住我"）
+        // 保存凭证（如果勾选了"记住我"，同时混淆保存密码用于下次自动填充）
         if self.login_remember {
             if let Some(ref token) = self.token {
-                self.cache_manager.save_credentials(token, &self.login_username, true);
+                self.cache_manager.save_credentials(
+                    token,
+                    &self.login_username,
+                    true,
+                    Some(&self.login_password),
+                );
             }
         } else {
             self.cache_manager.clear_credentials();
@@ -786,6 +936,315 @@ impl PezMaxApp {
 
             tx.send(result).ok();
         });
+    }
+
+    // ── 注册流程 triggers ────────────────────────────────────────
+
+    /// 独立于 login 的注册页验证码加载
+    pub fn trigger_register_captcha(&mut self) {
+        if self.register_captcha_rx.is_some() { return; }
+        let api = self.api.clone();
+        let (tx, rx) = oneshot::channel();
+        self.register_captcha_rx = Some(rx);
+        tokio::spawn(async move {
+            let result = api.get_captcha().await.and_then(|resp| {
+                resp.data.ok_or_else(|| anyhow::anyhow!("验证码为空"))
+            });
+            tx.send(result).ok();
+        });
+    }
+
+    /// 提交注册
+    pub fn trigger_register(&mut self) {
+        if self.register_loading || self.register_rx.is_some() { return; }
+        self.register_loading = true;
+        self.register_error.clear();
+
+        let api = self.api.clone();
+        let req = RegisterRequest {
+            username: self.register_username.clone(),
+            password: self.register_password.clone(),
+            nickname: if self.register_nickname.is_empty() {
+                self.register_username.clone()
+            } else {
+                self.register_nickname.clone()
+            },
+            code: if self.register_captcha_enabled { Some(self.register_captcha.clone()) } else { None },
+            uuid: if self.register_captcha_enabled { Some(self.register_captcha_uuid.clone()) } else { None },
+            security_questions: self.register_security_questions.clone(),
+        };
+
+        let (tx, rx) = oneshot::channel();
+        self.register_rx = Some(rx);
+        tokio::spawn(async move {
+            let result = api.desktop_register(&req).await.and_then(|resp| {
+                if resp.code == 200 { Ok(()) } else { Err(anyhow::anyhow!("{}", resp.msg)) }
+            });
+            tx.send(result).ok();
+        });
+    }
+
+    // ── 找回密码 triggers ────────────────────────────────────────
+
+    pub fn trigger_forget_captcha(&mut self) {
+        if self.forget_captcha_rx.is_some() { return; }
+        let api = self.api.clone();
+        let (tx, rx) = oneshot::channel();
+        self.forget_captcha_rx = Some(rx);
+        tokio::spawn(async move {
+            let result = api.get_captcha().await.and_then(|resp| {
+                resp.data.ok_or_else(|| anyhow::anyhow!("验证码为空"))
+            });
+            tx.send(result).ok();
+        });
+    }
+
+    /// 拉取该用户名的 3 个密保问题
+    pub fn trigger_forget_load_questions(&mut self) {
+        if self.forget_questions_rx.is_some() || self.forget_loading { return; }
+        self.forget_loading = true;
+        self.forget_error.clear();
+        let api = self.api.clone();
+        let username = self.forget_username.clone();
+        let (tx, rx) = oneshot::channel();
+        self.forget_questions_rx = Some(rx);
+        tokio::spawn(async move {
+            let result = api.get_security_questions(&username).await.and_then(|resp| {
+                resp.data.ok_or_else(|| anyhow::anyhow!("{}", resp.msg))
+            });
+            tx.send(result).ok();
+        });
+    }
+
+    /// 提交密保重置密码
+    pub fn trigger_forget_reset(&mut self) {
+        if self.forget_reset_rx.is_some() || self.forget_loading { return; }
+        self.forget_loading = true;
+        self.forget_error.clear();
+
+        // 组装 payload：参考 ref 的 resetPasswordBySecurity({ userName, code, uuid, securityAnswerOne, Two, Three, newPassword })
+        let mut payload = serde_json::json!({
+            "userName": self.forget_username,
+            "code": self.forget_captcha,
+            "uuid": self.forget_captcha_uuid,
+            "newPassword": self.forget_new_password,
+        });
+        if let Some(m) = payload.as_object_mut() {
+            for (i, q) in self.forget_questions.iter().enumerate() {
+                let key = match i {
+                    0 => "securityAnswerOne",
+                    1 => "securityAnswerTwo",
+                    _ => "securityAnswerThree",
+                };
+                m.insert(key.to_string(), serde_json::Value::String(q.answer.clone()));
+            }
+        }
+
+        let api = self.api.clone();
+        let (tx, rx) = oneshot::channel();
+        self.forget_reset_rx = Some(rx);
+        tokio::spawn(async move {
+            let result = api.reset_password_by_security(&payload).await.and_then(|resp| {
+                if resp.code == 200 { Ok(()) } else { Err(anyhow::anyhow!("{}", resp.msg)) }
+            });
+            tx.send(result).ok();
+        });
+    }
+
+    /// 清空注册流程（切页/成功后）
+    pub fn reset_register_flow(&mut self) {
+        self.register_step = 1;
+        self.register_username.clear();
+        self.register_password.clear();
+        self.register_confirm_password.clear();
+        self.register_nickname.clear();
+        self.register_captcha.clear();
+        self.register_captcha_uuid.clear();
+        self.register_captcha_texture = None;
+        for q in self.register_security_questions.iter_mut() {
+            q.question.clear();
+            q.answer.clear();
+        }
+        self.register_error.clear();
+        self.register_disclaimer_open = false;
+        self.register_disclaimer_countdown.jump_to(0.0);
+        self.auth_step_anim.set_target(0.0);
+    }
+
+    /// 验证旧密码（密码修改前）
+    pub fn trigger_verify_password(&mut self, password: String) {
+        if self.password_verify_rx.is_some() { return; }
+        let api = self.api.clone();
+        let (tx, rx) = oneshot::channel();
+        self.password_verify_rx = Some(rx);
+        tokio::spawn(async move {
+            let result = api.verify_password(&password).await.map(|resp| resp.code == 200);
+            tx.send(result).ok();
+        });
+    }
+
+    /// 预加载现有密保问题
+    pub fn trigger_preload_security(&mut self) {
+        if self.security_preload_rx.is_some() { return; }
+        let api = self.api.clone();
+        let (tx, rx) = oneshot::channel();
+        self.security_preload_rx = Some(rx);
+        tokio::spawn(async move {
+            let result = api.get_security().await.and_then(|resp| {
+                let data = resp.data.unwrap_or(serde_json::Value::Null);
+                // 后端可能返回 { securityQuestionOne, ...Two, ...Three } 或 [] 或 [{question, answer}, ...]
+                let mut out: Vec<SecurityQuestion> = Vec::with_capacity(3);
+                if let Some(obj) = data.as_object() {
+                    for (qk, ak) in [
+                        ("securityQuestionOne", "securityAnswerOne"),
+                        ("securityQuestionTwo", "securityAnswerTwo"),
+                        ("securityQuestionThree", "securityAnswerThree"),
+                    ] {
+                        let q = obj.get(qk).and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                        let a = obj.get(ak).and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                        out.push(SecurityQuestion { question: q, answer: a });
+                    }
+                } else if let Some(arr) = data.as_array() {
+                    for item in arr.iter().take(3) {
+                        let q = item.get("question").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                        let a = item.get("answer").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                        out.push(SecurityQuestion { question: q, answer: a });
+                    }
+                }
+                while out.len() < 3 {
+                    out.push(SecurityQuestion { question: String::new(), answer: String::new() });
+                }
+                Ok(out)
+            });
+            tx.send(result).ok();
+        });
+    }
+
+    /// 打开举报对话框，预填目标文件信息
+    pub fn open_report_dialog_for_file(&mut self, file: &PaperFile) {
+        self.report_target_file_id = Some(file.file_id);
+        self.report_target_file_name = if file.file_name.is_empty() {
+            format!("#{}", file.file_id)
+        } else {
+            file.file_name.clone()
+        };
+        self.report_target_user_id = None; // 未来可从 file.upload_user_id 拿
+        self.report_reason.clear();
+        self.report_remark.clear();
+        self.show_report_dialog = true;
+    }
+
+    /// 提交举报
+    pub fn trigger_submit_report(&mut self) {
+        if self.report_submit_rx.is_some() { return; }
+        let report = Report {
+            report_id: 0,
+            report_type: "file".to_string(),
+            content: self.report_reason.clone(),
+            status: String::new(),
+            create_time: String::new(),
+            file_id: self.report_target_file_id.unwrap_or(0),
+            user_id: self.report_target_user_id.unwrap_or(0),
+            remark: self.report_remark.clone(),
+            file_name: self.report_target_file_name.clone(),
+            result: None,
+        };
+        let api = self.api.clone();
+        let (tx, rx) = oneshot::channel();
+        self.report_submit_rx = Some(rx);
+        tokio::spawn(async move {
+            let result = api.create_report(&report).await.and_then(|r| {
+                if r.code == 200 { Ok(()) } else { Err(anyhow::anyhow!("{}", r.msg)) }
+            });
+            tx.send(result).ok();
+        });
+    }
+
+    /// 拉举报时间线，成功后打开弹窗
+    pub fn trigger_load_report_timeline(&mut self, report_id: i64) {
+        if self.report_timeline_rx.is_some() { return; }
+        self.selected_report_id = Some(report_id);
+        let api = self.api.clone();
+        let (tx, rx) = oneshot::channel();
+        self.report_timeline_rx = Some(rx);
+        tokio::spawn(async move {
+            let result = api.get_report_timeline(report_id).await.and_then(|r| {
+                r.data.ok_or_else(|| anyhow::anyhow!("{}", r.msg))
+            });
+            tx.send(result).ok();
+        });
+    }
+
+    /// 贡献文件两阶段上传：先 /datum/file/upload 拿 fileUrl，再 POST /datum/file 建记录。
+    pub fn trigger_contribute_upload(&mut self) {
+        if self.contribute_uploading || self.contribute_upload_rx.is_some() {
+            return;
+        }
+        let path = match &self.contribute_file_path {
+            Some(p) if !p.is_empty() => p.clone(),
+            _ => {
+                self.add_toast("请先选择文件", crate::app::ToastLevel::Error);
+                return;
+            }
+        };
+        let file_name = self.contribute_file_name.clone().unwrap_or_default();
+        let file_format = self.contribute_file_format.clone().unwrap_or_else(|| "pdf".to_string());
+        let file_size = self.contribute_file_size.unwrap_or(0) as i64;
+        let subject = self.contribute_subject.clone();
+        let school = self.contribute_school.clone();
+        let year: i64 = self.contribute_year.trim().parse().unwrap_or(0);
+        let creator = self.current_user.as_ref().map(|u| u.user_name.clone()).unwrap_or_default();
+
+        self.contribute_uploading = true;
+        let api = self.api.clone();
+        let (tx, rx) = oneshot::channel();
+        self.contribute_upload_rx = Some(rx);
+
+        tokio::spawn(async move {
+            let result = async {
+                // 阶段 1：上传字节
+                let file_url = api.upload_paper_bytes(&path).await?;
+                // 阶段 2：建元数据记录
+                let mut file = PaperFile {
+                    file_name,
+                    file_format,
+                    file_size,
+                    file_url,
+                    file_subject: subject,
+                    school_name: school,
+                    file_year: year,
+                    create_by: creator,
+                    ..Default::default()
+                };
+                let resp = api.create_file(&file).await?;
+                if resp.code != 200 {
+                    anyhow::bail!("{}", resp.msg);
+                }
+                // create_file 若返回 fileId 就填回来（少数后端会返回）
+                if let Some(v) = resp.data {
+                    if let Some(id) = v.get("fileId").and_then(|x| x.as_i64()) {
+                        file.file_id = id;
+                    }
+                }
+                Ok(file)
+            }
+            .await;
+            tx.send(result).ok();
+        });
+    }
+
+    /// 清空找回密码流程
+    pub fn reset_forget_flow(&mut self) {
+        self.forget_step = 1;
+        self.forget_username.clear();
+        self.forget_captcha.clear();
+        self.forget_captcha_uuid.clear();
+        self.forget_captcha_texture = None;
+        self.forget_questions.clear();
+        self.forget_new_password.clear();
+        self.forget_confirm_password.clear();
+        self.forget_error.clear();
+        self.auth_step_anim.set_target(0.0);
     }
 
     /// 异步加载通知列表
@@ -1503,6 +1962,9 @@ impl eframe::App for PezMaxApp {
         self.favorites_tab_anim.update(dt);
         self.page_enter_anim.update(dt);
         self.auth_anim.update(dt);
+        self.auth_step_anim.update(dt);
+        self.register_disclaimer_countdown.update(dt);
+        self.report_timeline_anim.update(dt);
         self.search_hint_anim.update(dt);
         self.pdf_viewer.update_animations(dt);
         self.fav_anim.update(dt);
@@ -1688,6 +2150,9 @@ impl eframe::App for PezMaxApp {
             || !self.favorites_tab_anim.is_steady()
             || !self.page_enter_anim.is_steady()
             || !self.auth_anim.is_steady()
+            || !self.auth_step_anim.is_steady()
+            || !self.register_disclaimer_countdown.is_steady()
+            || !self.report_timeline_anim.is_steady()
             || !self.search_hint_anim.is_steady()
             || !self.fav_anim.is_steady()
             || !self.dl_anim.is_steady()
@@ -1744,6 +2209,219 @@ impl eframe::App for PezMaxApp {
             }
         }
 
+        // 注册页验证码
+        if let Some(rx) = &mut self.register_captcha_rx {
+            if let Ok(result) = rx.try_recv() {
+                match result {
+                    Ok(captcha) => {
+                        self.register_captcha_enabled = captcha.captcha_enabled;
+                        self.register_captcha_uuid = captcha.uuid;
+                        self.register_captcha_img = captcha.img.clone();
+                        if !captcha.img.is_empty() {
+                            if let Some(tex) = decode_base64_image(&captcha.img, ctx) {
+                                self.register_captcha_texture = Some(tex);
+                            }
+                        }
+                    }
+                    Err(e) => self.register_error = format!("验证码加载失败: {}", e),
+                }
+                self.register_captcha_rx = None;
+            }
+        }
+        // 注册提交结果
+        if let Some(rx) = &mut self.register_rx {
+            if let Ok(result) = rx.try_recv() {
+                self.register_loading = false;
+                match result {
+                    Ok(_) => {
+                        self.add_toast("注册成功，请登录", crate::app::ToastLevel::Success);
+                        self.reset_register_flow();
+                        self.auth_page = AuthPage::Login;
+                    }
+                    Err(e) => {
+                        self.register_error = e.to_string();
+                        // 刷验证码
+                        self.register_captcha.clear();
+                        self.register_captcha_texture = None;
+                        self.register_captcha_uuid.clear();
+                        self.trigger_register_captcha();
+                    }
+                }
+                self.register_rx = None;
+            }
+        }
+        // 找回密码页验证码
+        if let Some(rx) = &mut self.forget_captcha_rx {
+            if let Ok(result) = rx.try_recv() {
+                match result {
+                    Ok(captcha) => {
+                        self.forget_captcha_enabled = captcha.captcha_enabled;
+                        self.forget_captcha_uuid = captcha.uuid;
+                        self.forget_captcha_img = captcha.img.clone();
+                        if !captcha.img.is_empty() {
+                            if let Some(tex) = decode_base64_image(&captcha.img, ctx) {
+                                self.forget_captcha_texture = Some(tex);
+                            }
+                        }
+                    }
+                    Err(e) => self.forget_error = format!("验证码加载失败: {}", e),
+                }
+                self.forget_captcha_rx = None;
+            }
+        }
+        // 找回密码：拉密保问题
+        if let Some(rx) = &mut self.forget_questions_rx {
+            if let Ok(result) = rx.try_recv() {
+                self.forget_loading = false;
+                match result {
+                    Ok(mut questions) => {
+                        // 后端返回的 answer 字段可能为空，清一下防串数据
+                        for q in questions.iter_mut() { q.answer.clear(); }
+                        self.forget_questions = questions;
+                        self.forget_step = 2;
+                        self.auth_step_anim.set_target(1.0);
+                    }
+                    Err(e) => {
+                        self.forget_error = e.to_string();
+                        self.forget_captcha.clear();
+                        self.forget_captcha_texture = None;
+                        self.forget_captcha_uuid.clear();
+                        self.trigger_forget_captcha();
+                    }
+                }
+                self.forget_questions_rx = None;
+            }
+        }
+        // 密码验证结果（密码修改 / 密保编辑前的通用网关）
+        if let Some(rx) = &mut self.password_verify_rx {
+            if let Ok(result) = rx.try_recv() {
+                self.account_edit_loading = false;
+                match result {
+                    Ok(true) => {
+                        self.account_edit_error.clear();
+                        match self.account_edit_section {
+                            AccountEditSection::Password => {
+                                self.password_verify_step = 1;
+                            }
+                            AccountEditSection::Security => {
+                                // 通过后立即拉现有密保
+                                self.trigger_preload_security();
+                            }
+                            _ => {
+                                self.password_verify_step = 1;
+                            }
+                        }
+                    }
+                    Ok(false) => {
+                        self.account_edit_error = "旧密码不正确".to_string();
+                        self.account_edit_message_timer = 3.0;
+                    }
+                    Err(e) => {
+                        self.account_edit_error = format!("验证失败: {}", e);
+                        self.account_edit_message_timer = 3.0;
+                    }
+                }
+                self.password_verify_rx = None;
+            }
+        }
+        // 密保预加载结果
+        if let Some(rx) = &mut self.security_preload_rx {
+            if let Ok(result) = rx.try_recv() {
+                self.account_edit_loading = false;
+                match result {
+                    Ok(qs) => {
+                        self.account_edit_security_questions = qs;
+                        self.security_verify_step = 1;
+                    }
+                    Err(e) => {
+                        self.account_edit_error = format!("加载密保失败: {}", e);
+                        self.account_edit_message_timer = 3.0;
+                    }
+                }
+                self.security_preload_rx = None;
+            }
+        }
+
+        // 举报提交
+        if let Some(rx) = &mut self.report_submit_rx {
+            if let Ok(result) = rx.try_recv() {
+                match result {
+                    Ok(_) => {
+                        self.add_toast("举报已提交，请等待审核", crate::app::ToastLevel::Success);
+                        self.show_report_dialog = false;
+                        self.report_reason.clear();
+                        self.report_remark.clear();
+                        // 强制刷新我的举报列表
+                        self.my_reports_data.reset();
+                    }
+                    Err(e) => {
+                        self.add_toast(&format!("提交失败: {}", e), crate::app::ToastLevel::Error);
+                    }
+                }
+                self.report_submit_rx = None;
+            }
+        }
+        // 举报时间线
+        if let Some(rx) = &mut self.report_timeline_rx {
+            if let Ok(result) = rx.try_recv() {
+                match result {
+                    Ok(data) => {
+                        self.report_timeline_data = Some(data);
+                        self.show_report_timeline = true;
+                        // 重置动画状态并播入场
+                        self.report_timeline_anim = SpringAnim::with_target(0.4, 0.8, 0.0, 0.0, 1.0);
+                    }
+                    Err(e) => {
+                        self.add_toast(&format!("加载时间线失败: {}", e), crate::app::ToastLevel::Error);
+                    }
+                }
+                self.report_timeline_rx = None;
+            }
+        }
+
+        // 贡献文件上传
+        if let Some(rx) = &mut self.contribute_upload_rx {
+            if let Ok(result) = rx.try_recv() {
+                self.contribute_uploading = false;
+                match result {
+                    Ok(_file) => {
+                        self.add_toast("上传成功，等待审核", crate::app::ToastLevel::Success);
+                        self.contribute_subject.clear();
+                        self.contribute_school.clear();
+                        self.contribute_year.clear();
+                        self.contribute_file_path = None;
+                        self.contribute_file_name = None;
+                        self.contribute_file_format = None;
+                        self.contribute_file_size = None;
+                        if let Some(ref mut stats) = self.user_stats {
+                            stats.upload_count += 1;
+                        }
+                        self.trigger_load_user_stats();
+                    }
+                    Err(e) => {
+                        self.add_toast(&format!("上传失败: {}", e), crate::app::ToastLevel::Error);
+                    }
+                }
+                self.contribute_upload_rx = None;
+            }
+        }
+
+        // 找回密码：重置密码结果
+        if let Some(rx) = &mut self.forget_reset_rx {
+            if let Ok(result) = rx.try_recv() {
+                self.forget_loading = false;
+                match result {
+                    Ok(_) => {
+                        self.add_toast("密码重置成功，请用新密码登录", crate::app::ToastLevel::Success);
+                        self.reset_forget_flow();
+                        self.auth_page = AuthPage::Login;
+                    }
+                    Err(e) => self.forget_error = e.to_string(),
+                }
+                self.forget_reset_rx = None;
+            }
+        }
+
         // 登录结果
         if let Some(rx) = &mut self.login_rx {
             if let Ok(result) = rx.try_recv() {
@@ -1757,7 +2435,10 @@ impl eframe::App for PezMaxApp {
                     }
                     Err(e) => {
                         self.login_error = e.to_string();
-                        // 刷新验证码
+                        // 刷新验证码：清旧输入、旧纹理、旧 uuid，触发下一帧重新拉
+                        self.login_captcha.clear();
+                        self.login_captcha_texture = None;
+                        self.login_captcha_uuid.clear();
                         self.captcha_loaded = false;
                         ctx.request_repaint();
                     }
@@ -2048,6 +2729,24 @@ impl eframe::App for PezMaxApp {
             });
 
         crate::components::toast::render(self, ctx);
+
+        // 上传进度 toast（右下角）
+        if self.contribute_uploading {
+            let name = self.contribute_file_name.clone().unwrap_or_else(|| "文件".to_string());
+            crate::components::upload_progress_toast::render(ctx, &name);
+        }
+
+        // 举报对话框（全局，任何页面都能打开）
+        let (submit_report, close_report) = crate::components::report_dialog::render(ctx, self);
+        if submit_report { self.trigger_submit_report(); }
+        if close_report { self.show_report_dialog = false; }
+
+        // 举报时间线弹窗
+        if crate::components::timeline_panel::render(ctx, self) {
+            // 退出动画：反向 anim
+            self.report_timeline_anim.set_target(0.0);
+            self.show_report_timeline = false;
+        }
     }
 
     fn on_exit(&mut self, ctx: std::option::Option<&eframe::glow::Context>) {

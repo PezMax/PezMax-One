@@ -48,6 +48,33 @@ impl ApiClient {
         self.post("/datum/file", file).await
     }
 
+    /// 上传试卷文件字节到 MinIO。返回 fileUrl（供后续 create_file 使用）。
+    /// 后端接口：POST /datum/file/upload  form: file
+    pub async fn upload_paper_bytes(&self, local_path: &str) -> Result<String> {
+        let resp: ApiResponse<serde_json::Value> = self
+            .upload_file("/datum/file/upload", local_path, "file", None)
+            .await?;
+        if resp.code != 200 {
+            anyhow::bail!("上传失败: {}", resp.msg);
+        }
+        // 后端 AjaxResult 里 fileUrl / url / data.url / data.fileUrl 都可能出现，逐一尝试
+        let data = resp.data.unwrap_or(serde_json::Value::Null);
+        let url = data
+            .get("url")
+            .or_else(|| data.get("fileUrl"))
+            .and_then(|v| v.as_str())
+            .map(String::from)
+            .or_else(|| {
+                if data.is_string() {
+                    data.as_str().map(String::from)
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| anyhow::anyhow!("上传响应中缺少 fileUrl"))?;
+        Ok(url)
+    }
+
     /// 修改试卷文件
     pub async fn update_file(&self, file: &PaperFile) -> Result<ApiResponse<serde_json::Value>> {
         self.put("/datum/file", file).await

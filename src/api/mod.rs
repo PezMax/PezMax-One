@@ -3,6 +3,7 @@
 // 使用 reqwest 异步 HTTP 客户端，支持 Bearer 鉴权、分页、文件上传/下载
 
 pub mod client;
+pub mod crypto;
 pub mod models;
 pub mod auth;
 pub mod bookmark;

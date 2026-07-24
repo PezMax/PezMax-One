@@ -307,6 +307,21 @@ pub struct Report {
     pub status: String,
     #[serde(default, deserialize_with = "null_to_default")]
     pub create_time: String,
+    /// 被举报的文件 id
+    #[serde(default, deserialize_with = "null_to_default")]
+    pub file_id: i64,
+    /// 被举报的用户 id
+    #[serde(default, deserialize_with = "null_to_default")]
+    pub user_id: i64,
+    /// 补充说明
+    #[serde(default, deserialize_with = "null_to_default")]
+    pub remark: String,
+    /// 被举报文件名（后端常带）
+    #[serde(default, deserialize_with = "null_to_default")]
+    pub file_name: String,
+    /// 处理结果 0=待审核 1=已通过 2=已下架 3=已驳回
+    #[serde(default)]
+    pub result: Option<i64>,
 }
 
 /// 排行榜用户项

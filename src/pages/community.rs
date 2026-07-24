@@ -312,11 +312,41 @@ pub fn render_contribute_file(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                     .add_filter("PDF", &["pdf"])
                                     .pick_file();
                                 if let Some(path) = file {
+                                    // 解析出 fileName / fileFormat / fileSize
+                                    let name = path
+                                        .file_name()
+                                        .and_then(|n| n.to_str())
+                                        .unwrap_or("")
+                                        .to_string();
+                                    let fmt = path
+                                        .extension()
+                                        .and_then(|e| e.to_str())
+                                        .map(|s| s.to_lowercase())
+                                        .unwrap_or_else(|| "pdf".to_string());
+                                    let size = std::fs::metadata(&path).ok().map(|m| m.len()).unwrap_or(0);
                                     app.contribute_file_path = Some(path.display().to_string());
+                                    app.contribute_file_name = Some(name);
+                                    app.contribute_file_format = Some(fmt);
+                                    app.contribute_file_size = Some(size);
                                 }
                             }
                         }
-                        ui.add_space(20.0);
+                        ui.add_space(12.0);
+                        // 已选文件回显
+                        if let Some(ref name) = app.contribute_file_name {
+                            let size_str = app.contribute_file_size
+                                .map(|s| {
+                                    if s < 1024 * 1024 { format!("{:.1} KB", s as f64 / 1024.0) }
+                                    else { format!("{:.1} MB", s as f64 / 1024.0 / 1024.0) }
+                                })
+                                .unwrap_or_default();
+                            ui.label(
+                                egui::RichText::new(format!("已选：{name}  ·  {size_str}"))
+                                    .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                                    .color(colors::primary()),
+                            );
+                        }
+                        ui.add_space(12.0);
                     });
                 });
 
@@ -348,43 +378,30 @@ pub fn render_contribute_file(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 
                     ui.horizontal(|ui| {
                         ui.add_space(16.0);
-                        let can_submit = !app.contribute_subject.is_empty()
-                            && !app.contribute_year.is_empty();
+                        let has_file = app.contribute_file_path.is_some();
+                        let can_submit = has_file
+                            && !app.contribute_subject.is_empty()
+                            && !app.contribute_year.is_empty()
+                            && !app.contribute_uploading;
+                        let label = if app.contribute_uploading { "  上传中…  " } else { "  提交上传  " };
                         let btn = egui::Button::new(
-                            egui::RichText::new("  提交上传  ")
+                            egui::RichText::new(label)
                                 .font(FontId::new(14.0, egui::FontFamily::Proportional))
                                 .color(colors::text_on_primary()),
                         )
-                        .fill(if can_submit {
-                            colors::accent_green()
-                        } else {
-                            colors::bg_hover()
-                        })
+                        .fill(if can_submit { colors::primary() } else { colors::bg_hover() })
                         .corner_radius(CornerRadius::same(0));
 
                         if ui.add_enabled(can_submit, btn).clicked() {
-                            let api = app.api.clone();
-                            let subject = app.contribute_subject.clone();
-                            let school = app.contribute_school.clone();
-                            let year = app.contribute_year.clone();
-                            app.contribute_subject.clear();
-                            app.contribute_school.clear();
-                            app.contribute_year.clear();
-                            // 乐观更新上传统计
-                            if let Some(ref mut stats) = app.user_stats {
-                                stats.upload_count += 1;
-                            }
-                            tokio::spawn(async move {
-                                let file = PaperFile {
-                                    file_subject: subject,
-                                    school_name: school,
-                                    file_year: year.parse().unwrap_or(0),
-                                    ..Default::default()
-                                };
-                                let _ = api.create_file(&file).await;
-                            });
-                            // 后台刷新统计
-                            app.trigger_load_user_stats();
+                            app.trigger_contribute_upload();
+                        }
+                        if !has_file {
+                            ui.add_space(12.0);
+                            ui.label(
+                                egui::RichText::new("请先选择要上传的文件")
+                                    .font(FontId::new(11.0, egui::FontFamily::Proportional))
+                                    .color(colors::text_secondary()),
+                            );
                         }
                     });
                     ui.add_space(16.0);
@@ -463,124 +480,61 @@ pub fn render_report_record(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     );
     ui.add_space(6.0);
     ui.label(
-        egui::RichText::new("举报违规内容，维护社区环境")
+        egui::RichText::new("查看你提交的所有举报及处理进度。想举报文件？打开文件详情，点举报按钮。")
             .font(FontId::new(13.0, egui::FontFamily::Proportional))
             .color(colors::text_secondary()),
     );
     ui.add_space(20.0);
 
-    // 举报表单
-    egui::Frame::new()
-        .fill(colors::bg_card())
-        .corner_radius(CornerRadius::same(0))
-        .stroke(egui::Stroke::new(1.0, colors::border()))
-        .show(ui, |ui| {
-            ui.set_min_width(ui.available_width());
-            ui.add_space(16.0);
+    // ── 状态筛选 chip 行 ─────────────────────────────
+    ui.horizontal(|ui| {
+        let filters: [(Option<i64>, &str); 5] = [
+            (None, "全部"),
+            (Some(0), "待审核"),
+            (Some(1), "已通过"),
+            (Some(2), "已下架"),
+            (Some(3), "已驳回"),
+        ];
+        for (val, label) in filters {
+            let selected = app.report_status_filter == val;
+            let btn = egui::Button::new(
+                egui::RichText::new(label)
+                    .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                    .color(if selected { colors::text_on_primary() } else { colors::text_secondary() }),
+            )
+            .fill(if selected { colors::primary() } else { colors::bg_input() })
+            .stroke(egui::Stroke::NONE)
+            .corner_radius(CornerRadius::ZERO)
+            .min_size(egui::vec2(0.0, 26.0));
+            if ui.add(btn).clicked() && !selected {
+                app.report_status_filter = val;
+            }
+            ui.add_space(6.0);
+        }
+    });
 
-            ui.horizontal(|ui| {
-                ui.add_space(16.0);
-                ui.label(
-                    egui::RichText::new("举报内容")
-                        .font(FontId::new(14.0, egui::FontFamily::Proportional))
-                        .color(colors::text_secondary()),
-                );
-                ui.add_space(8.0);
-                ui.scope(|ui| {
-                    crate::theme::apply_search_style(ui);
-                    ui.add(
-                        egui::TextEdit::singleline(&mut app.report_content)
-                            .hint_text("请描述违规内容")
-                            .desired_width(300.0)
-                            .font(FontId::new(14.0, egui::FontFamily::Proportional)),
-                    );
-                });
-            });
-            ui.add_space(12.0);
+    ui.add_space(16.0);
 
-            ui.horizontal(|ui| {
-                ui.add_space(16.0);
-                let btn = egui::Button::new(
-                    egui::RichText::new("  🚩 提交举报  ")
-                        .font(FontId::new(14.0, egui::FontFamily::Proportional))
-                        .color(colors::text_on_primary()),
-                )
-                .fill(if !app.report_content.is_empty() {
-                    colors::error()
-                } else {
-                    colors::bg_hover()
-                })
-                .corner_radius(CornerRadius::same(0));
-
-                if ui.add_enabled(!app.report_content.is_empty(), btn).clicked() {
-                    let api = app.api.clone();
-                    let content = app.report_content.clone();
-                    app.report_content.clear();
-                    // 提交后重置列表，以便下次进入时重新加载
-                    app.my_reports_data.reset();
-                    tokio::spawn(async move {
-                        let report = Report {
-                            content,
-                            report_type: "file".to_string(),
-                            ..Default::default()
-                        };
-                        let _ = api.create_report(&report).await;
-                    });
-                }
-            });
-            ui.add_space(16.0);
-        });
-
-    ui.add_space(20.0);
-    ui.label(
-        egui::RichText::new("我的举报")
-            .font(FontId::new(16.0, egui::FontFamily::Proportional))
-            .color(colors::text_primary()),
-    );
-    ui.add_space(8.0);
-
-    if app.my_reports_data.is_loading() {
-        egui::Frame::new()
-            .fill(colors::bg_card())
-            .corner_radius(CornerRadius::same(0))
-            .stroke(egui::Stroke::new(1.0, colors::border()))
-            .show(ui, |ui| {
-                ui.set_min_height(80.0);
-                ui.set_min_width(ui.available_width());
-                ui.vertical_centered(|ui| {
-                    ui.add_space(24.0);
-                    ui.label(
-                        egui::RichText::new("加载中…")
-                            .font(FontId::new(13.0, egui::FontFamily::Proportional))
-                            .color(colors::text_secondary()),
-                    );
-                    ui.add_space(24.0);
-                });
-            });
+    // ── 记录列表 ────────────────────────────────────
+    if app.my_reports_data.is_loading() && app.my_reports_data.data.is_none() {
+        loading_placeholder(ui);
         ui.ctx().request_repaint();
         return;
     }
 
-    let reports: Vec<Report> = app.my_reports_data.data.clone().unwrap_or_default();
+    let reports: Vec<Report> = app.my_reports_data
+        .data
+        .clone()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|r| match app.report_status_filter {
+            None => true,
+            Some(v) => r.result.unwrap_or_else(|| r.status.parse().unwrap_or(0)) == v,
+        })
+        .collect();
 
     if reports.is_empty() {
-        egui::Frame::new()
-            .fill(colors::bg_card())
-            .corner_radius(CornerRadius::same(0))
-            .stroke(egui::Stroke::new(1.0, colors::border()))
-            .show(ui, |ui| {
-                ui.set_min_height(80.0);
-                ui.set_min_width(ui.available_width());
-                ui.vertical_centered(|ui| {
-                    ui.add_space(24.0);
-                    ui.label(
-                        egui::RichText::new("暂无举报记录")
-                            .font(FontId::new(13.0, egui::FontFamily::Proportional))
-                            .color(colors::text_secondary()),
-                    );
-                    ui.add_space(24.0);
-                });
-            });
+        empty_placeholder(ui, "没有匹配的举报记录");
         return;
     }
 
@@ -588,47 +542,140 @@ pub fn render_report_record(app: &mut PezMaxApp, ui: &mut egui::Ui) {
         .id_salt("reports_scroll")
         .show(ui, |ui| {
             for report in &reports {
-                egui::Frame::new()
-                    .fill(colors::bg_card())
-                    .corner_radius(CornerRadius::same(0))
-                    .stroke(egui::Stroke::new(1.0, colors::border()))
-                    .show(ui, |ui| {
-                        ui.set_min_width(ui.available_width());
-                        ui.add_space(10.0);
-                        ui.horizontal(|ui| {
-                            ui.add_space(16.0);
-                            ui.label(
-                                egui::RichText::new(&report.content)
-                                    .font(FontId::new(14.0, egui::FontFamily::Proportional))
-                                    .color(colors::text_primary()),
-                            );
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    ui.add_space(16.0);
-                                    let status_text = match report.status.as_str() {
-                                        "0" => ("待处理", colors::text_secondary()),
-                                        "1" => ("已处理", colors::accent_green()),
-                                        "2" => ("已驳回", colors::error()),
-                                        _ => ("未知", colors::text_secondary()),
-                                    };
-                                    ui.label(
-                                        egui::RichText::new(status_text.0)
-                                            .font(FontId::new(12.0, egui::FontFamily::Proportional))
-                                            .color(status_text.1),
-                                    );
-                                    ui.add_space(8.0);
-                                    ui.label(
-                                        egui::RichText::new(&report.create_time)
-                                            .font(FontId::new(12.0, egui::FontFamily::Proportional))
-                                            .color(colors::text_secondary()),
-                                    );
-                                },
-                            );
-                        });
-                        ui.add_space(10.0);
-                    });
-                ui.add_space(4.0);
+                let report_id = report.report_id;
+                let (rect, resp) = ui.allocate_exact_size(
+                    egui::vec2(ui.available_width(), 72.0),
+                    egui::Sense::click(),
+                );
+                ui.painter().rect_filled(rect, CornerRadius::ZERO, colors::bg_card());
+                ui.painter().rect_stroke(
+                    rect,
+                    CornerRadius::ZERO,
+                    egui::Stroke::new(1.0, colors::border()),
+                    egui::StrokeKind::Outside,
+                );
+                // 左 3px 强调色条
+                let status = report.result.unwrap_or_else(|| report.status.parse().unwrap_or(0));
+                let (status_label, status_color) = match status {
+                    0 => ("待审核", colors::text_secondary()),
+                    1 => ("已通过", colors::primary()),
+                    2 => ("已下架", colors::primary()),
+                    3 => ("已驳回", egui::Color32::from_rgb(200, 60, 60)),
+                    _ => ("未知", colors::text_secondary()),
+                };
+                ui.painter().rect_filled(
+                    egui::Rect::from_min_max(
+                        rect.left_top(),
+                        egui::pos2(rect.left() + 3.0, rect.bottom()),
+                    ),
+                    CornerRadius::ZERO,
+                    status_color,
+                );
+
+                // 左侧：文件名 + 举报理由
+                ui.painter().text(
+                    egui::pos2(rect.left() + 20.0, rect.top() + 12.0),
+                    egui::Align2::LEFT_TOP,
+                    if report.file_name.is_empty() { format!("#{}", report.file_id) } else { report.file_name.clone() },
+                    FontId::new(14.0, egui::FontFamily::Proportional),
+                    colors::text_primary(),
+                );
+                let content_display = if report.content.is_empty() { "（未填写理由）" } else { &report.content };
+                ui.painter().text(
+                    egui::pos2(rect.left() + 20.0, rect.top() + 34.0),
+                    egui::Align2::LEFT_TOP,
+                    content_display,
+                    FontId::new(11.0, egui::FontFamily::Proportional),
+                    colors::text_secondary(),
+                );
+                ui.painter().text(
+                    egui::pos2(rect.left() + 20.0, rect.top() + 52.0),
+                    egui::Align2::LEFT_TOP,
+                    &report.create_time,
+                    FontId::new(11.0, egui::FontFamily::Proportional),
+                    colors::text_secondary(),
+                );
+
+                // 右侧：状态徽标 + "查看进度 ›"
+                ui.painter().text(
+                    egui::pos2(rect.right() - 16.0, rect.top() + 16.0),
+                    egui::Align2::RIGHT_TOP,
+                    status_label,
+                    FontId::new(12.0, egui::FontFamily::Proportional),
+                    status_color,
+                );
+                ui.painter().text(
+                    egui::pos2(rect.right() - 16.0, rect.bottom() - 18.0),
+                    egui::Align2::RIGHT_BOTTOM,
+                    "查看进度 ›",
+                    FontId::new(11.0, egui::FontFamily::Proportional),
+                    colors::primary(),
+                );
+
+                if resp.clicked() {
+                    app.trigger_load_report_timeline(report_id);
+                }
+                ui.add_space(6.0);
             }
+
+            // "加载更多"按钮：数据长度等于 pageSize * pageNum 就展示
+            if app.report_has_more && !app.my_reports_data.is_loading() {
+                ui.add_space(8.0);
+                ui.vertical_centered(|ui| {
+                    let btn = egui::Button::new(
+                        egui::RichText::new("加载更多")
+                            .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                            .color(colors::primary()),
+                    )
+                    .fill(colors::bg_input())
+                    .stroke(egui::Stroke::NONE)
+                    .corner_radius(CornerRadius::ZERO)
+                    .min_size(egui::vec2(120.0, 28.0));
+                    if ui.add(btn).clicked() {
+                        app.report_page_num += 1;
+                        app.my_reports_data.reset();
+                    }
+                });
+            }
+        });
+}
+
+fn loading_placeholder(ui: &mut egui::Ui) {
+    egui::Frame::new()
+        .fill(colors::bg_card())
+        .corner_radius(CornerRadius::same(0))
+        .stroke(egui::Stroke::new(1.0, colors::border()))
+        .show(ui, |ui| {
+            ui.set_min_height(80.0);
+            ui.set_min_width(ui.available_width());
+            ui.vertical_centered(|ui| {
+                ui.add_space(24.0);
+                ui.label(
+                    egui::RichText::new("加载中…")
+                        .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                        .color(colors::text_secondary()),
+                );
+                ui.add_space(24.0);
+            });
+        });
+}
+
+fn empty_placeholder(ui: &mut egui::Ui, msg: &str) {
+    egui::Frame::new()
+        .fill(colors::bg_card())
+        .corner_radius(CornerRadius::same(0))
+        .stroke(egui::Stroke::new(1.0, colors::border()))
+        .show(ui, |ui| {
+            ui.set_min_height(80.0);
+            ui.set_min_width(ui.available_width());
+            ui.vertical_centered(|ui| {
+                ui.add_space(24.0);
+                ui.label(
+                    egui::RichText::new(msg)
+                        .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                        .color(colors::text_secondary()),
+                );
+                ui.add_space(24.0);
+            });
         });
 }

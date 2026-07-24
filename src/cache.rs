@@ -17,6 +17,9 @@ pub struct SavedCredentials {
     pub token: String,
     pub username: String,
     pub remember_me: bool,
+    /// XOR + machine-id 混淆的密码。仅在 remember_me == true 时写入。
+    #[serde(default)]
+    pub password_encrypted: Option<String>,
 }
 
 // ── CacheManager ─────────────────────────────────────────────────────────────
@@ -124,14 +127,52 @@ impl CacheManager {
 
     // ── 凭证 I/O ──────────────────────────────────────────────────────────
 
-    pub fn save_credentials(&self, token: &str, username: &str, remember_me: bool) {
+    pub fn save_credentials(
+        &self,
+        token: &str,
+        username: &str,
+        remember_me: bool,
+        password_plain: Option<&str>,
+    ) {
+        let password_encrypted = if remember_me {
+            password_plain.map(crate::api::crypto::obfuscate)
+        } else {
+            None
+        };
         let creds = SavedCredentials {
             token: token.to_string(),
             username: username.to_string(),
             remember_me,
+            password_encrypted,
         };
         if let Ok(json) = serde_json::to_string(&creds) {
             let _ = std::fs::write(self.credentials_path(), json);
+        }
+    }
+
+    // ── 已读通知 I/O ─────────────────────────────────────────────────────
+    // 后端 /system/notification/user/* 无 markRead 端点，只在本地记读态。
+
+    pub fn read_notifications_path(&self) -> PathBuf {
+        self.cache_dir.join("read_notifications.json")
+    }
+
+    pub fn load_read_notifications(&self) -> std::collections::HashSet<i64> {
+        let path = self.read_notifications_path();
+        if !path.exists() {
+            return std::collections::HashSet::new();
+        }
+        std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|s| serde_json::from_str::<Vec<i64>>(&s).ok())
+            .map(|v| v.into_iter().collect())
+            .unwrap_or_default()
+    }
+
+    pub fn save_read_notifications(&self, ids: &std::collections::HashSet<i64>) {
+        let vec: Vec<i64> = ids.iter().copied().collect();
+        if let Ok(json) = serde_json::to_string(&vec) {
+            let _ = std::fs::write(self.read_notifications_path(), json);
         }
     }
 

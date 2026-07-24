@@ -361,9 +361,12 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
             app.trigger_load_user_stats();
         }
         Action::Report => {
-            app.show_report_dialog = true;
-            app.report_content.clear();
-            app.report_type = "侵权".to_string();
+            // 打开举报对话框，预填当前预览的文件信息
+            if let Some(file) = app.selected_file.clone() {
+                app.open_report_dialog_for_file(&file);
+            } else {
+                app.add_toast("请先选中要举报的文件", crate::app::ToastLevel::Error);
+            }
         }
         Action::ToggleInfo => {
             app.show_info_dialog = true;

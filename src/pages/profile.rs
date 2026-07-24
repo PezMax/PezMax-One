@@ -432,6 +432,10 @@ fn render_account_settings_list(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     settings_card_row(ui, "密保问题", "用于账号找回的安全验证", |_| {}, |ui| {
         if edit_button(ui, "修改") {
             app.account_edit_section = AccountEditSection::Security;
+            app.security_verify_step = 0;
+            app.account_edit_old_password.clear();
+            app.account_edit_security_questions.clear();
+            app.account_edit_error.clear();
         }
     });
 
@@ -441,6 +445,11 @@ fn render_account_settings_list(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     settings_card_row(ui, "登录密码", "定期更换密码保护账号安全", |_| {}, |ui| {
         if edit_button(ui, "修改") {
             app.account_edit_section = AccountEditSection::Password;
+            app.password_verify_step = 0;
+            app.account_edit_old_password.clear();
+            app.account_edit_new_password.clear();
+            app.account_edit_confirm_password.clear();
+            app.account_edit_error.clear();
         }
     });
 
@@ -833,14 +842,23 @@ fn render_username_edit(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 // ── 密保问题编辑 ────────────────────────────────────────────────────────────
 
 fn render_security_edit(app: &mut PezMaxApp, ui: &mut egui::Ui) {
-    // 初始化 3 组空密保问题
-    if app.account_edit_security_questions.is_empty() {
-        for _ in 0..3 {
-            app.account_edit_security_questions.push(SecurityQuestion {
-                question: String::new(),
-                answer: String::new(),
-            });
-        }
+    // Step 0: 验证密码；Step 1: 编辑
+    if app.security_verify_step == 0 {
+        render_verify_password_gate(
+            app,
+            ui,
+            "修改密保问题",
+            "为保护账号安全，请先验证登录密码",
+        );
+        return;
+    }
+
+    // 到 Step 1 时确保 3 组数据（预加载可能已填），不足补齐
+    while app.account_edit_security_questions.len() < 3 {
+        app.account_edit_security_questions.push(SecurityQuestion {
+            question: String::new(),
+            answer: String::new(),
+        });
     }
 
     edit_form(ui, "修改密保问题", |ui| {
@@ -943,6 +961,8 @@ fn render_security_edit(app: &mut PezMaxApp, ui: &mut egui::Ui) {
             if secondary_button(ui, "取消") {
                 app.account_edit_section = AccountEditSection::None;
                 app.account_edit_security_questions.clear();
+                app.security_verify_step = 0;
+                app.account_edit_old_password.clear();
                 app.account_edit_error.clear();
                 app.account_edit_success.clear();
                 app.account_edit_message_timer = 0.0;
@@ -954,31 +974,24 @@ fn render_security_edit(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 // ── 密码修改 ────────────────────────────────────────────────────────────────
 
 fn render_password_edit(app: &mut PezMaxApp, ui: &mut egui::Ui) {
+    // Step 0: 验证旧密码；Step 1: 设置新密码
+    if app.password_verify_step == 0 {
+        render_verify_password_gate(
+            app,
+            ui,
+            "修改登录密码",
+            "请先验证当前登录密码，通过后方可设置新密码",
+        );
+        return;
+    }
+
     edit_form(ui, "修改登录密码", |ui| {
         ui.label(
-            egui::RichText::new("请输入旧密码并设置新密码")
+            egui::RichText::new("已通过身份验证，请设置新密码")
                 .font(FontId::new(12.0, egui::FontFamily::Proportional))
                 .color(colors::text_secondary()),
         );
         ui.add_space(12.0);
-
-        // 旧密码
-        ui.label(
-            egui::RichText::new("旧密码")
-                .font(FontId::new(14.0, egui::FontFamily::Proportional))
-                .color(colors::text_primary()),
-        );
-        ui.add(
-            egui::TextEdit::singleline(&mut app.account_edit_old_password)
-                .font(FontId::new(14.0, egui::FontFamily::Proportional))
-                .text_color(colors::text_primary())
-                .desired_width(240.0)
-                .margin(egui::Vec2::new(8.0, 6.0))
-                .password(true)
-                .hint_text("请输入旧密码"),
-        );
-
-        ui.add_space(8.0);
 
         // 新密码
         ui.label(
@@ -1022,8 +1035,8 @@ fn render_password_edit(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                 let new = app.account_edit_new_password.trim();
                 let confirm = app.account_edit_confirm_password.trim();
 
-                if old.is_empty() || new.is_empty() || confirm.is_empty() {
-                    app.account_edit_error = "请填写所有密码字段".to_string();
+                if new.is_empty() || confirm.is_empty() {
+                    app.account_edit_error = "请填写新密码".to_string();
                     app.account_edit_message_timer = 3.0;
                     return;
                 }
@@ -1063,6 +1076,7 @@ fn render_password_edit(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                 app.account_edit_old_password.clear();
                 app.account_edit_new_password.clear();
                 app.account_edit_confirm_password.clear();
+                app.password_verify_step = 0;
                 app.account_edit_section = AccountEditSection::None;
             }
 
@@ -1071,8 +1085,64 @@ fn render_password_edit(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                 app.account_edit_old_password.clear();
                 app.account_edit_new_password.clear();
                 app.account_edit_confirm_password.clear();
+                app.password_verify_step = 0;
                 app.account_edit_error.clear();
                 app.account_edit_success.clear();
+            }
+        });
+    });
+}
+
+// ── 通用：密码验证网关 ────────────────────────────────────────────────────
+// 用于密码修改、密保编辑等敏感操作前的二次验证。
+// 验证成功后的后续动作（如推进 step、拉密保）由 app.rs 的 password_verify_rx poll 根据
+// current section 分派 — 这里只负责渲染表单和触发 trigger_verify_password。
+fn render_verify_password_gate(
+    app: &mut PezMaxApp,
+    ui: &mut egui::Ui,
+    title: &str,
+    subtitle: &str,
+) {
+    edit_form(ui, title, |ui| {
+        ui.label(
+            egui::RichText::new(subtitle)
+                .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                .color(colors::text_secondary()),
+        );
+        ui.add_space(12.0);
+        ui.label(
+            egui::RichText::new("当前登录密码")
+                .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                .color(colors::text_primary()),
+        );
+        ui.add(
+            egui::TextEdit::singleline(&mut app.account_edit_old_password)
+                .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                .text_color(colors::text_primary())
+                .desired_width(240.0)
+                .margin(egui::Vec2::new(8.0, 6.0))
+                .password(true)
+                .hint_text("请输入当前登录密码"),
+        );
+        ui.add_space(16.0);
+        ui.horizontal(|ui| {
+            let loading = app.password_verify_rx.is_some() || app.security_preload_rx.is_some();
+            if primary_button(ui, if loading { "验证中…" } else { "验证" }, loading) {
+                let pwd = app.account_edit_old_password.trim().to_string();
+                if pwd.is_empty() {
+                    app.account_edit_error = "请输入密码".to_string();
+                    app.account_edit_message_timer = 3.0;
+                } else {
+                    app.account_edit_error.clear();
+                    app.trigger_verify_password(pwd);
+                }
+            }
+            if secondary_button(ui, "取消") {
+                app.account_edit_section = AccountEditSection::None;
+                app.account_edit_old_password.clear();
+                app.password_verify_step = 0;
+                app.security_verify_step = 0;
+                app.account_edit_error.clear();
             }
         });
     });
@@ -1100,7 +1170,7 @@ pub fn render_notifications(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                 }
 
                 for notif in list {
-                    let is_read = notif.status == "1";
+                    let is_read = notif.status == "1" || app.read_notification_ids.contains(&notif.notify_id);
                     let accent = if is_read { colors::border() } else { colors::primary() };
 
                     let (rect, resp) = ui.allocate_exact_size(
@@ -1173,8 +1243,13 @@ pub fn render_notifications(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                         ui.painter().rect_filled(rect, CornerRadius::ZERO, overlay);
                     }
 
-                    if resp.clicked() {
-                        // 预留：点击通知跳转详情
+                    if resp.clicked() && !is_read {
+                        app.read_notification_ids.insert(notif.notify_id);
+                        app.cache_manager.save_read_notifications(&app.read_notification_ids);
+                        // 未读计数-1
+                        if app.unread_notifications > 0 {
+                            app.unread_notifications -= 1;
+                        }
                     }
 
                     ui.add_space(4.0);

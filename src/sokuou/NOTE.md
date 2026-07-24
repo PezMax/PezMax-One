@@ -23,6 +23,9 @@ Phase 1 完成。核心原语已稳定，已接入前端 UI 组件。
 | `accent_transition` | `MetroAnim` | `theme/mod.rs` | 强调色切换 RGB 插值（0.3s, Quadratic/EaseOut） |
 | `dark_transition` | `MetroAnim` | `theme/mod.rs` | 深色/浅色模式切换全颜色插值（0.3s, Quadratic/EaseOut） |
 | 设置页 toggle 开关滑块 | `Progress` | `pages/profile.rs::render_toggle_switch` | 开关滑块横向位移 + 背景色插值（0.22s, EaseOutCubic）。每开关按 `id_source` 独立存储到 `ctx.data_mut`，首次渲染 `jump_to` 避免开场动画。 |
+| `auth_step_anim` | `SpringAnim` | `app.rs` / `components/step_indicator.rs` | 注册 4 步、找回密码 3 步向导的步骤指示器滑动（0.3s, damping 0.85） |
+| `register_disclaimer_countdown` | `Progress` | `app.rs` / `components/disclaimer_dialog.rs` | 免责声明弹窗 1 秒倒计时门（Linear）；`value() >= 1.0` 才可点确认 |
+| `report_timeline_anim` | `SpringAnim` | `app.rs` / `components/timeline_panel.rs` | 举报时间线弹窗入场（0.4/0.8，24px 下滑 + alpha 淡入）。用 `SpringAnim::with_target` 重置状态而不加 `jump_to` API |
 
 ## 新增原语
 
@@ -44,7 +47,7 @@ Phase 1 完成。核心原语已稳定，已接入前端 UI 组件。
 
 ## 需要新增的原语（持续更新）
 
-_待定_
+- `SpringAnim::jump_to(value)` — 用于弹窗二次入场时"从头播动画"。目前通过 `SpringAnim::with_target(response, damping, 0, 0, 1)` 重新构造实例来绕过（见 `report_timeline_anim` 的入场逻辑）。
 
 ## 已移除的动画（2026-07-21）
 
