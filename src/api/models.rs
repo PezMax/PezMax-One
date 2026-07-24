@@ -349,7 +349,7 @@ pub struct ActionResponse {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BookmarkFavorite {
-    #[serde(default)]
+    #[serde(default, alias = "id")]
     pub bookmark_id: i64,
     #[serde(default)]
     pub bookmark_name: String,

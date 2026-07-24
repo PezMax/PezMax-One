@@ -413,6 +413,7 @@ pub struct PezMaxApp {
     pub show_bookmark_form: bool,
     pub favorite_bookmark_ids: HashSet<i64>,       // 已收藏的书签 ID
     pub bookmark_fav_data: Vec<(i64, bool)>,        // (bookmark_id, is_add) 待处理的收藏操作
+    pub bookmark_detail_rx: Option<oneshot::Receiver<anyhow::Result<Bookmark>>>, // 书签详情异步加载
     pub bookmark_favorite_ids_rx: Option<oneshot::Receiver<anyhow::Result<HashSet<i64>>>>,
     pub bookmark_cover_textures: HashMap<i64, egui::TextureHandle>,  // 书签封面纹理缓存
     pub bookmark_cover_requested: HashSet<i64>,                 // 已请求封面的书签
@@ -420,6 +421,9 @@ pub struct PezMaxApp {
     pub bookmark_cover_pending_id: Option<i64>,                 // 当前等待中的封面请求 ID
     pub bookmark_cover_bulk_rx: Option<tokio::sync::mpsc::UnboundedReceiver<(i64, anyhow::Result<Vec<u8>>)>>,
     pub bookmark_covers_triggered: bool,  // 防止每帧重复创建封面加载通道
+    pub bookmark_title_cache: HashMap<i64, String>,  // 书签标题缓存（bookmark_id → title）
+    pub bookmark_title_rx: Option<tokio::sync::mpsc::UnboundedReceiver<(i64, String)>>,
+    pub bookmark_title_tx: Option<tokio::sync::mpsc::UnboundedSender<(i64, String)>>,
 
     // 贡献文件元数据表单
     pub contribute_subject: String,
@@ -572,6 +576,7 @@ impl PezMaxApp {
             show_bookmark_form: false,
             favorite_bookmark_ids: HashSet::new(),
             bookmark_fav_data: Vec::new(),
+            bookmark_detail_rx: None,
             bookmark_favorite_ids_rx: None,
             bookmark_cover_textures: HashMap::new(),
             bookmark_cover_requested: HashSet::new(),
@@ -579,6 +584,9 @@ impl PezMaxApp {
             bookmark_cover_pending_id: None,
             bookmark_cover_bulk_rx: None,
             bookmark_covers_triggered: false,
+            bookmark_title_cache: HashMap::new(),
+            bookmark_title_rx: None,
+            bookmark_title_tx: None,
             contribute_subject: String::new(),
             contribute_school: String::new(),
             contribute_year: String::new(),
@@ -1711,6 +1719,29 @@ impl eframe::App for PezMaxApp {
             }
             self.favorites_data.poll();
             self.bookmark_favorites_data.poll();
+
+            // 书签详情异步加载结果
+            if let Some(rx) = &mut self.bookmark_detail_rx {
+                if let Ok(result) = rx.try_recv() {
+                    self.bookmark_detail_rx = None;
+                    match result {
+                        Ok(bookmark) => {
+                            self.selected_bookmark = Some(bookmark);
+                        }
+                        Err(e) => {
+                            log::error!("获取书签详情失败: {}", e);
+                        }
+                    }
+                }
+            }
+
+            // 书签标题缓存更新
+            if let Some(rx) = &mut self.bookmark_title_rx {
+                while let Ok((id, title)) = rx.try_recv() {
+                    self.bookmark_title_cache.insert(id, title);
+                }
+            }
+
             self.user_rank_data.poll();
             // 排行榜数据加载完成后，触发头像加载
             if self.user_rank_data.is_loaded() {

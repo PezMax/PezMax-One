@@ -344,6 +344,9 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                 });
             }
             app.add_toast(msg, ToastLevel::Success);
+            // 使收藏缓存失效，下次进入我的收藏页面时重新加载
+            app.favorites_data.reset();
+            app.bookmark_favorites_data.reset();
             // 后台刷新统计（确保下次打开时数据一致）
             app.trigger_load_user_stats();
         }
@@ -1279,6 +1282,8 @@ fn render_bookmark_detail(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                 app.bookmark_fav_data.push((target_id, true));
                                 app.add_toast("已收藏".to_string(), ToastLevel::Success);
                             }
+                            // 使书签收藏缓存失效，下次进入我的收藏页面时重新加载
+                            app.bookmark_favorites_data.reset();
                         }
 
                         ui.add_space(8.0);
@@ -1613,7 +1618,8 @@ fn render_paper_favorites(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                     });
                     return;
                 }
-                for fav in list {
+                let items = list.clone();
+                for fav in &items {
                     egui::Frame::new()
                         .fill(colors::bg_card())
                         .corner_radius(CornerRadius::same(0))
@@ -1622,7 +1628,18 @@ fn render_paper_favorites(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                             ui.set_min_width(ui.available_width());
                             ui.horizontal(|ui| {
                                 ui.add_space(12.0);
-                                ui.label(egui::RichText::new("⭐").font(FontId::new(18.0, egui::FontFamily::Proportional)));
+
+                                // 收藏图标（emoji，使用 painter 精确居中）
+                                let icon_area = egui::vec2(36.0, 55.0);
+                                let (icon_rect, _) = ui.allocate_exact_size(icon_area, egui::Sense::hover());
+                                ui.painter().text(
+                                    icon_rect.center() + egui::vec2(0.0, 3.0),
+                                    egui::Align2::CENTER_CENTER,
+                                    "⭐",
+                                    FontId::new(18.0, egui::FontFamily::Proportional),
+                                    colors::text_primary(),
+                                );
+
                                 ui.add_space(10.0);
                                 ui.vertical(|ui| {
                                     ui.add_space(8.0);
@@ -1648,13 +1665,46 @@ fn render_paper_favorites(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                         if let Some(ref mut stats) = app.user_stats {
                                             stats.favorite_count = (stats.favorite_count - 1).max(0);
                                         }
+                                        // 使试卷收藏缓存失效，马上刷新列表
+                                        app.favorites_data.reset();
                                         tokio::spawn(async move { let _ = api.remove_favorite(uid, fid).await; });
                                     }
                                     ui.add_space(4.0);
                                     if ui.small_button("📥 下载").clicked() {
                                         let api = app.api.clone();
                                         let fid = fav.file_id;
-                                        tokio::spawn(async move { let _ = api.download_paper(fid).await; });
+                                        let fname = fav.file_name.clone();
+                                        tokio::spawn(async move {
+                                            let file = rfd::AsyncFileDialog::new()
+                                                .set_file_name(&fname)
+                                                .add_filter("PDF", &["pdf"])
+                                                .save_file()
+                                                .await;
+                                            if let Some(file) = file {
+                                                match api.download_paper(fid).await {
+                                                    Ok(bytes) => {
+                                                        let _ = std::fs::write(file.path(), &bytes);
+                                                    }
+                                                    Err(e) => {
+                                                        log::error!("下载失败: {}", e);
+                                                    }
+                                                }
+                                            }
+                                        });
+                                    }
+                                    ui.add_space(4.0);
+                                    // 访问文件按钮
+                                    if ui.small_button("访问文件").clicked() {
+                                        let fid = fav.file_id;
+                                        let fname = fav.file_name.clone();
+                                        let fsubj = fav.file_subject.clone();
+                                        app.selected_file = Some(crate::api::models::PaperFile {
+                                            file_id: fid,
+                                            file_name: fname,
+                                            file_subject: fsubj,
+                                            ..Default::default()
+                                        });
+                                        app.preview_anim.set_target(1.0);
                                     }
                                 });
                             });
@@ -1678,6 +1728,10 @@ fn render_paper_favorites(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 fn render_bookmark_favorites(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     if !app.bookmark_favorites_data.is_loaded() && !app.bookmark_favorites_data.is_loading() {
         app.trigger_load_bookmark_favorites();
+    }
+    // 确保书签列表已加载，用于查找书签标题
+    if !app.bookmarks_data.is_loaded() && !app.bookmarks_data.is_loading() {
+        app.trigger_load_bookmarks();
     }
 
     ui.horizontal(|ui| {
@@ -1728,9 +1782,34 @@ fn render_bookmark_favorites(app: &mut PezMaxApp, ui: &mut egui::Ui) {
             }
             for bm_fav in &list_clone {
                 let bm_id = bm_fav.bookmark_id;
-                let bm_name = bm_fav.bookmark_name.clone();
                 let bm_time = bm_fav.create_time.clone();
-                let mut btn_clicked = false;
+
+                // 获取标题：缓存 → 书签列表 → 异步获取 → 书签 ID 回退
+                let bm_title = app.bookmark_title_cache.get(&bm_id).cloned()
+                    .or_else(|| {
+                        app.bookmarks_data.data.as_ref()
+                            .and_then(|list| list.iter().find(|b| b.id == bm_id).map(|b| b.title.clone()))
+                    })
+                    .unwrap_or_else(|| {
+                        // 不在缓存中：触发异步获取
+                        if app.bookmark_title_tx.is_none() {
+                            let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+                            app.bookmark_title_rx = Some(rx);
+                            app.bookmark_title_tx = Some(tx);
+                        }
+                        if let Some(tx) = &app.bookmark_title_tx {
+                            let api = app.api.clone();
+                            let tx = tx.clone();
+                            tokio::spawn(async move {
+                                if let Ok(resp) = api.get_bookmark_detail(bm_id).await {
+                                    if let Some(bookmark) = resp.data {
+                                        let _ = tx.send((bm_id, bookmark.title));
+                                    }
+                                }
+                            });
+                        }
+                        format!("书签 #{}", bm_id)
+                    });
 
                 egui::Frame::new()
                     .fill(colors::bg_card())
@@ -1740,12 +1819,23 @@ fn render_bookmark_favorites(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                         ui.set_min_width(ui.available_width());
                         ui.horizontal(|ui| {
                             ui.add_space(12.0);
-                            ui.label(egui::RichText::new("🔖").font(FontId::new(18.0, egui::FontFamily::Proportional)));
+
+                            // 书签图标（emoji，使用 painter 精确居中）
+                            let icon_area = egui::vec2(36.0, 55.0);
+                            let (icon_rect, _) = ui.allocate_exact_size(icon_area, egui::Sense::hover());
+                            ui.painter().text(
+                                icon_rect.center() + egui::vec2(0.0, 3.0),
+                                egui::Align2::CENTER_CENTER,
+                                "🔖",
+                                FontId::new(18.0, egui::FontFamily::Proportional),
+                                colors::text_primary(),
+                            );
+
                             ui.add_space(10.0);
                             ui.vertical(|ui| {
                                 ui.add_space(8.0);
                                 ui.label(
-                                    egui::RichText::new(&bm_name)
+                                    egui::RichText::new(&bm_title)
                                         .font(FontId::new(14.0, egui::FontFamily::Proportional))
                                         .color(colors::text_primary()),
                                 );
@@ -1758,51 +1848,45 @@ fn render_bookmark_favorites(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                             });
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                 ui.add_space(12.0);
+                                // 取消收藏按钮（在右侧，先渲染）
                                 if ui.small_button("取消收藏").clicked() {
-                                    btn_clicked = true;
                                     let api = app.api.clone();
                                     let uid = app.current_user.as_ref().map(|u| u.user_id).unwrap_or(0);
                                     app.favorite_bookmark_ids.remove(&bm_id);
                                     if let Some(ref mut stats) = app.user_stats {
                                         stats.favorite_count = (stats.favorite_count - 1).max(0);
                                     }
+                                    // 使书签收藏缓存失效，准备好下次进入时重新加载
+                                    app.bookmark_favorites_data.reset();
                                     tokio::spawn(async move {
                                         let _ = api.remove_bookmark_favorite(uid, bm_id).await;
                                     });
                                 }
+                                ui.add_space(4.0);
+                                // 查看详情按钮（在左侧，后渲染）
+                                if ui.small_button("查看详情").clicked() {
+                                    let api = app.api.clone();
+                                    let (tx, rx) = tokio::sync::oneshot::channel();
+                                    app.bookmark_detail_rx = Some(rx);
+                                    tokio::spawn(async move {
+                                        let result = api.get_bookmark_detail(bm_id).await;
+                                        let bookmark = result
+                                            .and_then(|resp| resp.data.ok_or_else(|| anyhow::anyhow!("书签数据为空")));
+                                        tx.send(bookmark).ok();
+                                    });
+                                    app.selected_bookmark = Some(crate::api::models::Bookmark {
+                                        id: bm_id,
+                                        title: bm_title.clone(),
+                                        ..Default::default()
+                                    });
+                                    app.bookmark_detail_anim = crate::sokuou::SpringAnim::with_target(
+                                        0.4, 0.8, 0.0, 0.0, 1.0,
+                                    );
+                                    app.navigate_to(crate::app::Section::Browse, crate::app::Subsection::ExternalBookmarks);
+                                }
                             });
                         });
                     });
-
-                // 整行点击 → 跳转书签详情（仅当未点击按钮时）
-                if !btn_clicked {
-                    let row_rect = ui.response().rect;
-                    let click_id = ui.next_auto_id();
-                    if ui.interact(row_rect, click_id, egui::Sense::click()).clicked() {
-                        // 查找已加载的书签数据
-                        let found = app.bookmarks_data.data.as_ref()
-                            .and_then(|list| list.iter().find(|b| b.id == bm_id).cloned());
-                        if let Some(bookmark) = found {
-                            app.selected_bookmark = Some(bookmark);
-                            app.bookmark_detail_anim = crate::sokuou::SpringAnim::with_target(
-                                0.4, 0.8, 0.0, 0.0, 1.0,
-                            );
-                            app.navigate_to(crate::app::Section::Browse, crate::app::Subsection::ExternalBookmarks);
-                        } else {
-                            // 书签列表未加载：用已有信息构造一个部分 Bookmark 再导航
-                            app.selected_bookmark = Some(crate::api::models::Bookmark {
-                                id: bm_id,
-                                title: bm_name.clone(),
-                                ..Default::default()
-                            });
-                            app.bookmark_detail_anim = crate::sokuou::SpringAnim::with_target(
-                                0.4, 0.8, 0.0, 0.0, 1.0,
-                            );
-                            app.trigger_load_bookmarks();
-                            app.navigate_to(crate::app::Section::Browse, crate::app::Subsection::ExternalBookmarks);
-                        }
-                    }
-                }
                 ui.add_space(6.0);
             }
         });

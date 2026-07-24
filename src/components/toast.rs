@@ -41,11 +41,11 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
             .show(ctx, |ui| {
                 ui.set_opacity(alpha.clamp(0.0, 1.0));
 
-                let (bg_color, icon) = match toast.level {
-                    ToastLevel::Success => (colors::success(), "✓"),
-                    ToastLevel::Warning => (colors::warning(), "⚠"),
-                    ToastLevel::Error => (colors::error(), "✕"),
-                    ToastLevel::Info => (colors::info(), "ℹ"),
+                let bg_color = match toast.level {
+                    ToastLevel::Success => colors::success(),
+                    ToastLevel::Warning => colors::warning(),
+                    ToastLevel::Error => colors::error(),
+                    ToastLevel::Info => colors::info(),
                 };
 
                 Frame::new()
@@ -57,15 +57,6 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                         ui.add_space(10.0);
                         ui.horizontal(|ui| {
                             ui.add_space(12.0);
-                            ui.label(
-                                egui::RichText::new(icon)
-                                    .color(colors::text_on_primary())
-                                    .font(egui::FontId::new(
-                                        15.0,
-                                        egui::FontFamily::Proportional,
-                                    )),
-                            );
-                            ui.add_space(8.0);
                             ui.label(
                                 egui::RichText::new(&toast.message)
                                     .color(colors::text_on_primary())
