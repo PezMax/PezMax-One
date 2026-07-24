@@ -20,6 +20,9 @@ pub struct AppSettings {
     pub pdf_view_mode: ViewMode,
     /// PDF 默认缩放
     pub pdf_scale: f32,
+    /// 默认下载目录（None = 使用平台默认 ~/Downloads/PezMax）
+    #[serde(default)]
+    pub download_dir: Option<String>,
     /// 窗口大小 (w, h)
     pub window_size: Option<(f32, f32)>,
     /// 窗口位置 (x, y)
@@ -35,6 +38,7 @@ impl Default for AppSettings {
             setting_silent_download: false,
             pdf_view_mode: ViewMode::Line,
             pdf_scale: 1.0,
+            download_dir: None,
             window_size: None,
             window_pos: None,
         }

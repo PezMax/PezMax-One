@@ -14,6 +14,15 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 
+/// 平台默认下载目录 `~/Downloads/PezMax`。
+pub fn default_download_dir() -> String {
+    if let Some(home) = dirs::home_dir() {
+        home.join("Downloads").join("PezMax").to_string_lossy().to_string()
+    } else {
+        "~/Downloads/PezMax".to_string()
+    }
+}
+
 /// 将 base64 图片（JPEG 格式）解码为 egui 纹理
 fn decode_base64_image(b64: &str, ctx: &egui::Context) -> Option<egui::TextureHandle> {
     let bytes = base64::engine::general_purpose::STANDARD
@@ -397,6 +406,9 @@ pub struct PezMaxApp {
     pub setting_auto_launch: bool,
     pub setting_silent_download: bool,
 
+    // 默认下载路径
+    pub setting_download_dir: String,
+
     // PDF 设置
     pub setting_pdf_view_mode: crate::pdf::ViewMode,
     pub setting_pdf_scale: f32,
@@ -577,6 +589,10 @@ impl PezMaxApp {
             show_about_dialog: false,
             setting_auto_launch: settings.setting_auto_launch,
             setting_silent_download: settings.setting_silent_download,
+            setting_download_dir: settings
+                .download_dir
+                .clone()
+                .unwrap_or_else(default_download_dir),
             setting_pdf_view_mode: settings.pdf_view_mode,
             setting_pdf_scale: settings.pdf_scale,
             theme_mode: settings.theme_mode,
@@ -1441,12 +1457,14 @@ impl eframe::App for PezMaxApp {
         }
 
         // 主题/强调色变化时保存设置
+        let dir_changed = self.settings.download_dir.as_deref() != Some(self.setting_download_dir.as_str());
         if self.settings.theme_mode != self.theme_mode
             || self.settings.accent_idx != self.accent_idx
             || self.settings.setting_auto_launch != self.setting_auto_launch
             || self.settings.setting_silent_download != self.setting_silent_download
             || self.settings.pdf_view_mode != self.setting_pdf_view_mode
             || self.settings.pdf_scale != self.setting_pdf_scale
+            || dir_changed
         {
             self.settings.theme_mode = self.theme_mode;
             self.settings.accent_idx = self.accent_idx;
@@ -1454,6 +1472,7 @@ impl eframe::App for PezMaxApp {
             self.settings.setting_silent_download = self.setting_silent_download;
             self.settings.pdf_view_mode = self.setting_pdf_view_mode;
             self.settings.pdf_scale = self.setting_pdf_scale;
+            self.settings.download_dir = Some(self.setting_download_dir.clone());
             self.settings.save(&self.cache_manager);
 
             // 开机自启变化时同步注册表

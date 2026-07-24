@@ -190,7 +190,7 @@ pub fn render_resource_manager(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                 ui.visuals_mut().widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
                 ui.add(
                     egui::Button::new(
-                        egui::RichText::new("✕ 清除")
+                        egui::RichText::new("× 清除")
                             .font(FontId::new(12.0, egui::FontFamily::Proportional))
                             .color(colors::text_secondary()),
                     )
@@ -421,8 +421,8 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                             ui.visuals_mut().widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
                             ui.add(
                                 egui::Button::new(
-                                    egui::RichText::new("✕")
-                                        .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                                    egui::RichText::new("×")
+                                        .font(FontId::new(20.0, egui::FontFamily::Proportional))
                                         .color(colors::text_secondary()),
                                 )
                                 .stroke(egui::Stroke::NONE)

@@ -4,6 +4,7 @@ use crate::sokuou::easing::Easing;
 ///
 /// 适用于透明度、颜色等不需要弹性的过渡。
 /// 位移/缩放等需要"自然感"的属性请用 SpringAnim。
+#[derive(Debug, Clone)]
 pub struct Progress {
     value: f64,
     target: f64,

@@ -39,7 +39,7 @@ fn section_title(ui: &mut egui::Ui, text: &str) {
     });
 }
 
-/// 带小一号标题的 setting 小节标题
+/// 设置页小节标题：3px 强调色条 + 13px 二级色文字
 fn setting_section_title(ui: &mut egui::Ui, text: &str) {
     ui.horizontal(|ui| {
         egui::Frame::new()
@@ -52,11 +52,157 @@ fn setting_section_title(ui: &mut egui::Ui, text: &str) {
         ui.add_space(8.0);
         ui.label(
             egui::RichText::new(text)
-                .font(FontId::new(15.0, egui::FontFamily::Proportional))
-                .color(colors::text_primary())
+                .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                .color(colors::text_secondary())
                 .strong(),
         );
     });
+    ui.add_space(8.0);
+}
+
+/// 统一设置卡片：左 3px 强调色条 + 边框 + 标签/描述 + 右侧控件
+/// right_width 决定右侧控件区宽度；返回卡片的 hover/click Response
+fn setting_card(
+    ui: &mut egui::Ui,
+    label: &str,
+    desc: &str,
+    right_width: f32,
+    add_right: impl FnOnce(&mut egui::Ui),
+) -> egui::Response {
+    let (rect, resp) = ui.allocate_exact_size(
+        Vec2::new(ui.available_width(), 60.0),
+        egui::Sense::click(),
+    );
+    ui.painter().rect_filled(rect, CornerRadius::ZERO, colors::bg_card());
+    ui.painter().rect_stroke(
+        rect,
+        CornerRadius::ZERO,
+        Stroke::new(1.0, colors::border()),
+        StrokeKind::Outside,
+    );
+    // 左边缘 3px 强调色条
+    ui.painter().rect_filled(
+        Rect::from_min_max(pos2(rect.left(), rect.top()), pos2(rect.left() + 3.0, rect.bottom())),
+        CornerRadius::ZERO,
+        colors::primary(),
+    );
+
+    // 左侧：标签 + 描述
+    let left_rect = Rect::from_min_max(
+        pos2(rect.left() + 20.0, rect.top() + 10.0),
+        pos2(rect.right() - right_width - 24.0, rect.bottom() - 10.0),
+    );
+    ui.allocate_ui_at_rect(left_rect, |ui| {
+        ui.label(
+            egui::RichText::new(label)
+                .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                .color(colors::text_primary()),
+        );
+        ui.label(
+            egui::RichText::new(desc)
+                .font(FontId::new(11.0, egui::FontFamily::Proportional))
+                .color(colors::text_secondary()),
+        );
+    });
+
+    // 右侧：控件区（垂直居中，右对齐）
+    let right_rect = Rect::from_min_size(
+        pos2(rect.right() - right_width - 12.0, rect.top() + 14.0),
+        Vec2::new(right_width, 32.0),
+    );
+    ui.allocate_ui_at_rect(right_rect, |ui| {
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            add_right(ui);
+        });
+    });
+
+    resp
+}
+
+/// Metro 风格开关：直角方形 + 白色滑块。
+/// 动画由 Sokuou `Progress` 驱动：滑块位置在 off/on 之间以 EaseOutCubic 平滑过渡；
+/// 背景色随 progress 由 bg_input 插值到 primary。每个开关按 `id` 独立存储动画状态。
+fn render_toggle_switch(ui: &mut egui::Ui, id_source: &str, value: &mut bool) {
+    use crate::sokuou::{Easing, Progress};
+
+    let (rect, resp) = ui.allocate_exact_size(
+        Vec2::new(40.0, 24.0),
+        egui::Sense::click(),
+    );
+
+    if resp.clicked() {
+        *value = !*value;
+    }
+
+    // ── 每-开关的 Progress 缓存到 egui 临时数据 ──
+    let anim_id = egui::Id::new(("toggle_progress", id_source));
+    let target = if *value { 1.0f64 } else { 0.0 };
+    let mut anim = ui.ctx().data_mut(|d| {
+        d.get_temp::<Progress>(anim_id).unwrap_or_else(|| {
+            let mut p = Progress::with_easing(0.22, Easing::EaseOutCubic);
+            p.jump_to(target); // 首次渲染直接落到当前状态，不播开场动画
+            p
+        })
+    });
+    if (anim.target() - target).abs() > f64::EPSILON {
+        anim.set_target(target);
+    }
+    let dt = ui.input(|i| i.stable_dt) as f64;
+    anim.update(dt);
+    let t = anim.value().clamp(0.0, 1.0) as f32;
+    if !anim.is_steady() {
+        ui.ctx().request_repaint();
+    }
+    ui.ctx().data_mut(|d| d.insert_temp(anim_id, anim));
+
+    // ── 背景色：bg_input → primary 插值 ──
+    let bg_off = colors::bg_input();
+    let bg_on = colors::primary();
+    let bg = Color32::from_rgb(
+        lerp_u8(bg_off.r(), bg_on.r(), t),
+        lerp_u8(bg_off.g(), bg_on.g(), t),
+        lerp_u8(bg_off.b(), bg_on.b(), t),
+    );
+    ui.painter().rect_filled(rect, CornerRadius::ZERO, bg);
+
+    // ── 滑块横向位置：4px → (rect.width - 20) 线性映射 ──
+    let knob_left = rect.left() + 4.0;
+    let knob_right = rect.right() - 20.0;
+    let knob_x = knob_left + (knob_right - knob_left) * t;
+    let knob_rect = Rect::from_min_size(
+        pos2(knob_x, rect.top() + 4.0),
+        Vec2::splat(16.0),
+    );
+    ui.painter().rect_filled(knob_rect, CornerRadius::ZERO, Color32::WHITE);
+
+    if resp.hovered() {
+        let c = if *value { colors::primary() } else { colors::border() };
+        let overlay = Color32::from_rgba_premultiplied(c.r(), c.g(), c.b(), 30);
+        ui.painter().rect_filled(rect, CornerRadius::ZERO, overlay);
+    }
+}
+
+#[inline]
+fn lerp_u8(a: u8, b: u8, t: f32) -> u8 {
+    (a as f32 + (b as f32 - a as f32) * t).clamp(0.0, 255.0) as u8
+}
+
+/// 小号方角文字按钮（选中态填充强调色，未选中透明）
+fn render_choice_button(ui: &mut egui::Ui, label: &str, selected: bool) -> egui::Response {
+    let btn = egui::Button::new(
+        egui::RichText::new(label)
+            .font(FontId::new(12.0, egui::FontFamily::Proportional))
+            .color(if selected {
+                colors::text_on_primary()
+            } else {
+                colors::text_secondary()
+            }),
+    )
+    .fill(if selected { colors::primary() } else { colors::bg_input() })
+    .corner_radius(CornerRadius::ZERO)
+    .stroke(Stroke::NONE)
+    .min_size(Vec2::new(0.0, 26.0));
+    ui.add(btn)
 }
 
 /// 纯色统计色块（匹配首页 render_metric_blocks 风格）
@@ -1173,67 +1319,155 @@ pub fn render_app_settings(app: &mut PezMaxApp, ui: &mut egui::Ui) {
         .id_salt("settings_scroll")
         .show(ui, |ui| {
             // ── 常规 ──────────────────────────────────────────────
-            settings_group(ui, "常规", |ui| {
-                toggle_row(ui, "开机自启", "登录时自动启动 PezMax", &mut app.setting_auto_launch);
+            setting_section_title(ui, "常规");
+            setting_card(ui, "开机自启", "登录时自动启动 PezMax", 60.0, |ui| {
+                render_toggle_switch(ui, "auto_launch", &mut app.setting_auto_launch);
             });
 
-            ui.add_space(12.0);
+            ui.add_space(16.0);
 
             // ── 外观 ──────────────────────────────────────────────
-            settings_group(ui, "外观", |ui| {
-                theme_mode_row(ui, &mut app.theme_mode);
-                ui.add_space(4.0);
-                accent_color_row(ui, &mut app.accent_idx);
+            setting_section_title(ui, "外观");
+            setting_card(ui, "外观模式", "跟随系统 / 深色 / 浅色", 240.0, |ui| {
+                // right_to_left 布局：Light → Dark → System
+                for (variant, label) in [
+                    (ThemeMode::Light,  "浅色"),
+                    (ThemeMode::Dark,   "深色"),
+                    (ThemeMode::System, "跟随系统"),
+                ] {
+                    let selected = app.theme_mode == variant;
+                    if render_choice_button(ui, label, selected).clicked() {
+                        app.theme_mode = variant;
+                    }
+                    ui.add_space(4.0);
+                }
+            });
+            ui.add_space(6.0);
+            setting_card(ui, "强调色", ACCENT_PRESETS[app.accent_idx].name, 260.0, |ui| {
+                for (i, preset) in ACCENT_PRESETS.iter().enumerate().rev() {
+                    let selected = app.accent_idx == i;
+                    let color = egui::Color32::from_rgb(preset.r, preset.g, preset.b);
+                    let (crect, cresp) = ui.allocate_exact_size(
+                        Vec2::splat(28.0),
+                        egui::Sense::click(),
+                    );
+                    if cresp.clicked() {
+                        app.accent_idx = i;
+                    }
+                    ui.painter().rect_filled(crect, CornerRadius::ZERO, color);
+                    if selected {
+                        ui.painter().text(
+                            crect.center(),
+                            egui::Align2::CENTER_CENTER,
+                            "✓",
+                            FontId::new(14.0, egui::FontFamily::Proportional),
+                            Color32::WHITE,
+                        );
+                    }
+                    if cresp.hovered() {
+                        ui.painter().rect_stroke(
+                            crect,
+                            CornerRadius::ZERO,
+                            Stroke::new(2.0, Color32::WHITE),
+                            StrokeKind::Outside,
+                        );
+                    }
+                    ui.add_space(6.0);
+                }
             });
 
-            ui.add_space(12.0);
+            ui.add_space(16.0);
 
             // ── PDF ──────────────────────────────────────────────
-            settings_group(ui, "PDF", |ui| {
-                pdf_view_mode_row(ui, &mut app.setting_pdf_view_mode);
-                ui.add_space(4.0);
-                info_row(ui, "默认缩放", &format!("{:.0}%", app.setting_pdf_scale * 100.0));
+            setting_section_title(ui, "PDF");
+            setting_card(ui, "视图模式", "网格 / 单页 / 双页", 240.0, |ui| {
+                let modes: Vec<ViewMode> = ViewMode::all().iter().rev().copied().collect();
+                for variant in modes {
+                    let selected = app.setting_pdf_view_mode == variant;
+                    if render_choice_button(ui, variant.label(), selected).clicked() {
+                        app.setting_pdf_view_mode = variant;
+                    }
+                    ui.add_space(4.0);
+                }
+            });
+            ui.add_space(6.0);
+            setting_card(ui, "默认缩放", "PDF 打开时的默认显示比例", 130.0, |ui| {
+                // 预设缩放档位
+                const SCALES: &[f32] = &[0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
+                let current = app.setting_pdf_scale;
+                let selected_text = format!("{:.0}%", current * 100.0);
+                egui::ComboBox::from_id_salt("pdf_default_scale")
+                    .selected_text(
+                        egui::RichText::new(&selected_text)
+                            .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                            .color(colors::primary()),
+                    )
+                    .width(96.0)
+                    .show_ui(ui, |ui| {
+                        for &s in SCALES {
+                            let label = format!("{:.0}%", s * 100.0);
+                            let active = (current - s).abs() < 0.001;
+                            if ui.selectable_label(active, label).clicked() {
+                                app.setting_pdf_scale = s;
+                            }
+                        }
+                    });
             });
 
-            ui.add_space(12.0);
+            ui.add_space(16.0);
 
             // ── 下载 ──────────────────────────────────────────────
-            settings_group(ui, "下载", |ui| {
-                toggle_row(ui, "静默下载", "跳过保存路径选择，直接存入默认目录", &mut app.setting_silent_download);
-                ui.add_space(4.0);
-                let default_dl = default_download_dir();
-                info_row(ui, "默认路径", &default_dl);
+            setting_section_title(ui, "下载");
+            setting_card(ui, "静默下载", "跳过保存路径选择，直接存入默认目录", 60.0, |ui| {
+                render_toggle_switch(ui, "silent_download", &mut app.setting_silent_download);
             });
+            ui.add_space(6.0);
+            render_download_path_card(app, ui);
 
-            ui.add_space(12.0);
+            ui.add_space(16.0);
 
             // ── 隐私 ──────────────────────────────────────────────
-            settings_group(ui, "隐私", |ui| {
-                let cache_size = format_cache_size(compute_cache_size(&app.cache_manager));
-                info_row(ui, "缓存大小", &cache_size);
-                ui.add_space(4.0);
-                if action_row(ui, "清理缓存", "释放本地缓存空间").clicked() {
-                    // 系统原生确认对话框
-                    if rfd::MessageDialog::new()
-                        .set_title("清除缓存")
-                        .set_description("确定要清除所有本地缓存吗？\n此操作将清除头像、PDF 页面和书签封面等缓存数据。")
-                        .set_buttons(rfd::MessageButtons::OkCancel)
-                        .show()
-                        == rfd::MessageDialogResult::Ok
-                    {
-                        app.clear_cache();
-                    }
-                }
+            setting_section_title(ui, "隐私");
+            let cache_size = format_cache_size(compute_cache_size(&app.cache_manager));
+            setting_card(ui, "缓存大小", "头像、PDF 页面、书签封面等本地缓存占用", 100.0, |ui| {
+                ui.label(
+                    egui::RichText::new(&cache_size)
+                        .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                        .color(colors::text_secondary()),
+                );
             });
+            ui.add_space(6.0);
+            if setting_card(ui, "清理缓存", "释放本地缓存空间", 80.0, |ui| {
+                ui.label(
+                    egui::RichText::new("清理 ›")
+                        .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                        .color(colors::primary()),
+                );
+            }).clicked() {
+                if rfd::MessageDialog::new()
+                    .set_title("清除缓存")
+                    .set_description("确定要清除所有本地缓存吗？\n此操作将清除头像、PDF 页面和书签封面等缓存数据。")
+                    .set_buttons(rfd::MessageButtons::OkCancel)
+                    .show()
+                    == rfd::MessageDialogResult::Ok
+                {
+                    app.clear_cache();
+                }
+            }
 
-            ui.add_space(12.0);
+            ui.add_space(16.0);
 
             // ── 关于 ──────────────────────────────────────────────
-            settings_group(ui, "关于", |ui| {
-                if action_row(ui, "关于 PezMax One", "版本 · 许可证 · 联系方式").clicked() {
-                    app.show_about_dialog = true;
-                }
-            });
+            setting_section_title(ui, "关于");
+            if setting_card(ui, "关于 PezMax One", "版本 · 许可证 · 联系方式", 80.0, |ui| {
+                ui.label(
+                    egui::RichText::new("查看 ›")
+                        .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                        .color(colors::primary()),
+                );
+            }).clicked() {
+                app.show_about_dialog = true;
+            }
 
             ui.add_space(24.0);
         });
@@ -1244,274 +1478,68 @@ pub fn render_app_settings(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 
 // ── 内部组件 ──────────────────────────────────────────────────────────────────
 
-/// 设置分组容器（带分组标题）
-fn settings_group(ui: &mut egui::Ui, title: &str, add_contents: impl FnOnce(&mut egui::Ui)) {
-    ui.horizontal(|ui| {
-        egui::Frame::new()
-            .fill(colors::primary())
-            .corner_radius(CornerRadius::ZERO)
-            .show(ui, |ui| {
-                ui.set_min_size(Vec2::new(3.0, 14.0));
-                ui.set_max_size(Vec2::new(3.0, 14.0));
-            });
-        ui.add_space(8.0);
-        ui.label(
-            egui::RichText::new(title)
-                .font(FontId::new(13.0, egui::FontFamily::Proportional))
-                .color(colors::text_secondary())
-                .strong(),
-        );
-    });
-    ui.add_space(6.0);
-
-    // 内容卡片容器
-    egui::Frame::new()
-        .fill(colors::bg_card())
-        .corner_radius(CornerRadius::ZERO)
-        .stroke(egui::Stroke::new(1.0, colors::border()))
-        .inner_margin(egui::Margin::symmetric(16, 8))
-        .show(ui, |ui| {
-            ui.set_min_width(ui.available_width());
-            add_contents(ui);
-        });
-}
-
-/// 带开关的设置行
-fn toggle_row(ui: &mut egui::Ui, label: &str, desc: &str, value: &mut bool) {
-    ui.horizontal(|ui| {
-        ui.vertical(|ui| {
-            ui.label(
-                egui::RichText::new(label)
-                    .font(FontId::new(15.0, egui::FontFamily::Proportional))
-                    .color(colors::text_primary()),
-            );
-            ui.label(
-                egui::RichText::new(desc)
-                    .font(FontId::new(12.0, egui::FontFamily::Proportional))
-                    .color(colors::text_secondary()),
-            );
-        });
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            // Metro 风格开关：用强调色填充
-            let toggle_size = 28.0;
-            let (rect, resp) = ui.allocate_exact_size(
-                Vec2::new(44.0, toggle_size),
-                egui::Sense::click(),
-            );
-
-            let bg = if *value { colors::primary() } else { colors::bg_input() };
-            ui.painter().rect_filled(rect, CornerRadius::ZERO, bg);
-
-            // 滑块
-            let knob_x = if *value { rect.right() - 24.0 } else { rect.left() + 4.0 };
-            let knob_rect = Rect::from_min_size(
-                pos2(knob_x, rect.top() + 4.0),
-                Vec2::splat(20.0),
-            );
-            ui.painter().rect_filled(knob_rect, CornerRadius::ZERO, Color32::WHITE);
-
-            if resp.clicked() {
-                *value = !*value;
-            }
-            if resp.hovered() {
-                let c = if *value { colors::primary() } else { colors::border() };
-                let overlay = Color32::from_rgba_premultiplied(c.r(), c.g(), c.b(), 30);
-                ui.painter().rect_filled(rect, CornerRadius::ZERO, overlay);
-            }
-        });
-    });
-}
-
-/// 只读信息行
-fn info_row(ui: &mut egui::Ui, label: &str, value: &str) {
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new(label)
-                .font(FontId::new(15.0, egui::FontFamily::Proportional))
-                .color(colors::text_primary()),
-        );
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.label(
-                egui::RichText::new(value)
-                    .font(FontId::new(13.0, egui::FontFamily::Proportional))
-                    .color(colors::text_secondary()),
-            );
-            ui.add_space(4.0);
-            ui.label(
-                egui::RichText::new("›")
-                    .font(FontId::new(20.0, egui::FontFamily::Proportional))
-                    .color(colors::text_secondary()),
-            );
-        });
-    });
-}
-
-/// 可点击操作行（整行可点击）
-fn action_row(ui: &mut egui::Ui, label: &str, desc: &str) -> egui::Response {
+/// 默认下载路径卡片 — 高度加大以容纳完整路径，整卡片可点击打开系统文件夹选择器
+fn render_download_path_card(app: &mut PezMaxApp, ui: &mut egui::Ui) {
+    let path = app.setting_download_dir.clone();
     let (rect, resp) = ui.allocate_exact_size(
-        Vec2::new(ui.available_width(), 48.0),
+        Vec2::new(ui.available_width(), 80.0),
         egui::Sense::click(),
     );
-
-    // 左侧文字
-    ui.painter().text(
-        pos2(rect.left() + 4.0, rect.top() + 10.0),
-        egui::Align2::LEFT_TOP,
-        label,
-        FontId::new(15.0, egui::FontFamily::Proportional),
-        colors::primary(),
+    ui.painter().rect_filled(rect, CornerRadius::ZERO, colors::bg_card());
+    ui.painter().rect_stroke(
+        rect,
+        CornerRadius::ZERO,
+        Stroke::new(1.0, colors::border()),
+        StrokeKind::Outside,
     );
-    ui.painter().text(
-        pos2(rect.left() + 4.0, rect.top() + 30.0),
-        egui::Align2::LEFT_TOP,
-        desc,
-        FontId::new(12.0, egui::FontFamily::Proportional),
-        colors::text_secondary(),
-    );
-
-    // 右侧箭头
-    ui.painter().text(
-        pos2(rect.right() - 4.0, rect.center().y),
-        egui::Align2::RIGHT_CENTER,
-        "›",
-        FontId::new(20.0, egui::FontFamily::Proportional),
+    // 左 3px 强调色条
+    ui.painter().rect_filled(
+        Rect::from_min_max(pos2(rect.left(), rect.top()), pos2(rect.left() + 3.0, rect.bottom())),
+        CornerRadius::ZERO,
         colors::primary(),
     );
 
-    resp
-}
-
-/// 外观模式三态选择行
-fn theme_mode_row(ui: &mut egui::Ui, mode: &mut ThemeMode) {
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("外观模式")
-                .font(FontId::new(15.0, egui::FontFamily::Proportional))
-                .color(colors::text_primary()),
-        );
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            for (variant, label) in [
-                (ThemeMode::System, "跟随系统"),
-                (ThemeMode::Dark,   "深色"),
-                (ThemeMode::Light,  "浅色"),
-            ] {
-                let selected = *mode == variant;
-                let btn = egui::Button::new(
-                    egui::RichText::new(label)
-                        .font(FontId::new(13.0, egui::FontFamily::Proportional))
-                        .color(if selected {
-                            colors::text_on_primary()
-                        } else {
-                            colors::text_secondary()
-                        }),
-                )
-                .fill(if selected { colors::primary() } else { colors::bg_input() })
-                .corner_radius(CornerRadius::same(0))
-                .min_size(Vec2::new(0.0, 28.0));
-                if ui.add(btn).clicked() {
-                    *mode = variant;
-                }
-                ui.add_space(4.0);
-            }
-        });
-    });
-}
-
-/// 强调色色块选择行（放大色块至 36px）
-fn accent_color_row(ui: &mut egui::Ui, accent_idx: &mut usize) {
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("强调色")
-                .font(FontId::new(15.0, egui::FontFamily::Proportional))
-                .color(colors::text_primary()),
-        );
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            for (i, preset) in ACCENT_PRESETS.iter().enumerate().rev() {
-                let selected = *accent_idx == i;
-                let color = egui::Color32::from_rgb(preset.r, preset.g, preset.b);
-                let (rect, resp) = ui.allocate_exact_size(
-                    Vec2::splat(36.0),
-                    egui::Sense::click(),
-                );
-                if resp.clicked() {
-                    *accent_idx = i;
-                }
-
-                // 色块 — 圆角方形，比之前大一圈
-                let inner_rect = rect.shrink(2.0);
-                ui.painter().rect_filled(inner_rect, egui::CornerRadius::same(4), color);
-
-                // 选中时：白色对勾
-                if selected {
-                    ui.painter().text(
-                        rect.center(),
-                        egui::Align2::CENTER_CENTER,
-                        "✓",
-                        FontId::new(18.0, egui::FontFamily::Proportional),
-                        egui::Color32::WHITE,
-                    );
-                }
-                // 悬停时：白色边框
-                if resp.hovered() {
-                    ui.painter().rect_stroke(
-                        inner_rect,
-                        egui::CornerRadius::same(4),
-                        egui::Stroke::new(2.0, egui::Color32::WHITE),
-                        egui::StrokeKind::Outside,
-                    );
-                }
-                ui.add_space(6.0);
-            }
-            // 当前颜色名称
-            ui.add_space(8.0);
+    let content_rect = Rect::from_min_max(
+        pos2(rect.left() + 20.0, rect.top() + 10.0),
+        pos2(rect.right() - 12.0, rect.bottom() - 10.0),
+    );
+    ui.allocate_ui_at_rect(content_rect, |ui| {
+        // 第一行：标签 + 右侧"更改 ›"
+        ui.horizontal(|ui| {
             ui.label(
-                egui::RichText::new(ACCENT_PRESETS[*accent_idx].name)
-                    .font(FontId::new(13.0, egui::FontFamily::Proportional))
-                    .color(colors::text_secondary()),
+                egui::RichText::new("默认下载路径")
+                    .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                    .color(colors::text_primary()),
             );
-        });
-    });
-}
-
-/// PDF 视图模式选择行
-fn pdf_view_mode_row(ui: &mut egui::Ui, mode: &mut ViewMode) {
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("视图模式")
-                .font(FontId::new(15.0, egui::FontFamily::Proportional))
-                .color(colors::text_primary()),
-        );
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            for variant in ViewMode::all() {
-                let selected = *mode == *variant;
-                let btn = egui::Button::new(
-                    egui::RichText::new(variant.label())
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.label(
+                    egui::RichText::new("更改 ›")
                         .font(FontId::new(13.0, egui::FontFamily::Proportional))
-                        .color(if selected {
-                            colors::text_on_primary()
-                        } else {
-                            colors::text_secondary()
-                        }),
-                )
-                .fill(if selected { colors::primary() } else { colors::bg_input() })
-                .corner_radius(CornerRadius::same(0))
-                .min_size(Vec2::new(0.0, 28.0));
-                if ui.add(btn).clicked() {
-                    *mode = *variant;
-                }
-                ui.add_space(4.0);
-            }
+                        .color(colors::primary()),
+                );
+            });
         });
+        ui.add_space(4.0);
+        // 第二行：路径（超长时截断，避免撑破卡片）
+        ui.add(
+            egui::Label::new(
+                egui::RichText::new(&path)
+                    .font(FontId::new(11.0, egui::FontFamily::Monospace))
+                    .color(colors::text_secondary()),
+            )
+            .truncate(),
+        );
     });
-}
 
-/// 获取默认下载目录
-fn default_download_dir() -> String {
-    if let Some(home) = dirs::home_dir() {
-        let path = home.join("Downloads").join("PezMax");
-        path.to_string_lossy().to_string()
-    } else {
-        "~/Downloads/PezMax".to_string()
+    if resp.clicked() {
+        let start_dir = std::path::PathBuf::from(&path);
+        let mut dlg = rfd::FileDialog::new().set_title("选择默认下载文件夹");
+        if start_dir.exists() {
+            dlg = dlg.set_directory(&start_dir);
+        }
+        if let Some(chosen) = dlg.pick_folder() {
+            app.setting_download_dir = chosen.to_string_lossy().to_string();
+        }
     }
 }
 
@@ -1577,11 +1605,15 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.";
 
+    // 内容左侧内边距（过 3px 强调色条 + 呼吸空间）
+    const LEFT_PAD: f32 = 24.0;
+    const RIGHT_PAD: f32 = 20.0;
+
     egui::Window::new("关于")
         .collapsible(false)
         .resizable(false)
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-        .fixed_size(egui::vec2(420.0, 440.0))
+        .fixed_size(egui::vec2(500.0, 560.0))
         .title_bar(false)
         .frame(egui::Frame::new()
             .fill(colors::bg_card())
@@ -1598,28 +1630,32 @@ SOFTWARE.";
                 colors::primary(),
             );
 
-            ui.add_space(16.0);
+            let content_left = ui.max_rect().left() + LEFT_PAD;
+            let content_right = ui.max_rect().right() - RIGHT_PAD;
 
-            // 标题
+            ui.add_space(18.0);
+
+            // ── 标题栏 ─────────────────────────────────────────
             ui.horizontal(|ui| {
-                ui.add_space(8.0);
+                ui.add_space(LEFT_PAD);
                 ui.label(
-                    egui::RichText::new("关于 PezMax One")
-                        .font(FontId::new(18.0, egui::FontFamily::Proportional))
-                        .color(colors::text_primary())
+                    egui::RichText::new("关于")
+                        .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                        .color(colors::text_secondary())
                         .strong(),
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.add_space(RIGHT_PAD - 12.0);
                     let close_clicked = ui.scope(|ui| {
                         ui.visuals_mut().widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
                         ui.add(
                             egui::Button::new(
-                                egui::RichText::new("✕")
-                                    .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                                egui::RichText::new("×")
+                                    .font(FontId::new(22.0, egui::FontFamily::Proportional))
                                     .color(colors::text_secondary()),
                             )
                             .stroke(egui::Stroke::NONE)
-                            .min_size(egui::vec2(24.0, 24.0)),
+                            .min_size(egui::vec2(28.0, 28.0)),
                         )
                     }).inner.clicked();
                     if close_clicked {
@@ -1628,40 +1664,44 @@ SOFTWARE.";
                 });
             });
 
-            ui.add_space(12.0);
+            ui.add_space(14.0);
 
             // ── 应用名称 + 版本号 ──────────────────────────────
-            let app_name = "PezMax One · 拼图满绩·绫";
-            let version = "v0.1.0";
-
             ui.horizontal(|ui| {
-                ui.add_space(8.0);
+                ui.add_space(LEFT_PAD);
                 ui.label(
-                    egui::RichText::new(app_name)
-                        .font(FontId::new(22.0, egui::FontFamily::Proportional))
+                    egui::RichText::new("PezMax One")
+                        .font(FontId::new(24.0, egui::FontFamily::Proportional))
                         .color(colors::primary())
                         .strong(),
                 );
-                ui.add_space(8.0);
+                ui.add_space(10.0);
                 ui.label(
-                    egui::RichText::new(version)
+                    egui::RichText::new("v0.1.0")
                         .font(FontId::new(13.0, egui::FontFamily::Proportional))
                         .color(colors::text_secondary()),
                 );
             });
+            ui.horizontal(|ui| {
+                ui.add_space(LEFT_PAD);
+                ui.label(
+                    egui::RichText::new("拼图满绩 · 绫")
+                        .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                        .color(colors::text_secondary()),
+                );
+            });
 
-            ui.add_space(16.0);
+            ui.add_space(18.0);
 
             // ── 分割线 ────────────────────────────────────────
-            let sep_rect = ui.available_rect_before_wrap();
             let sep_y = ui.cursor().top();
             ui.painter().line_segment(
-                [egui::pos2(sep_rect.left() + 16.0, sep_y), egui::pos2(sep_rect.right() - 16.0, sep_y)],
+                [egui::pos2(content_left, sep_y), egui::pos2(content_right, sep_y)],
                 egui::Stroke::new(1.0, colors::border()),
             );
-            ui.add_space(12.0);
+            ui.add_space(16.0);
 
-            // ── 信息列表 ──────────────────────────────────────
+            // ── 信息列表（key 列固定 84px 宽度对齐）─────────
             let info_items: &[(&str, &str)] = &[
                 ("版本号", "v0.1.0 (build 2026-07)"),
                 ("作者", "Takahashi Rinta"),
@@ -1671,21 +1711,25 @@ SOFTWARE.";
 
             for (key, val) in info_items {
                 ui.horizontal(|ui| {
-                    ui.add_space(8.0);
-                    ui.label(
-                        egui::RichText::new(format!("{}:", key))
-                            .font(FontId::new(12.0, egui::FontFamily::Proportional))
-                            .color(colors::text_secondary()),
+                    ui.add_space(LEFT_PAD);
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(84.0, 22.0),
+                        egui::Layout::left_to_right(egui::Align::Center),
+                        |ui| {
+                            ui.label(
+                                egui::RichText::new(*key)
+                                    .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                                    .color(colors::text_secondary()),
+                            );
+                        },
                     );
-                    ui.add_space(8.0);
                     ui.label(
                         egui::RichText::new(*val)
                             .font(FontId::new(13.0, egui::FontFamily::Proportional))
                             .color(colors::text_primary()),
                     );
-                    // QQ群号可点击复制
                     if *key == "QQ交流群" {
-                        ui.add_space(6.0);
+                        ui.add_space(8.0);
                         let copy_btn = ui.scope(|ui| {
                             ui.visuals_mut().widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
                             ui.add(
@@ -1695,7 +1739,7 @@ SOFTWARE.";
                                         .color(colors::primary()),
                                 )
                                 .corner_radius(egui::CornerRadius::ZERO)
-                                .min_size(egui::vec2(40.0, 20.0))
+                                .min_size(egui::vec2(40.0, 22.0))
                                 .stroke(egui::Stroke::new(1.0, colors::primary())),
                             )
                         }).inner.clicked();
@@ -1703,63 +1747,64 @@ SOFTWARE.";
                             if let Ok(mut clipboard) = arboard::Clipboard::new() {
                                 let _ = clipboard.set_text("1077605719");
                             }
-                            app.show_about_dialog = false;
-                            app.add_toast("QQ群号已复制到剪贴板", crate::app::ToastLevel::Success);
+                            app.add_toast("QQ群号已复制到剪贴板", ToastLevel::Success);
                         }
                     }
                 });
-                ui.add_space(6.0);
+                ui.add_space(8.0);
             }
 
-            // ── MIT License 正文 ──────────────────────────────
-            ui.add_space(8.0);
+            ui.add_space(6.0);
             let sep_y2 = ui.cursor().top();
             ui.painter().line_segment(
-                [egui::pos2(sep_rect.left() + 16.0, sep_y2), egui::pos2(sep_rect.right() - 16.0, sep_y2)],
+                [egui::pos2(content_left, sep_y2), egui::pos2(content_right, sep_y2)],
                 egui::Stroke::new(1.0, colors::border()),
             );
-            ui.add_space(8.0);
+            ui.add_space(12.0);
 
+            // ── 许可证 ────────────────────────────────────────
             ui.horizontal(|ui| {
-                ui.add_space(8.0);
+                ui.add_space(LEFT_PAD);
                 ui.label(
-                    egui::RichText::new("许可证")
+                    egui::RichText::new("MIT License")
                         .font(FontId::new(13.0, egui::FontFamily::Proportional))
                         .color(colors::text_primary())
                         .strong(),
                 );
             });
-            ui.add_space(4.0);
+            ui.add_space(6.0);
 
             egui::ScrollArea::vertical()
                 .id_salt("about_license_scroll")
-                .max_height(120.0)
+                .max_height(180.0)
+                .auto_shrink([false, false])
                 .show(ui, |ui| {
-                    ui.add_space(4.0);
                     ui.horizontal(|ui| {
-                        ui.add_space(8.0);
-                        ui.label(
-                            egui::RichText::new(license_text)
-                                .font(FontId::new(11.0, egui::FontFamily::Monospace))
-                                .color(colors::text_secondary()),
-                        );
+                        ui.add_space(LEFT_PAD);
+                        ui.vertical(|ui| {
+                            ui.set_max_width(content_right - content_left);
+                            ui.label(
+                                egui::RichText::new(license_text)
+                                    .font(FontId::new(11.0, egui::FontFamily::Monospace))
+                                    .color(colors::text_secondary()),
+                            );
+                        });
                     });
                 });
 
-            ui.add_space(16.0);
+            ui.add_space(14.0);
 
-            // ── 关闭按钮 ──────────────────────────────────────
-            ui.horizontal_centered(|ui| {
-                ui.add_space(ui.available_width() * 0.3);
+            // ── 关闭按钮（真居中）─────────────────────────────
+            ui.vertical_centered(|ui| {
                 let close_btn = egui::Button::new(
-                    egui::RichText::new("  关闭  ")
+                    egui::RichText::new("关闭")
                         .font(FontId::new(14.0, egui::FontFamily::Proportional))
                         .color(colors::text_on_primary()),
                 )
                 .fill(colors::primary())
                 .stroke(egui::Stroke::NONE)
                 .corner_radius(egui::CornerRadius::ZERO)
-                .min_size(egui::vec2(80.0, 32.0));
+                .min_size(egui::vec2(96.0, 32.0));
                 if ui.add(close_btn).clicked() {
                     app.show_about_dialog = false;
                 }

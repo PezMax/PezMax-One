@@ -22,6 +22,7 @@ Phase 1 完成。核心原语已稳定，已接入前端 UI 组件。
 | `grid_size_anim` | `SpringAnim` | `pdf/mod.rs` | 平摊模式下页面宽度平滑过渡（response=0.4, damping=0.825） |
 | `accent_transition` | `MetroAnim` | `theme/mod.rs` | 强调色切换 RGB 插值（0.3s, Quadratic/EaseOut） |
 | `dark_transition` | `MetroAnim` | `theme/mod.rs` | 深色/浅色模式切换全颜色插值（0.3s, Quadratic/EaseOut） |
+| 设置页 toggle 开关滑块 | `Progress` | `pages/profile.rs::render_toggle_switch` | 开关滑块横向位移 + 背景色插值（0.22s, EaseOutCubic）。每开关按 `id_source` 独立存储到 `ctx.data_mut`，首次渲染 `jump_to` 避免开场动画。 |
 
 ## 新增原语
 
@@ -36,7 +37,7 @@ Phase 1 完成。核心原语已稳定，已接入前端 UI 组件。
 ## 从未使用的 API（持续更新）
 
 - `SpringAnim::set_target_with_velocity` — 暂无用例（无手势驱动交互）
-- `Progress::jump_to` — 所有 Progress 实例均使用 `set_target` 平滑过渡
+- `Progress::jump_to` — `render_toggle_switch` 首次渲染时用它跳到当前布尔态，避免开场播动画；其余 Progress 实例均使用 `set_target` 平滑过渡
 - `Animator` / `Animation` trait — 预留存根，尚未验证
 - `MetroAnim::default_metro` / `MetroAnim::jump_to` — 仅使用 `new` + `set_target` + `update`
 - `UwpEasing` 非-Quadratic 变体（Cubic, Sine, Back, Bounce, Elastic 等）— 暂无用例，但保留供后续参考
