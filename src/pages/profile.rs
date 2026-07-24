@@ -9,9 +9,10 @@
 //   - 内容卡片 bg_card + 1px 边框
 //   - 悬停叠加色（primary color + 低透明度）
 
-use crate::app::{AccountEditSection, PezMaxApp};
+use crate::app::{AccountEditSection, PezMaxApp, ToastLevel};
 use crate::api::models::SecurityQuestion;
 use crate::components::animated_counter::render_odometer_value;
+use crate::pdf::ViewMode;
 use crate::theme::colors;
 use crate::theme::{ThemeMode, ACCENT_PRESETS};
 use egui::{Color32, CornerRadius, FontId, Rect, Stroke, Vec2, pos2, StrokeKind};
@@ -1187,19 +1188,41 @@ pub fn render_app_settings(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 
             ui.add_space(12.0);
 
+            // ── PDF ──────────────────────────────────────────────
+            settings_group(ui, "PDF", |ui| {
+                pdf_view_mode_row(ui, &mut app.setting_pdf_view_mode);
+                ui.add_space(4.0);
+                info_row(ui, "默认缩放", &format!("{:.0}%", app.setting_pdf_scale * 100.0));
+            });
+
+            ui.add_space(12.0);
+
             // ── 下载 ──────────────────────────────────────────────
             settings_group(ui, "下载", |ui| {
                 toggle_row(ui, "静默下载", "跳过保存路径选择，直接存入默认目录", &mut app.setting_silent_download);
                 ui.add_space(4.0);
-                info_row(ui, "默认路径", "~/Downloads/PezMax");
+                let default_dl = default_download_dir();
+                info_row(ui, "默认路径", &default_dl);
             });
 
             ui.add_space(12.0);
 
             // ── 隐私 ──────────────────────────────────────────────
             settings_group(ui, "隐私", |ui| {
+                let cache_size = format_cache_size(compute_cache_size(&app.cache_manager));
+                info_row(ui, "缓存大小", &cache_size);
+                ui.add_space(4.0);
                 if action_row(ui, "清理缓存", "释放本地缓存空间").clicked() {
-                    app.clear_cache();
+                    // 系统原生确认对话框
+                    if rfd::MessageDialog::new()
+                        .set_title("清除缓存")
+                        .set_description("确定要清除所有本地缓存吗？\n此操作将清除头像、PDF 页面和书签封面等缓存数据。")
+                        .set_buttons(rfd::MessageButtons::OkCancel)
+                        .show()
+                        == rfd::MessageDialogResult::Ok
+                    {
+                        app.clear_cache();
+                    }
                 }
             });
 
@@ -1207,11 +1230,16 @@ pub fn render_app_settings(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 
             // ── 关于 ──────────────────────────────────────────────
             settings_group(ui, "关于", |ui| {
-                info_row(ui, "版本", "PezMax 0.1.0 · egui 版");
+                if action_row(ui, "关于 PezMax One", "版本 · 许可证 · 联系方式").clicked() {
+                    app.show_about_dialog = true;
+                }
             });
 
             ui.add_space(24.0);
         });
+
+    // 关于弹窗
+    render_about_dialog(app, ui);
 }
 
 // ── 内部组件 ──────────────────────────────────────────────────────────────────
@@ -1318,35 +1346,39 @@ fn info_row(ui: &mut egui::Ui, label: &str, value: &str) {
     });
 }
 
-/// 可点击操作行
+/// 可点击操作行（整行可点击）
 fn action_row(ui: &mut egui::Ui, label: &str, desc: &str) -> egui::Response {
-    ui.horizontal(|ui| {
-        let resp = ui.vertical(|ui| {
-            ui.label(
-                egui::RichText::new(label)
-                    .font(FontId::new(15.0, egui::FontFamily::Proportional))
-                    .color(colors::primary()),
-            );
-            ui.label(
-                egui::RichText::new(desc)
-                    .font(FontId::new(12.0, egui::FontFamily::Proportional))
-                    .color(colors::text_secondary()),
-            );
-        })
-        .response
-        .interact(egui::Sense::click());
+    let (rect, resp) = ui.allocate_exact_size(
+        Vec2::new(ui.available_width(), 48.0),
+        egui::Sense::click(),
+    );
 
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.label(
-                egui::RichText::new("›")
-                    .font(FontId::new(20.0, egui::FontFamily::Proportional))
-                    .color(colors::primary()),
-            );
-        });
+    // 左侧文字
+    ui.painter().text(
+        pos2(rect.left() + 4.0, rect.top() + 10.0),
+        egui::Align2::LEFT_TOP,
+        label,
+        FontId::new(15.0, egui::FontFamily::Proportional),
+        colors::primary(),
+    );
+    ui.painter().text(
+        pos2(rect.left() + 4.0, rect.top() + 30.0),
+        egui::Align2::LEFT_TOP,
+        desc,
+        FontId::new(12.0, egui::FontFamily::Proportional),
+        colors::text_secondary(),
+    );
 
-        resp
-    })
-    .inner
+    // 右侧箭头
+    ui.painter().text(
+        pos2(rect.right() - 4.0, rect.center().y),
+        egui::Align2::RIGHT_CENTER,
+        "›",
+        FontId::new(20.0, egui::FontFamily::Proportional),
+        colors::primary(),
+    );
+
+    resp
 }
 
 /// 外观模式三态选择行
@@ -1385,7 +1417,7 @@ fn theme_mode_row(ui: &mut egui::Ui, mode: &mut ThemeMode) {
     });
 }
 
-/// 强调色色块选择行
+/// 强调色色块选择行（放大色块至 36px）
 fn accent_color_row(ui: &mut egui::Ui, accent_idx: &mut usize) {
     ui.horizontal(|ui| {
         ui.label(
@@ -1398,15 +1430,16 @@ fn accent_color_row(ui: &mut egui::Ui, accent_idx: &mut usize) {
                 let selected = *accent_idx == i;
                 let color = egui::Color32::from_rgb(preset.r, preset.g, preset.b);
                 let (rect, resp) = ui.allocate_exact_size(
-                    Vec2::splat(28.0),
+                    Vec2::splat(36.0),
                     egui::Sense::click(),
                 );
                 if resp.clicked() {
                     *accent_idx = i;
                 }
 
-                // 色块
-                ui.painter().rect_filled(rect, 0.0, color);
+                // 色块 — 圆角方形，比之前大一圈
+                let inner_rect = rect.shrink(2.0);
+                ui.painter().rect_filled(inner_rect, egui::CornerRadius::same(4), color);
 
                 // 选中时：白色对勾
                 if selected {
@@ -1414,15 +1447,15 @@ fn accent_color_row(ui: &mut egui::Ui, accent_idx: &mut usize) {
                         rect.center(),
                         egui::Align2::CENTER_CENTER,
                         "✓",
-                        FontId::new(16.0, egui::FontFamily::Proportional),
+                        FontId::new(18.0, egui::FontFamily::Proportional),
                         egui::Color32::WHITE,
                     );
                 }
                 // 悬停时：白色边框
                 if resp.hovered() {
                     ui.painter().rect_stroke(
-                        rect,
-                        0.0,
+                        inner_rect,
+                        egui::CornerRadius::same(4),
                         egui::Stroke::new(2.0, egui::Color32::WHITE),
                         egui::StrokeKind::Outside,
                     );
@@ -1438,4 +1471,298 @@ fn accent_color_row(ui: &mut egui::Ui, accent_idx: &mut usize) {
             );
         });
     });
+}
+
+/// PDF 视图模式选择行
+fn pdf_view_mode_row(ui: &mut egui::Ui, mode: &mut ViewMode) {
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new("视图模式")
+                .font(FontId::new(15.0, egui::FontFamily::Proportional))
+                .color(colors::text_primary()),
+        );
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            for variant in ViewMode::all() {
+                let selected = *mode == *variant;
+                let btn = egui::Button::new(
+                    egui::RichText::new(variant.label())
+                        .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                        .color(if selected {
+                            colors::text_on_primary()
+                        } else {
+                            colors::text_secondary()
+                        }),
+                )
+                .fill(if selected { colors::primary() } else { colors::bg_input() })
+                .corner_radius(CornerRadius::same(0))
+                .min_size(Vec2::new(0.0, 28.0));
+                if ui.add(btn).clicked() {
+                    *mode = *variant;
+                }
+                ui.add_space(4.0);
+            }
+        });
+    });
+}
+
+/// 获取默认下载目录
+fn default_download_dir() -> String {
+    if let Some(home) = dirs::home_dir() {
+        let path = home.join("Downloads").join("PezMax");
+        path.to_string_lossy().to_string()
+    } else {
+        "~/Downloads/PezMax".to_string()
+    }
+}
+
+/// 计算缓存目录大小（字节）
+fn compute_cache_size(cm: &crate::cache::CacheManager) -> u64 {
+    let cache_dir = cm.cache_dir();
+    if !cache_dir.exists() {
+        return 0;
+    }
+    fn walk_dir(dir: &std::path::Path) -> u64 {
+        let mut total = 0u64;
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    total += walk_dir(&path);
+                } else if let Ok(meta) = entry.metadata() {
+                    total += meta.len();
+                }
+            }
+        }
+        total
+    }
+    walk_dir(cache_dir)
+}
+
+/// 格式化缓存大小（B/KB/MB）
+fn format_cache_size(bytes: u64) -> String {
+    if bytes < 1024 {
+        format!("{} B", bytes)
+    } else if bytes < 1024 * 1024 {
+        format!("{:.1} KB", bytes as f64 / 1024.0)
+    } else {
+        format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
+    }
+}
+
+/// 关于弹窗 — Metro Design 风格，居中显示完整信息
+fn render_about_dialog(app: &mut PezMaxApp, ui: &mut egui::Ui) {
+    if !app.show_about_dialog {
+        return;
+    }
+
+    let license_text = "MIT License
+
+Copyright (c) 2026 Takahashi_Rinta
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the \"Software\"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.";
+
+    egui::Window::new("关于")
+        .collapsible(false)
+        .resizable(false)
+        .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+        .fixed_size(egui::vec2(420.0, 440.0))
+        .title_bar(false)
+        .frame(egui::Frame::new()
+            .fill(colors::bg_card())
+            .corner_radius(egui::CornerRadius::ZERO)
+            .stroke(egui::Stroke::new(1.0, colors::border())))
+        .show(ui.ctx(), |ui| {
+            // 左边缘 3px 强调色条
+            ui.painter().rect_filled(
+                egui::Rect::from_min_size(
+                    ui.max_rect().left_top(),
+                    egui::vec2(3.0, ui.max_rect().height()),
+                ),
+                egui::CornerRadius::ZERO,
+                colors::primary(),
+            );
+
+            ui.add_space(16.0);
+
+            // 标题
+            ui.horizontal(|ui| {
+                ui.add_space(8.0);
+                ui.label(
+                    egui::RichText::new("关于 PezMax One")
+                        .font(FontId::new(18.0, egui::FontFamily::Proportional))
+                        .color(colors::text_primary())
+                        .strong(),
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let close_clicked = ui.scope(|ui| {
+                        ui.visuals_mut().widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
+                        ui.add(
+                            egui::Button::new(
+                                egui::RichText::new("✕")
+                                    .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                                    .color(colors::text_secondary()),
+                            )
+                            .stroke(egui::Stroke::NONE)
+                            .min_size(egui::vec2(24.0, 24.0)),
+                        )
+                    }).inner.clicked();
+                    if close_clicked {
+                        app.show_about_dialog = false;
+                    }
+                });
+            });
+
+            ui.add_space(12.0);
+
+            // ── 应用名称 + 版本号 ──────────────────────────────
+            let app_name = "PezMax One · 拼图满绩·绫";
+            let version = "v0.1.0";
+
+            ui.horizontal(|ui| {
+                ui.add_space(8.0);
+                ui.label(
+                    egui::RichText::new(app_name)
+                        .font(FontId::new(22.0, egui::FontFamily::Proportional))
+                        .color(colors::primary())
+                        .strong(),
+                );
+                ui.add_space(8.0);
+                ui.label(
+                    egui::RichText::new(version)
+                        .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                        .color(colors::text_secondary()),
+                );
+            });
+
+            ui.add_space(16.0);
+
+            // ── 分割线 ────────────────────────────────────────
+            let sep_rect = ui.available_rect_before_wrap();
+            let sep_y = ui.cursor().top();
+            ui.painter().line_segment(
+                [egui::pos2(sep_rect.left() + 16.0, sep_y), egui::pos2(sep_rect.right() - 16.0, sep_y)],
+                egui::Stroke::new(1.0, colors::border()),
+            );
+            ui.add_space(12.0);
+
+            // ── 信息列表 ──────────────────────────────────────
+            let info_items: &[(&str, &str)] = &[
+                ("版本号", "v0.1.0 (build 2026-07)"),
+                ("作者", "Takahashi Rinta"),
+                ("QQ交流群", "1077605719"),
+                ("许可证", "MIT License"),
+            ];
+
+            for (key, val) in info_items {
+                ui.horizontal(|ui| {
+                    ui.add_space(8.0);
+                    ui.label(
+                        egui::RichText::new(format!("{}:", key))
+                            .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                            .color(colors::text_secondary()),
+                    );
+                    ui.add_space(8.0);
+                    ui.label(
+                        egui::RichText::new(*val)
+                            .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                            .color(colors::text_primary()),
+                    );
+                    // QQ群号可点击复制
+                    if *key == "QQ交流群" {
+                        ui.add_space(6.0);
+                        let copy_btn = ui.scope(|ui| {
+                            ui.visuals_mut().widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
+                            ui.add(
+                                egui::Button::new(
+                                    egui::RichText::new("复制")
+                                        .font(FontId::new(11.0, egui::FontFamily::Proportional))
+                                        .color(colors::primary()),
+                                )
+                                .corner_radius(egui::CornerRadius::ZERO)
+                                .min_size(egui::vec2(40.0, 20.0))
+                                .stroke(egui::Stroke::new(1.0, colors::primary())),
+                            )
+                        }).inner.clicked();
+                        if copy_btn {
+                            if let Ok(mut clipboard) = arboard::Clipboard::new() {
+                                let _ = clipboard.set_text("1077605719");
+                            }
+                            app.show_about_dialog = false;
+                            app.add_toast("QQ群号已复制到剪贴板", crate::app::ToastLevel::Success);
+                        }
+                    }
+                });
+                ui.add_space(6.0);
+            }
+
+            // ── MIT License 正文 ──────────────────────────────
+            ui.add_space(8.0);
+            let sep_y2 = ui.cursor().top();
+            ui.painter().line_segment(
+                [egui::pos2(sep_rect.left() + 16.0, sep_y2), egui::pos2(sep_rect.right() - 16.0, sep_y2)],
+                egui::Stroke::new(1.0, colors::border()),
+            );
+            ui.add_space(8.0);
+
+            ui.horizontal(|ui| {
+                ui.add_space(8.0);
+                ui.label(
+                    egui::RichText::new("许可证")
+                        .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                        .color(colors::text_primary())
+                        .strong(),
+                );
+            });
+            ui.add_space(4.0);
+
+            egui::ScrollArea::vertical()
+                .id_salt("about_license_scroll")
+                .max_height(120.0)
+                .show(ui, |ui| {
+                    ui.add_space(4.0);
+                    ui.horizontal(|ui| {
+                        ui.add_space(8.0);
+                        ui.label(
+                            egui::RichText::new(license_text)
+                                .font(FontId::new(11.0, egui::FontFamily::Monospace))
+                                .color(colors::text_secondary()),
+                        );
+                    });
+                });
+
+            ui.add_space(16.0);
+
+            // ── 关闭按钮 ──────────────────────────────────────
+            ui.horizontal_centered(|ui| {
+                ui.add_space(ui.available_width() * 0.3);
+                let close_btn = egui::Button::new(
+                    egui::RichText::new("  关闭  ")
+                        .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                        .color(colors::text_on_primary()),
+                )
+                .fill(colors::primary())
+                .stroke(egui::Stroke::NONE)
+                .corner_radius(egui::CornerRadius::ZERO)
+                .min_size(egui::vec2(80.0, 32.0));
+                if ui.add(close_btn).clicked() {
+                    app.show_about_dialog = false;
+                }
+            });
+        });
 }

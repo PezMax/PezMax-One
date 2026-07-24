@@ -397,6 +397,13 @@ pub struct PezMaxApp {
     pub setting_auto_launch: bool,
     pub setting_silent_download: bool,
 
+    // PDF 设置
+    pub setting_pdf_view_mode: crate::pdf::ViewMode,
+    pub setting_pdf_scale: f32,
+
+    // 关于弹窗
+    pub show_about_dialog: bool,
+
     // 外观：外观模式 + 强调色索引（对应 theme::ACCENT_PRESETS）
     pub theme_mode: theme::ThemeMode,
     pub accent_idx: usize,
@@ -567,8 +574,11 @@ impl PezMaxApp {
             report_content: String::new(),
             report_type: String::new(),
             show_report_dialog: false,
+            show_about_dialog: false,
             setting_auto_launch: settings.setting_auto_launch,
             setting_silent_download: settings.setting_silent_download,
+            setting_pdf_view_mode: settings.pdf_view_mode,
+            setting_pdf_scale: settings.pdf_scale,
             theme_mode: settings.theme_mode,
             accent_idx: settings.accent_idx,
 
@@ -1346,6 +1356,51 @@ impl PezMaxApp {
         self.pdf_viewer.clear_textures();
         self.add_toast("缓存已清理", ToastLevel::Success);
     }
+
+    /// 同步开机自启设置到系统注册表（Windows only）
+    pub fn sync_auto_launch(&self) {
+        #[cfg(target_os = "windows")]
+        {
+            let app_name = "PezMax";
+            let current_exe = std::env::current_exe().ok();
+
+            if self.setting_auto_launch {
+                // 添加开机自启
+                if let Some(exe) = current_exe {
+                    let exe_str = exe.to_string_lossy().to_string();
+                    // 使用 winreg 或直接调用 RegSetValueExW
+                    // 这里用注册表命令方式（需要 winreg crate 或 reg.exe）
+                    let _ = std::process::Command::new("reg")
+                        .args([
+                            "add", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+                            "/v", app_name,
+                            "/t", "REG_SZ",
+                            "/d", &exe_str,
+                            "/f",
+                        ])
+                        .output();
+                    log::info!("已设置开机自启: {}", exe_str);
+                }
+            } else {
+                // 移除开机自启
+                let _ = std::process::Command::new("reg")
+                    .args([
+                        "delete", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+                        "/v", app_name,
+                        "/f",
+                    ])
+                    .output();
+                log::info!("已移除开机自启");
+            }
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            // macOS/Linux 暂不支持开机自启
+            if self.setting_auto_launch {
+                log::info!("开机自启仅在 Windows 平台支持");
+            }
+        }
+    }
 }
 
 impl eframe::App for PezMaxApp {
@@ -1390,13 +1445,33 @@ impl eframe::App for PezMaxApp {
             || self.settings.accent_idx != self.accent_idx
             || self.settings.setting_auto_launch != self.setting_auto_launch
             || self.settings.setting_silent_download != self.setting_silent_download
+            || self.settings.pdf_view_mode != self.setting_pdf_view_mode
+            || self.settings.pdf_scale != self.setting_pdf_scale
         {
             self.settings.theme_mode = self.theme_mode;
             self.settings.accent_idx = self.accent_idx;
             self.settings.setting_auto_launch = self.setting_auto_launch;
             self.settings.setting_silent_download = self.setting_silent_download;
+            self.settings.pdf_view_mode = self.setting_pdf_view_mode;
+            self.settings.pdf_scale = self.setting_pdf_scale;
             self.settings.save(&self.cache_manager);
+
+            // 开机自启变化时同步注册表
+            self.sync_auto_launch();
         }
+
+        // 同步 PDF 设置到 PdfViewer（仅在登录后）
+        if self.is_logged_in {
+            if self.pdf_viewer.view_mode != self.setting_pdf_view_mode {
+                self.pdf_viewer.set_view_mode(
+                    self.setting_pdf_view_mode,
+                    &self.pdf_engine,
+                    ctx,
+                );
+            }
+        }
+
+        // 清理缓存后刷新大小显示（toast 已添加，不需要额外操作）
 
         let dt = ctx.input(|i| i.stable_dt) as f64;
 
