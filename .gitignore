@@ -10,3 +10,7 @@ Cargo.lock
 # PDFium 运行库（用户自行下载，不提交）
 pdfium.dll
 *.lib
+
+# 敏感凭证（本地登录 token/加密密码等）
+credentials.json
+**/credentials.json
