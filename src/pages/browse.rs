@@ -1705,6 +1705,8 @@ fn render_paper_favorites(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                             ..Default::default()
                                         });
                                         app.preview_anim.set_target(1.0);
+                                        // 跳转到资源管理页，用户点击后即可开始阅读
+                                        app.navigate_to(crate::app::Section::Browse, crate::app::Subsection::ResourceManager);
                                     }
                                 });
                             });
