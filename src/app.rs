@@ -1509,6 +1509,7 @@ impl eframe::App for PezMaxApp {
                     Ok(bytes) => {
                         if let Some(id) = pending_id {
                             self.process_bookmark_cover_result(ctx, id, &bytes);
+                            ctx.request_repaint(); // 封面纹理就绪后触发重绘
                         }
                     }
                     Err(e) => {
@@ -1532,8 +1533,12 @@ impl eframe::App for PezMaxApp {
                     }
                 }
             }
+            let need_repaint = !cover_results.is_empty();
             for (id, bytes) in cover_results {
                 self.process_bookmark_cover_result(ctx, id, &bytes);
+            }
+            if need_repaint {
+                ctx.request_repaint(); // 批量封面纹理就绪后触发重绘
             }
         }
 
