@@ -4,7 +4,7 @@
 use crate::app::{PezMaxApp, Section, Subsection};
 use crate::components::animated_counter::render_odometer_value;
 use crate::theme::colors;
-use egui::{CornerRadius, FontId, Vec2, Color32, Stroke, pos2, UiBuilder};
+use egui::{CornerRadius, FontId, Vec2, Color32, Stroke, pos2};
 
 const GAP: f32 = 12.0;
 
@@ -182,49 +182,59 @@ fn render_quick_actions(app: &mut PezMaxApp, ui: &mut egui::Ui, parent_w: f32) {
             for col in 0..2 {
                 let idx = row * 2 + col;
                 if idx >= actions.len() { break; }
-                let (icon, title, desc, section, sub, color) = actions[idx];
+                let (icon, title, desc, section, sub, accent) = actions[idx];
 
                 let (rect, resp) = ui.allocate_exact_size(Vec2::new(card_w, card_h), egui::Sense::click());
-                ui.painter().rect_filled(rect, CornerRadius::ZERO, colors::bg_card());
+                let painter = ui.painter();
 
-                ui.painter().rect_filled(
+                // 卡片底色
+                painter.rect_filled(rect, CornerRadius::ZERO, colors::bg_card());
+
+                // 左侧色条
+                painter.rect_filled(
                     egui::Rect::from_min_max(pos2(rect.left(), rect.top()), pos2(rect.left() + 3.0, rect.bottom())),
                     CornerRadius::ZERO,
-                    color,
+                    accent,
                 );
 
-                let mut child_ui = ui.new_child(
-                    UiBuilder::new()
-                        .max_rect(rect)
-                        .layout(egui::Layout::top_down(egui::Align::Center)),
-                );
-                child_ui.vertical_centered(|ui| {
-                    ui.label(
-                        egui::RichText::new(icon)
-                            .font(FontId::new(24.0, egui::FontFamily::Proportional)),
-                    );
-                    ui.add_space(2.0);
-                    ui.label(
-                        egui::RichText::new(title)
-                            .font(FontId::new(14.0, egui::FontFamily::Proportional))
-                            .color(colors::text_primary())
-                            .strong(),
-                    );
-                    ui.add_space(2.0);
-                    ui.label(
-                        egui::RichText::new(desc)
-                            .font(FontId::new(11.0, egui::FontFamily::Proportional))
-                            .color(colors::text_secondary()),
-                    );
-                });
+                // ── 全部用 painter 绘制文字，避免子 UI 部件干扰 hover 检测 ──
+                let center_x = rect.center().x;
 
+                // 图标
+                painter.text(
+                    pos2(center_x, rect.top() + 20.0),
+                    egui::Align2::CENTER_CENTER,
+                    icon,
+                    FontId::new(24.0, egui::FontFamily::Proportional),
+                    colors::text_primary(),
+                );
+
+                // 标题
+                painter.text(
+                    pos2(center_x, rect.top() + 47.0),
+                    egui::Align2::CENTER_CENTER,
+                    title,
+                    FontId::new(14.0, egui::FontFamily::Proportional),
+                    colors::text_primary(),
+                );
+
+                // 描述
+                painter.text(
+                    pos2(center_x, rect.top() + 64.0),
+                    egui::Align2::CENTER_CENTER,
+                    desc,
+                    FontId::new(11.0, egui::FontFamily::Proportional),
+                    colors::text_secondary(),
+                );
+
+                // hover 效果：半透明色块叠加 + 左侧色条加粗
                 if resp.hovered() {
-                    let overlay = Color32::from_rgba_premultiplied(color.r(), color.g(), color.b(), 18);
-                    ui.painter().rect_filled(rect, CornerRadius::ZERO, overlay);
-                    ui.painter().rect_filled(
+                    let overlay = Color32::from_rgba_premultiplied(accent.r(), accent.g(), accent.b(), 18);
+                    painter.rect_filled(rect, CornerRadius::ZERO, overlay);
+                    painter.rect_filled(
                         egui::Rect::from_min_max(pos2(rect.left(), rect.top()), pos2(rect.left() + 4.0, rect.bottom())),
                         CornerRadius::ZERO,
-                        color,
+                        accent,
                     );
                 }
 
