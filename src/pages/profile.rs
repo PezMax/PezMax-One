@@ -297,7 +297,7 @@ fn render_account_settings_list(app: &mut PezMaxApp, ui: &mut egui::Ui) {
         }
     });
 
-    ui.add_space(12.0);
+    ui.add_space(4.0);
 
     // ── 退出登录 ─────────────────────────────────────
     let (rect, _) = ui.allocate_exact_size(
