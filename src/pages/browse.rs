@@ -186,14 +186,18 @@ pub fn render_resource_manager(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                     .color(colors::primary()),
             );
             ui.add_space(8.0);
-            let clear_btn = egui::Button::new(
-                egui::RichText::new("✕ 清除")
-                    .font(FontId::new(12.0, egui::FontFamily::Proportional))
-                    .color(colors::text_secondary()),
-            )
-            .fill(egui::Color32::TRANSPARENT)
-            .corner_radius(egui::CornerRadius::same(0));
-            if ui.add(clear_btn).clicked() {
+            let clear_clicked = ui.scope(|ui| {
+                ui.visuals_mut().widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
+                ui.add(
+                    egui::Button::new(
+                        egui::RichText::new("✕ 清除")
+                            .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                            .color(colors::text_secondary()),
+                    )
+                    .corner_radius(egui::CornerRadius::same(0)),
+                )
+            }).inner.clicked();
+            if clear_clicked {
                 new_sub = Some(None);
                 new_school = Some(None);
             }
@@ -413,15 +417,19 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                             .color(colors::text_primary()),
                     );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let close_btn = egui::Button::new(
-                            egui::RichText::new("✕")
-                                .font(FontId::new(14.0, egui::FontFamily::Proportional))
-                                .color(colors::text_secondary()),
-                        )
-                        .fill(egui::Color32::TRANSPARENT)
-                        .stroke(egui::Stroke::NONE)
-                        .min_size(egui::vec2(24.0, 24.0));
-                        if ui.add(close_btn).clicked() {
+                        let close_clicked = ui.scope(|ui| {
+                            ui.visuals_mut().widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
+                            ui.add(
+                                egui::Button::new(
+                                    egui::RichText::new("✕")
+                                        .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                                        .color(colors::text_secondary()),
+                                )
+                                .stroke(egui::Stroke::NONE)
+                                .min_size(egui::vec2(24.0, 24.0)),
+                            )
+                        }).inner.clicked();
+                        if close_clicked {
                             app.show_info_dialog = false;
                         }
                     });
@@ -1034,13 +1042,13 @@ fn render_bookmark_form(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                     app.bookmarks_data = crate::app::AsyncData::new();
                 }
                 ui.add_space(8.0);
-                if ui
-                    .add(
+                if ui.scope(|ui| {
+                    ui.visuals_mut().widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
+                    ui.add(
                         egui::Button::new("取消")
-                            .fill(egui::Color32::TRANSPARENT)
                             .corner_radius(CornerRadius::same(0)),
                     )
-                    .clicked()
+                }).inner.clicked()
                 {
                     app.show_bookmark_form = false;
                     app.bookmark_edit_target = None;
@@ -1505,16 +1513,19 @@ pub fn render_favorites(app: &mut PezMaxApp, ui: &mut egui::Ui) {
         ui.add_space(0.0);
         for (i, label) in tabs.iter().enumerate() {
             let is_active = i == active_tab;
-            let btn = egui::Button::new(
-                egui::RichText::new(*label)
-                    .font(FontId::new(14.0, egui::FontFamily::Proportional))
-                    .color(if is_active { colors::primary() } else { colors::text_secondary() }),
-            )
-            .fill(egui::Color32::TRANSPARENT)
-            .stroke(egui::Stroke::NONE)
-            .corner_radius(CornerRadius::ZERO)
-            .min_size(egui::vec2(80.0, 32.0));
-            let resp = ui.add(btn);
+            let resp = ui.scope(|ui| {
+                ui.visuals_mut().widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
+                ui.add(
+                    egui::Button::new(
+                        egui::RichText::new(*label)
+                            .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                            .color(if is_active { colors::primary() } else { colors::text_secondary() }),
+                    )
+                    .stroke(egui::Stroke::NONE)
+                    .corner_radius(CornerRadius::ZERO)
+                    .min_size(egui::vec2(80.0, 32.0)),
+                )
+            }).inner;
             tab_rects.push(resp.rect);
             if resp.clicked() && !is_active {
                 app.favorites_tab_idx = i;

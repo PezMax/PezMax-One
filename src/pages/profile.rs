@@ -343,16 +343,20 @@ fn render_account_settings_list(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     );
     ui.allocate_ui_at_rect(btn_rect, |ui| {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let btn = egui::Button::new(
-                egui::RichText::new("退出")
-                    .font(FontId::new(13.0, egui::FontFamily::Proportional))
-                    .color(colors::primary()),
-            )
-            .fill(Color32::TRANSPARENT)
-            .corner_radius(CornerRadius::ZERO)
-            .min_size(Vec2::new(56.0, 28.0))
-            .stroke(Stroke::new(1.0, colors::primary()));
-            if ui.add(btn).clicked() {
+            let clicked = ui.scope(|ui| {
+                ui.visuals_mut().widgets.inactive.bg_fill = Color32::TRANSPARENT;
+                ui.add(
+                    egui::Button::new(
+                        egui::RichText::new("退出")
+                            .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                            .color(colors::primary()),
+                    )
+                    .corner_radius(CornerRadius::ZERO)
+                    .min_size(Vec2::new(56.0, 28.0))
+                    .stroke(Stroke::new(1.0, colors::primary())),
+                )
+            }).inner.clicked();
+            if clicked {
                 app.logout();
             }
         });
@@ -422,18 +426,21 @@ fn settings_card_row(
     });
 }
 
-/// 编辑按钮（小号方角）
+/// 编辑按钮（小号方角，hover/click 有填充色）
 fn edit_button(ui: &mut egui::Ui, text: &str) -> bool {
-    let btn = egui::Button::new(
-        egui::RichText::new(text)
-            .font(FontId::new(13.0, egui::FontFamily::Proportional))
-            .color(colors::primary()),
-    )
-    .fill(Color32::TRANSPARENT)
-    .corner_radius(CornerRadius::ZERO)
-    .min_size(Vec2::new(56.0, 28.0))
-    .stroke(Stroke::new(1.0, colors::primary()));
-    ui.add(btn).clicked()
+    ui.scope(|ui| {
+        ui.visuals_mut().widgets.inactive.bg_fill = Color32::TRANSPARENT;
+        ui.add(
+            egui::Button::new(
+                egui::RichText::new(text)
+                    .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                    .color(colors::primary()),
+            )
+            .corner_radius(CornerRadius::ZERO)
+            .min_size(Vec2::new(56.0, 28.0))
+            .stroke(Stroke::new(1.0, colors::primary())),
+        )
+    }).inner.clicked()
 }
 
 /// 计算居中裁剪的 UV 坐标，使任意比例图片以正方形居中显示
@@ -477,18 +484,21 @@ fn primary_button(ui: &mut egui::Ui, text: &str, loading: bool) -> bool {
     ui.add(btn).clicked()
 }
 
-/// 次要按钮
+/// 次要按钮（hover/click 有填充色）
 fn secondary_button(ui: &mut egui::Ui, text: &str) -> bool {
-    let btn = egui::Button::new(
-        egui::RichText::new(text)
-            .font(FontId::new(13.0, egui::FontFamily::Proportional))
-            .color(colors::text_secondary()),
-    )
-    .fill(Color32::TRANSPARENT)
-    .corner_radius(CornerRadius::ZERO)
-    .min_size(Vec2::new(56.0, 28.0))
-    .stroke(Stroke::new(1.0, colors::border()));
-    ui.add(btn).clicked()
+    ui.scope(|ui| {
+        ui.visuals_mut().widgets.inactive.bg_fill = Color32::TRANSPARENT;
+        ui.add(
+            egui::Button::new(
+                egui::RichText::new(text)
+                    .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                    .color(colors::text_secondary()),
+            )
+            .corner_radius(CornerRadius::ZERO)
+            .min_size(Vec2::new(56.0, 28.0))
+            .stroke(Stroke::new(1.0, colors::border())),
+        )
+    }).inner.clicked()
 }
 
 /// 编辑表单容器

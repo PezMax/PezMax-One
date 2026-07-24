@@ -52,16 +52,20 @@ fn render_welcome(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.add_space(16.0);
-            let btn = egui::Button::new(
-                egui::RichText::new("👤 个人中心")
-                    .font(FontId::new(14.0, egui::FontFamily::Proportional))
-                    .color(colors::primary()),
-            )
-            .fill(Color32::TRANSPARENT)
-            .stroke(Stroke::new(1.0, colors::primary()))
-            .corner_radius(CornerRadius::ZERO)
-            .min_size(Vec2::new(100.0, 34.0));
-            if ui.add(btn).clicked() {
+            let clicked = ui.scope(|ui| {
+                ui.visuals_mut().widgets.inactive.bg_fill = Color32::TRANSPARENT;
+                ui.add(
+                    egui::Button::new(
+                        egui::RichText::new("👤 个人中心")
+                            .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                            .color(colors::primary()),
+                    )
+                    .stroke(Stroke::new(1.0, colors::primary()))
+                    .corner_radius(CornerRadius::ZERO)
+                    .min_size(Vec2::new(100.0, 34.0)),
+                )
+            }).inner.clicked();
+            if clicked {
                 app.navigate_to(Section::Profile, Subsection::PersonalCenter);
             }
         });
@@ -317,16 +321,20 @@ fn render_recent_files(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     } else if is_loading {
         centered_text(ui, "⏳ 加载中...");
     } else {
-        let btn = egui::Button::new(
-            egui::RichText::new("加载最近更新")
-                .font(FontId::new(13.0, egui::FontFamily::Proportional))
-                .color(colors::primary()),
+        let clicked = ui.scope(|ui| {
+        ui.visuals_mut().widgets.inactive.bg_fill = Color32::TRANSPARENT;
+        ui.add(
+            egui::Button::new(
+                egui::RichText::new("加载最近更新")
+                    .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                    .color(colors::primary()),
+            )
+            .stroke(Stroke::new(1.0, colors::primary()))
+            .corner_radius(CornerRadius::ZERO)
+            .min_size(Vec2::new(120.0, 32.0)),
         )
-        .fill(Color32::TRANSPARENT)
-        .stroke(Stroke::new(1.0, colors::primary()))
-        .corner_radius(CornerRadius::ZERO)
-        .min_size(Vec2::new(120.0, 32.0));
-        if ui.add(btn).clicked() {
+    }).inner.clicked();
+    if clicked {
             app.trigger_load_recent_files();
         }
     }
