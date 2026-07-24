@@ -41,12 +41,12 @@ fn main() -> Result<(), eframe::Error> {
             .with_inner_size([1400.0, 900.0])
             .with_min_inner_size([800.0, 600.0])
             .with_icon(Arc::new(icon))
-            .with_title("PezMax"),
+            .with_title("PezMax One · 拼图满绩·绫 feat. Takahashi Rinta"),
         ..Default::default()
     };
 
     eframe::run_native(
-        "PezMax — 试卷资源管理系统",
+        "PezMax One · 拼图满绩·绫 feat. Takahashi Rinta",
         options,
         Box::new(|cc| Ok(Box::new(PezMaxApp::new(cc, pdf_engine)))),
     )
