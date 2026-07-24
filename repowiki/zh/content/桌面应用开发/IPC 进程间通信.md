@@ -1,5 +1,8 @@
 # IPC 进程间通信
 
+> **参考**：PezMax-Desktop（Electron + Vue 3）是独立维护的参考 repo，本文为其 IPC 通信机制文档。
+> 当前产品桌面端为 Rust + egui 单进程架构，详见 [桌面应用开发](桌面应用开发.md)。
+
 <cite>
 **本文引用的文件列表**
 - [src/main/index.js](file://PezMax-Desktop/src/main/index.js)

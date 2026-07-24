@@ -1,5 +1,8 @@
 # Electron 架构设计
 
+> **参考**：PezMax-Desktop（Electron + Vue 3）是独立维护的参考 repo，本目录为其架构文档。
+> 当前产品桌面端为 Rust + egui 架构，详见 [桌面应用开发](../桌面应用开发.md)。
+
 <cite>
 **本文引用的文件**   
 - [src/main/index.js](file://PezMax-Desktop/src/main/index.js)
