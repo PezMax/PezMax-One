@@ -7,10 +7,12 @@
 //!
 //! 视图模式：Grid（缩略图网格预览）/ Line（连续纵向滚动 + 左侧总览面板）
 
+use crate::cache::CacheManager;
 use crate::sokuou::SpringAnim;
 use egui::Context;
 use egui::{ColorImage, TextureHandle, TextureOptions, Vec2};
 use pdfium_render::prelude::*;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -60,7 +62,7 @@ const OVERVIEW_PANEL_WIDTH: f32 = 150.0;
 const MAX_CONCURRENT_RENDERS: usize = 1;
 
 /// 视图模式
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum ViewMode {
     /// 缩略图网格预览
     Grid,
@@ -236,6 +238,9 @@ pub struct PdfViewer {
     /// PDF 原始字节（用于后台渲染）
     pdf_bytes: Option<Vec<u8>>,
 
+    /// 当前打开的文件 ID（用于磁盘缓存路径）
+    pub file_id: Option<i64>,
+
     // 文档元数据
     page_count: usize,
     page_width: f32,
@@ -299,6 +304,7 @@ impl PdfViewer {
         let _ = display_scale_anim.update(100.0);
         Self {
             pdf_bytes: None,
+            file_id: None,
             page_count: 0,
             page_width: 595.0,
             page_height: 842.0,
@@ -330,7 +336,10 @@ impl PdfViewer {
         engine: &Arc<PdfEngine>,
         pdf_bytes: Vec<u8>,
         ctx: &Context,
+        file_id: Option<i64>,
+        cache_manager: &CacheManager,
     ) {
+        self.file_id = file_id;
         self.pdf_bytes = Some(pdf_bytes);
         self.loaded = false;
         self.error = None;
@@ -370,20 +379,21 @@ impl PdfViewer {
         }
 
         // 渲染所有页面（全分辨率 + 缩略图）
-        self.request_all_renders(engine, ctx);
+        self.request_all_renders(engine, ctx, cache_manager);
         self.request_all_thumbnails(engine, ctx);
     }
 
     /// 请求渲染所有页面的全分辨率纹理（限制并发数）
-    fn request_all_renders(&mut self, engine: &Arc<PdfEngine>, ctx: &Context) {
+    fn request_all_renders(&mut self, engine: &Arc<PdfEngine>, ctx: &Context, cache_manager: &CacheManager) {
         self.next_render_idx = 0;
         for _ in 0..MAX_CONCURRENT_RENDERS.min(self.page_count) {
-            self.request_next_render(engine, ctx);
+            self.request_next_render(engine, ctx, cache_manager);
         }
     }
 
     /// 启动下一个待渲染页面（如果还有未开始的页）
-    fn request_next_render(&mut self, engine: &Arc<PdfEngine>, ctx: &Context) {
+    fn request_next_render(&mut self, engine: &Arc<PdfEngine>, ctx: &Context, cache_manager: &CacheManager) {
+        let scale = RENDER_SCALE * self.scale;
         while self.next_render_idx < self.page_count {
             let idx = self.next_render_idx;
             self.next_render_idx += 1;
@@ -391,7 +401,24 @@ impl PdfViewer {
             if self.textures.contains_key(&idx) {
                 continue;
             }
-            self.request_render(engine, idx, ctx);
+            // 检查磁盘缓存
+            if let Some(fid) = self.file_id {
+                let cache_path = cache_manager.pdf_page_cache_path(fid, idx, scale);
+                if let Some((rgba, w, h)) = CacheManager::read_rgba_cache(&cache_path) {
+                    let color_image = ColorImage::from_rgba_unmultiplied([w, h], &rgba);
+                    let tex = ctx.load_texture(
+                        &format!("pdf_page_{}", idx),
+                        color_image,
+                        TextureOptions::LINEAR,
+                    );
+                    self.textures.insert(idx, tex);
+                    // 更新 rendered_scale 近似值
+                    self.rendered_scale = self.scale;
+                    log::info!("PDF page {} loaded from disk cache", idx);
+                    continue;
+                }
+            }
+            self.request_render(engine, idx, ctx, cache_manager, scale);
             return;
         }
     }
@@ -441,8 +468,8 @@ impl PdfViewer {
         }
     }
 
-    /// 请求渲染第 `page_idx` 页（后台线程）
-    fn request_render(&mut self, engine: &Arc<PdfEngine>, page_idx: usize, _ctx: &Context) {
+    /// 请求渲染第 `page_idx` 页（后台线程），渲染完成后写入磁盘缓存
+    fn request_render(&mut self, engine: &Arc<PdfEngine>, page_idx: usize, _ctx: &Context, cache_manager: &CacheManager, scale: f32) {
         if page_idx >= self.page_count {
             return;
         }
@@ -466,13 +493,25 @@ impl PdfViewer {
             None => return,
         };
         let engine = engine.clone();
-        let scale = RENDER_SCALE * self.scale;
         let (tx, rx) = oneshot::channel();
+
+        // 计算磁盘缓存路径
+        let cache_path = self.file_id.map(|fid| {
+            cache_manager.pdf_page_cache_path(fid, page_idx, scale)
+        });
 
         spawn_pdfium(move || {
             let result = engine.render_page(bytes, page_idx, scale);
             match result {
                 Ok(img) => {
+                    // 写入磁盘缓存
+                    if let Some(ref path) = cache_path {
+                        // ColorImage 的 pixels 是 Vec<Color32>，转成 [u8;4] 平坦数组
+                        let raw: Vec<u8> = img.pixels.iter()
+                            .flat_map(|c| c.to_array())
+                            .collect();
+                        CacheManager::write_rgba_cache(path, &raw, img.width(), img.height());
+                    }
                     tx.send((page_idx, img)).ok();
                 }
                 Err(e) => {
@@ -490,7 +529,7 @@ impl PdfViewer {
     }
 
     /// 每帧轮询渲染和缩略图结果
-    pub fn poll_render(&mut self, engine: &Arc<PdfEngine>, ctx: &Context) {
+    pub fn poll_render(&mut self, engine: &Arc<PdfEngine>, ctx: &Context, cache_manager: &CacheManager) {
         let page_count = self.page_count;
 
         // 轮询全分辨率渲染结果
@@ -519,7 +558,7 @@ impl PdfViewer {
 
         // 有渲染完成 → 启动下一个待渲染页（每个完成的渲染启动一个新的）
         for _ in 0..completed.len() {
-            self.request_next_render(engine, ctx);
+            self.request_next_render(engine, ctx, cache_manager);
         }
 
         // 轮询缩略图渲染结果
@@ -666,6 +705,17 @@ impl PdfViewer {
 
     pub fn page_count(&self) -> usize {
         self.page_count
+    }
+
+    /// 清除所有纹理缓存（内存+请求队列）
+    pub fn clear_textures(&mut self) {
+        self.textures.clear();
+        self.thumbnails.clear();
+        self.pending_renders.clear();
+        self.pending_thumbnails.clear();
+        self.all_rendered = false;
+        self.re_render_in_progress = false;
+        self.next_render_idx = 0;
     }
 }
 

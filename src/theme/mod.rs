@@ -4,6 +4,7 @@
 
 use crate::sokuou::{EasingMode, MetroAnim, UwpEasing};
 use egui::{FontFamily, FontId, TextStyle, Vec2};
+use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::cell::Cell;
 use std::cell::RefCell;
@@ -11,7 +12,7 @@ use std::sync::Arc;
 
 // ── 外观模式 ─────────────────────────────────────────────────────────────────
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
 pub enum ThemeMode {
     Light,
     Dark,

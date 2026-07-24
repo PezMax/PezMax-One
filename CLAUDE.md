@@ -25,6 +25,8 @@ Java backend source is maintained separately at PezMax/PezMax-Java.
 PezMax-One/                  ← product root, Rust crate root
 ├── src/
 │   ├── main.rs              ← eframe entry, window config, PDF engine init
+│   ├── cache.rs             ← CacheManager（统一缓存管理，所有缓存文件强制在 `.cache/` 下）
+│   ├── settings.rs          ← AppSettings（本地设置持久化，theme/accent/preferences 保存到 settings.json）
 │   ├── app.rs               ← PezMaxApp state, routing, eframe::App impl
 │   ├── api/                 ← typed HTTP client (reqwest)
 │   │   ├── client.rs        ← ApiClient core: GET/POST/PUT/DELETE/upload/download
@@ -156,9 +158,43 @@ Rules:
 - `Animator` in `animator.rs` is a **reserved stub** — do not use until validated
 - After adding/modifying Sokuou animations, update `src/sokuou/NOTE.md`
 
-### Credential Persistence
+### Cache System — `CacheManager` + `AppSettings`
 
-Credentials are saved to `%APPDATA%/PezMax/credentials.json` (JSON: `{token, username, remember_me}`). On startup, `try_auto_login()` reads saved credentials, sets the token, and validates against the server. Avatar images are cached in `%APPDATA%/PezMax/avatar_cache/`.
+**所有磁盘缓存文件必须放在 `.cache/` 目录下。** 非缓存用户数据（凭证、设置）放在根目录。
+
+目录结构：
+
+```
+{data_dir}/                 ← 平台数据目录，由 `dirs::data_dir()` 决定
+│                             Windows: %APPDATA%/PezMax/
+│                             macOS:   ~/Library/Application Support/com.pezmax/
+│                             Linux:   ~/.local/share/pezmax/
+  credentials.json          ← 用户凭证（根目录，非缓存）
+  settings.json             ← AppSettings（根目录，非缓存，serde_json 持久化）
+  .cache/
+    user_stats.json         ← 用户统计缓存
+    avatar/{user_id}.cache  ← 排行头像缓存（原始字节）
+    bookmark_cover/bm_cover_{id}.cache ← 书签封面缓存
+    pdf/{file_id}/p{idx}_s{scale}.rgba ← PDF 页面渲染磁盘缓存
+```
+
+**`CacheManager`** (`src/cache.rs`) — 统一缓存管理器：
+- `CacheManager::new()` — 创建目录结构，迁移旧缓存
+- `save_credentials()` / `load_credentials()` / `clear_credentials()`
+- `save_user_stats()` / `load_user_stats()`
+- `read_avatar_cache()` / `write_avatar_cache()`
+- `read_bookmark_cover_cache()` / `write_bookmark_cover_cache()`
+- `read_rgba_cache()` / `write_rgba_cache()` — PDF 页面缓存（4B width + 4B height + raw RGBA）
+- `clear_all_cache()` — 删除并重建 `.cache/` 目录
+- `clear_pdf_cache()` — 删除 PDF 渲染缓存
+
+**`AppSettings`** (`src/settings.rs`) — 本地设置持久化：
+- 保存到 `{data_dir}/settings.json`（路径由 `dirs::data_dir()` 跨平台解析）
+- 字段：`theme_mode`, `accent_idx`, `setting_auto_launch`, `setting_silent_download`, `pdf_view_mode`, `pdf_scale`, `window_size`, `window_pos`
+- 启动时在 `PezMaxApp::new()` 加载，`on_exit()` 保存
+- 主题/强调色变化时自动保存
+
+**PDF 磁盘缓存：** 渲染完成后写入 `.cache/pdf/{file_id}/p{idx}_s{scale}.rgba`。下次打开同文件同缩放级别时，直接从磁盘读取缓存纹理，无需重新渲染。缩放变化会产生新的缓存文件（`scale_encoded = (RENDER_SCALE * scale * 100.0) as u32`）。
 
 ### API Layer (mapping to 后端接口列表.md)
 

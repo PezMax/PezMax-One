@@ -55,6 +55,8 @@ pdfium-render = { version = "0.8", features = ["thread_safe", "sync"] }
 webbrowser = "1"
 
 # ── 本地持久化 ────────────────────────────────────────────
+# 跨平台数据目录（APPDATA / ~/.local/share / ~/Library）
+dirs = "6"
 # 嵌入式 KV 数据库（本地下载记录）
 sled = "0.34"
 # 配置文件持久化（用户设置）

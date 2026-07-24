@@ -1,100 +1,18 @@
 use crate::api::client::ApiClient;
 use crate::api::models::*;
+use crate::cache::CacheManager;
 use crate::components::action_bar;
 use crate::components::animated_counter::AnimatedCounter;
 use crate::pdf::{PdfEngine, PdfViewer};
+use crate::settings::AppSettings;
 use crate::sokuou::{map_range, Easing, Progress, SpringAnim};
 use crate::theme;
 use anyhow;
 use base64::Engine;
 use egui::Context;
-use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
-
-/// 保存到磁盘的凭证
-#[derive(Debug, Serialize, Deserialize)]
-struct SavedCredentials {
-    token: String,
-    username: String,
-    remember_me: bool,
-}
-
-fn get_data_dir() -> std::path::PathBuf {
-    if let Ok(appdata) = std::env::var("APPDATA") {
-        let dir = std::path::PathBuf::from(appdata).join("PezMax");
-        let _ = std::fs::create_dir_all(&dir);
-        dir
-    } else {
-        std::path::PathBuf::from(".")
-    }
-}
-
-/// 集中式缓存根目录：%APPDATA%/PezMax/.cache/
-fn get_cache_dir() -> std::path::PathBuf {
-    let dir = get_data_dir().join(".cache");
-    let _ = std::fs::create_dir_all(&dir);
-    dir
-}
-
-fn avatar_cache_dir() -> std::path::PathBuf {
-    let dir = get_cache_dir().join("avatar");
-    let _ = std::fs::create_dir_all(&dir);
-    dir
-}
-
-pub fn bookmark_cover_cache_dir() -> std::path::PathBuf {
-    let dir = get_cache_dir().join("bookmark_cover");
-    let _ = std::fs::create_dir_all(&dir);
-    dir
-}
-
-/// 用户统计缓存路径
-fn user_stats_cache_path() -> std::path::PathBuf {
-    get_cache_dir().join("user_stats.json")
-}
-
-/// 迁移旧缓存目录（启动时调用）
-fn migrate_old_cache() {
-    let data_dir = get_data_dir();
-    let old_dirs = ["avatar_cache", "bookmark_cover_cache"];
-    for name in &old_dirs {
-        let old_path = data_dir.join(name);
-        if old_path.exists() {
-            let _ = std::fs::remove_dir_all(&old_path);
-        }
-    }
-}
-
-fn credentials_path() -> std::path::PathBuf {
-    get_data_dir().join("credentials.json")
-}
-
-fn save_credentials(token: &str, username: &str, remember_me: bool) {
-    let creds = SavedCredentials {
-        token: token.to_string(),
-        username: username.to_string(),
-        remember_me,
-    };
-    if let Ok(json) = serde_json::to_string(&creds) {
-        let _ = std::fs::write(credentials_path(), json);
-    }
-}
-
-fn load_credentials() -> Option<SavedCredentials> {
-    let path = credentials_path();
-    if !path.exists() {
-        return None;
-    }
-    let json = std::fs::read_to_string(&path).ok()?;
-    serde_json::from_str(&json).ok()
-}
-
-fn clear_credentials() {
-    let path = credentials_path();
-    let _ = std::fs::remove_file(path);
-}
 
 /// 将 base64 图片（JPEG 格式）解码为 egui 纹理
 fn decode_base64_image(b64: &str, ctx: &egui::Context) -> Option<egui::TextureHandle> {
@@ -483,6 +401,11 @@ pub struct PezMaxApp {
     pub theme_mode: theme::ThemeMode,
     pub accent_idx: usize,
 
+    // 缓存管理器 + 设置 + PDF 文件 ID 跟踪
+    pub cache_manager: CacheManager,
+    pub settings: AppSettings,
+    pub pdf_file_id: Option<i64>,
+
     // 搜索框提示文字动画（SpringAnim: 0.0=隐藏, 1.0=完全显示）
     pub search_hint_anim: SpringAnim,
     pub search_was_focused: bool,
@@ -532,8 +455,13 @@ impl PezMaxApp {
         theme::setup_fonts(&cc.egui_ctx);
         theme::apply_metro_theme(&cc.egui_ctx);
 
-        // 迁移旧缓存目录到 .cache/ 统一结构
-        migrate_old_cache();
+        // 初始化 CacheManager（创建目录结构，迁移旧缓存）
+        let cache_manager = CacheManager::new();
+        // 加载本地设置
+        let settings = AppSettings::load(&cache_manager);
+        // 应用设置到主题全局变量
+        theme::set_accent(settings.accent_idx);
+        theme::set_dark(matches!(settings.theme_mode, theme::ThemeMode::Dark));
 
         let mut app = Self {
             api: ApiClient::new(None),
@@ -639,10 +567,10 @@ impl PezMaxApp {
             report_content: String::new(),
             report_type: String::new(),
             show_report_dialog: false,
-            setting_auto_launch: false,
-            setting_silent_download: false,
-            theme_mode: theme::ThemeMode::System,
-            accent_idx: 0,
+            setting_auto_launch: settings.setting_auto_launch,
+            setting_silent_download: settings.setting_silent_download,
+            theme_mode: settings.theme_mode,
+            accent_idx: settings.accent_idx,
 
             search_hint_anim: SpringAnim::new(0.25, 0.7, 0.0),
             search_was_focused: false,
@@ -674,6 +602,11 @@ impl PezMaxApp {
             pdf_viewer: PdfViewer::new(),
             pdf_loading: false,
             pdf_bytes_rx: None,
+
+            // 新字段
+            cache_manager,
+            settings,
+            pdf_file_id: None,
         };
 
         // 从缓存加载用户统计（如果有），让首页个人页能立即显示
@@ -687,7 +620,7 @@ impl PezMaxApp {
 
     /// 尝试从本地加载凭证并自动登录
     pub fn try_auto_login(&mut self) {
-        if let Some(creds) = load_credentials() {
+        if let Some(creds) = self.cache_manager.load_credentials() {
             self.login_username = creds.username;
             self.login_remember = creds.remember_me;
             // 设置 token 并异步验证
@@ -724,10 +657,10 @@ impl PezMaxApp {
         // 保存凭证（如果勾选了"记住我"）
         if self.login_remember {
             if let Some(ref token) = self.token {
-                save_credentials(token, &self.login_username, true);
+                self.cache_manager.save_credentials(token, &self.login_username, true);
             }
         } else {
-            clear_credentials();
+            self.cache_manager.clear_credentials();
         }
 
         // 清空登录表单
@@ -904,17 +837,11 @@ impl PezMaxApp {
 
     /// 从本地缓存加载用户统计（启动时调用，让首页个人页能立即显示）
     fn load_user_stats_cache(&mut self) {
-        let path = user_stats_cache_path();
-        if !path.exists() {
-            return;
-        }
-        if let Ok(json) = std::fs::read_to_string(&path) {
-            if let Ok(stats) = serde_json::from_str::<UserStats>(&json) {
-                self.user_stats = Some(stats.clone());
-                self.fav_anim.jump_to(stats.favorite_count);
-                self.dl_anim.jump_to(stats.download_count);
-                self.ul_anim.jump_to(stats.upload_count);
-            }
+        if let Some(stats) = self.cache_manager.load_user_stats::<UserStats>() {
+            self.user_stats = Some(stats.clone());
+            self.fav_anim.jump_to(stats.favorite_count);
+            self.dl_anim.jump_to(stats.download_count);
+            self.ul_anim.jump_to(stats.upload_count);
         }
     }
 
@@ -1088,7 +1015,6 @@ impl PezMaxApp {
             self.rank_avatar_rx = Some(rx);
         }
         let tx = self.rank_avatar_tx.clone().unwrap();
-        let cache_dir = avatar_cache_dir();
 
         for item in items {
             if item.avatar.is_empty() {
@@ -1106,29 +1032,23 @@ impl PezMaxApp {
             self.rank_avatar_pending.insert(user_id);
 
             // 尝试从磁盘缓存加载
-            let cache_path = cache_dir.join(format!("{}.cache", user_id));
-            if cache_path.exists() {
-                if let Ok(bytes) = std::fs::read(&cache_path) {
-                    if !bytes.is_empty() {
-                        let tx = tx.clone();
-                        tokio::spawn(async move {
-                            tx.send((user_id, Ok(bytes))).ok();
-                        });
-                        continue;
-                    }
-                }
+            if let Some(cached) = self.cache_manager.read_avatar_cache(user_id) {
+                let tx = tx.clone();
+                tokio::spawn(async move {
+                    tx.send((user_id, Ok(cached))).ok();
+                });
+                continue;
             }
             // 下载
             let avatar_url = item.avatar.clone();
             let tx = tx.clone();
             let api = self.api.clone();
+            let cm = self.cache_manager.clone();
             tokio::spawn(async move {
                 let result = api.download_raw_url(&avatar_url).await;
                 // 下载成功时，保存到磁盘缓存
                 if let Ok(ref bytes) = result {
-                    if !bytes.is_empty() {
-                        let _ = std::fs::write(&cache_path, bytes);
-                    }
+                    cm.write_avatar_cache(user_id, bytes);
                 }
                 tx.send((user_id, result)).ok();
             });
@@ -1359,7 +1279,7 @@ impl PezMaxApp {
         self.rank_avatar_tx = None;
         self.rank_avatar_failed.clear();
         self.rank_avatar_pending.clear();
-        clear_credentials();
+        self.cache_manager.clear_credentials();
         // 清除 API token
         let api = self.api.clone();
         tokio::spawn(async move {
@@ -1381,6 +1301,7 @@ impl PezMaxApp {
         if self.pdf_loading || self.pdf_bytes_rx.is_some() {
             return;
         }
+        self.pdf_file_id = Some(file_id);
         self.pdf_loading = true;
         let api = self.api.clone();
         let (tx, rx) = oneshot::channel();
@@ -1404,6 +1325,26 @@ impl PezMaxApp {
         }
         self.toasts
             .retain(|t| now.duration_since(t.created_at).as_secs_f32() < 4.7);
+    }
+
+    /// 清除所有缓存（磁盘 + 内存纹理）
+    pub fn clear_cache(&mut self) {
+        // 清空磁盘缓存
+        let _ = self.cache_manager.clear_all_cache();
+        // 清空内存纹理缓存
+        self.rank_avatar_textures.clear();
+        self.rank_avatar_delays.clear();
+        self.rank_avatar_timer.clear();
+        self.rank_avatar_frame_idx.clear();
+        self.rank_avatar_failed.clear();
+        self.rank_avatar_pending.clear();
+        self.bookmark_cover_textures.clear();
+        self.bookmark_cover_requested.clear();
+        self.bookmark_title_cache.clear();
+        self.avatar_texture = None;
+        self.avatar_image_size = None;
+        self.pdf_viewer.clear_textures();
+        self.add_toast("缓存已清理", ToastLevel::Success);
     }
 }
 
@@ -1444,6 +1385,19 @@ impl eframe::App for PezMaxApp {
             ctx.request_repaint();
         }
 
+        // 主题/强调色变化时保存设置
+        if self.settings.theme_mode != self.theme_mode
+            || self.settings.accent_idx != self.accent_idx
+            || self.settings.setting_auto_launch != self.setting_auto_launch
+            || self.settings.setting_silent_download != self.setting_silent_download
+        {
+            self.settings.theme_mode = self.theme_mode;
+            self.settings.accent_idx = self.accent_idx;
+            self.settings.setting_auto_launch = self.setting_auto_launch;
+            self.settings.setting_silent_download = self.setting_silent_download;
+            self.settings.save(&self.cache_manager);
+        }
+
         let dt = ctx.input(|i| i.stable_dt) as f64;
 
         // 每帧推进所有动画状态
@@ -1468,7 +1422,7 @@ impl eframe::App for PezMaxApp {
         }
 
         // 轮询 PDF 渲染结果
-        self.pdf_viewer.poll_render(&self.pdf_engine, ctx);
+        self.pdf_viewer.poll_render(&self.pdf_engine, ctx, &self.cache_manager);
 
         // 轮询头像下载结果
         if let Some(rx) = &mut self.avatar_load_rx {
@@ -1608,7 +1562,14 @@ impl eframe::App for PezMaxApp {
                 self.pdf_bytes_rx = None;
                 match result {
                     Ok(bytes) => {
-                        self.pdf_viewer.load_document(&self.pdf_engine, bytes, ctx);
+                        let file_id = self.pdf_file_id;
+                        self.pdf_viewer.load_document(
+                            &self.pdf_engine,
+                            bytes,
+                            ctx,
+                            file_id,
+                            &self.cache_manager,
+                        );
                     }
                     Err(e) => {
                         log::error!("PDF 下载失败: {}", e);
@@ -1720,7 +1681,7 @@ impl eframe::App for PezMaxApp {
                         }
                         Err(_) => {
                             // 自动登录失败，清除凭证并退回登录页
-                            clear_credentials();
+                            self.cache_manager.clear_credentials();
                             self.token = None;
                             self.current_user = None;
                             self.is_logged_in = false;
@@ -1750,7 +1711,7 @@ impl eframe::App for PezMaxApp {
                 let bookmarks = self.bookmarks_data.data.clone();
                 if let Some(ref list) = bookmarks {
                     log::info!("触发书签封面加载: {} 条书签", list.len());
-                    let cache_dir = bookmark_cover_cache_dir();
+                    let cm = self.cache_manager.clone();
                     let (tx, rx) = mpsc::unbounded_channel();
                     for bm in list {
                         if !bm.cover_url.is_empty()
@@ -1761,24 +1722,20 @@ impl eframe::App for PezMaxApp {
                             let id = bm.id;
                             let url = bm.cover_url.clone();
                             let txc = tx.clone();
-                            let cache_path = cache_dir.join(format!("bm_cover_{}.cache", id));
+                            let cm_clone = cm.clone();
                             log::info!("书签 {} 封面URL: {}", id, url);
                             tokio::spawn(async move {
                                 // 优先读磁盘缓存
-                                if cache_path.exists() {
-                                    if let Ok(cached) = std::fs::read(&cache_path) {
-                                        if !cached.is_empty() {
-                                            log::info!("书签 {} 封面命中磁盘缓存 ({} bytes)", id, cached.len());
-                                            let _ = txc.send((id, Ok(cached)));
-                                            return;
-                                        }
-                                    }
+                                if let Some(cached) = cm_clone.read_bookmark_cover_cache(id) {
+                                    log::info!("书签 {} 封面命中磁盘缓存 ({} bytes)", id, cached.len());
+                                    let _ = txc.send((id, Ok(cached)));
+                                    return;
                                 }
                                 let result = api.download_bytes(&url).await;
                                 // 成功后写磁盘缓存
                                 if let Ok(ref bytes) = result {
                                     if !bytes.is_empty() {
-                                        let _ = std::fs::write(&cache_path, bytes);
+                                        cm_clone.write_bookmark_cover_cache(id, bytes);
                                         log::info!("书签 {} 封面下载成功 {} bytes, 已缓存", id, bytes.len());
                                     }
                                 } else if let Err(ref e) = result {
@@ -1847,9 +1804,7 @@ impl eframe::App for PezMaxApp {
                 self.dl_anim.set_target(stats.download_count);
                 self.ul_anim.set_target(stats.upload_count);
                 // 写入本地缓存
-                if let Ok(json) = serde_json::to_string(stats) {
-                    let _ = std::fs::write(user_stats_cache_path(), json);
-                }
+                self.cache_manager.save_user_stats(stats);
                 self.user_stats = Some(stats.clone());
             }
         }
@@ -1994,6 +1949,16 @@ impl eframe::App for PezMaxApp {
             });
 
         crate::components::toast::render(self, ctx);
+    }
+
+    fn on_exit(&mut self, ctx: std::option::Option<&eframe::glow::Context>) {
+        // 保存窗口状态 — 注意 eframe 0.31 的 glow::Context 没有 viewport info，
+        // 窗口大小/位置由 settings 保存但仅在 on_exit 时可行
+        if let Some(_ctx) = ctx {
+            // glow::Context 无法直接获取 viewport 信息，暂不保存窗口位置
+        }
+        // 保存所有设置
+        self.settings.save(&self.cache_manager);
     }
 }
 

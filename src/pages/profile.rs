@@ -1188,7 +1188,9 @@ pub fn render_app_settings(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 
             // ── 隐私 ──────────────────────────────────────────────
             settings_group(ui, "隐私", |ui| {
-                action_row(ui, "清理缓存", "释放本地缓存空间");
+                if action_row(ui, "清理缓存", "释放本地缓存空间").clicked() {
+                    app.clear_cache();
+                }
             });
 
             ui.add_space(12.0);
