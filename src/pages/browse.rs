@@ -747,11 +747,7 @@ fn render_bookmark_row(ui: &mut egui::Ui, bm: &Bookmark, _app: &mut PezMaxApp) -
         .next()
         .unwrap_or("");
 
-    let cover_w = 56.0_f32;
-    let cover_h = 36.0_f32;
     let card_h = 64.0_f32;
-    let has_cover = !bm.cover_url.is_empty();
-    let tex_loaded = has_cover && _app.bookmark_cover_textures.contains_key(&bm.id);
 
     let frame_resp = egui::Frame::new()
         .fill(colors::bg_card())
@@ -764,29 +760,16 @@ fn render_bookmark_row(ui: &mut egui::Ui, bm: &Bookmark, _app: &mut PezMaxApp) -
             ui.horizontal(|ui| {
                 ui.add_space(16.0);
 
-                // 封面区域：申请一个高度 = card_h 的空间，在其中垂直居中 36px 封面
-                let cover_area = ui.allocate_exact_size(
-                    egui::vec2(cover_w, card_h),
-                    egui::Sense::hover(),
-                ).0;
-                let cover_y = cover_area.center().y - cover_h / 2.0;
-                let cover_rect = egui::Rect::from_min_size(
-                    egui::pos2(cover_area.left(), cover_y),
-                    egui::vec2(cover_w, cover_h),
+                // 网络/链接图标（emoji，垂直居中）
+                let icon_area = egui::vec2(40.0, card_h);
+                let (icon_rect, _) = ui.allocate_exact_size(icon_area, egui::Sense::hover());
+                ui.painter().text(
+                    icon_rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    "🌐",
+                    FontId::new(24.0, egui::FontFamily::Proportional),
+                    colors::text_primary(),
                 );
-
-                if tex_loaded {
-                    if let Some(tex_handle) = _app.bookmark_cover_textures.get(&bm.id) {
-                        let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
-                        ui.painter().image(tex_handle.id(), cover_rect, uv, egui::Color32::WHITE);
-                    }
-                } else {
-                    ui.painter().rect_filled(
-                        cover_rect,
-                        CornerRadius::ZERO,
-                        Color32::from_rgba_unmultiplied(type_color.r(), type_color.g(), type_color.b(), 38),
-                    );
-                }
 
                 ui.add_space(12.0);
 
@@ -1843,11 +1826,21 @@ fn file_row(ui: &mut egui::Ui, file: &PaperFile, app: &PezMaxApp) -> bool {
             ui.set_min_width(ui.available_width());
             ui.horizontal(|ui| {
                 ui.add_space(14.0);
-                ui.label(
-                    egui::RichText::new("📄")
-                        .font(FontId::new(26.0, egui::FontFamily::Proportional)),
+
+                // PDF 文件图标（emoji，使用 painter 精确居中）
+                let icon_area = egui::vec2(36.0, 55.0);
+                let (icon_rect, _) = ui.allocate_exact_size(icon_area, egui::Sense::hover());
+                // egui 中 emoji 的视觉内容位于字框上半部分，
+                // 因此需要额外向下偏移 3px 以达到视觉居中
+                ui.painter().text(
+                    icon_rect.center() + egui::vec2(0.0, 3.0),
+                    egui::Align2::CENTER_CENTER,
+                    "📄",
+                    FontId::new(26.0, egui::FontFamily::Proportional),
+                    colors::text_primary(),
                 );
                 ui.add_space(12.0);
+
                 ui.vertical(|ui| {
                     ui.add_space(10.0);
                     ui.label(
