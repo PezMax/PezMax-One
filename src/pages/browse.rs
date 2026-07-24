@@ -287,6 +287,10 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
             let api = app.api.clone();
             let fid = file_id;
             let fname = file_name.clone();
+            // 乐观更新下载统计
+            if let Some(ref mut stats) = app.user_stats {
+                stats.download_count += 1;
+            }
             tokio::spawn(async move {
                 // 选择保存路径
                 let file = rfd::AsyncFileDialog::new()
@@ -305,6 +309,8 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                     }
                 }
             });
+            // 后台刷新统计（确保下次打开时数据一致）
+            app.trigger_load_user_stats();
         }
         Action::Favorite => {
             let api = app.api.clone();

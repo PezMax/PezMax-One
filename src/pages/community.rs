@@ -370,6 +370,10 @@ pub fn render_contribute_file(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                             app.contribute_subject.clear();
                             app.contribute_school.clear();
                             app.contribute_year.clear();
+                            // 乐观更新上传统计
+                            if let Some(ref mut stats) = app.user_stats {
+                                stats.upload_count += 1;
+                            }
                             tokio::spawn(async move {
                                 let file = PaperFile {
                                     file_subject: subject,
@@ -379,6 +383,8 @@ pub fn render_contribute_file(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                 };
                                 let _ = api.create_file(&file).await;
                             });
+                            // 后台刷新统计
+                            app.trigger_load_user_stats();
                         }
                     });
                     ui.add_space(16.0);

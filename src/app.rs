@@ -1,6 +1,7 @@
 use crate::api::client::ApiClient;
 use crate::api::models::*;
 use crate::components::action_bar;
+use crate::components::animated_counter::AnimatedCounter;
 use crate::pdf::{PdfEngine, PdfViewer};
 use crate::sokuou::{map_range, Easing, Progress, SpringAnim};
 use crate::theme;
@@ -30,16 +31,40 @@ fn get_data_dir() -> std::path::PathBuf {
     }
 }
 
+/// 集中式缓存根目录：%APPDATA%/PezMax/.cache/
+fn get_cache_dir() -> std::path::PathBuf {
+    let dir = get_data_dir().join(".cache");
+    let _ = std::fs::create_dir_all(&dir);
+    dir
+}
+
 fn avatar_cache_dir() -> std::path::PathBuf {
-    let dir = get_data_dir().join("avatar_cache");
+    let dir = get_cache_dir().join("avatar");
     let _ = std::fs::create_dir_all(&dir);
     dir
 }
 
 pub fn bookmark_cover_cache_dir() -> std::path::PathBuf {
-    let dir = get_data_dir().join("bookmark_cover_cache");
+    let dir = get_cache_dir().join("bookmark_cover");
     let _ = std::fs::create_dir_all(&dir);
     dir
+}
+
+/// 用户统计缓存路径
+fn user_stats_cache_path() -> std::path::PathBuf {
+    get_cache_dir().join("user_stats.json")
+}
+
+/// 迁移旧缓存目录（启动时调用）
+fn migrate_old_cache() {
+    let data_dir = get_data_dir();
+    let old_dirs = ["avatar_cache", "bookmark_cover_cache"];
+    for name in &old_dirs {
+        let old_path = data_dir.join(name);
+        if old_path.exists() {
+            let _ = std::fs::remove_dir_all(&old_path);
+        }
+    }
 }
 
 fn credentials_path() -> std::path::PathBuf {
@@ -299,6 +324,16 @@ impl<T: Send + 'static> AsyncData<T> {
         }
     }
 
+    /// 重新加载（重置状态后加载，用于刷新已加载的数据）
+    pub fn reload<F, Fut>(&mut self, f: F)
+    where
+        F: FnOnce() -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = anyhow::Result<T>> + Send,
+    {
+        self.reset();
+        self.load(f);
+    }
+
     pub fn is_loaded(&self) -> bool { self.loaded }
     pub fn is_loading(&self) -> bool { self.loading }
     pub fn reset(&mut self) {
@@ -337,6 +372,10 @@ pub struct PezMaxApp {
     pub download_records: AsyncData<Vec<DownloadRecord>>,
     pub recent_files: AsyncData<Vec<PaperFile>>,
     pub user_stats_data: AsyncData<UserStats>,
+    // 动画计数器（电表翻动效果）
+    pub fav_anim: AnimatedCounter,
+    pub dl_anim: AnimatedCounter,
+    pub ul_anim: AnimatedCounter,
     // Browse 页面
     pub file_list_data: AsyncData<Vec<PaperFile>>,
     pub subjects_data: AsyncData<Vec<String>>,
@@ -493,6 +532,9 @@ impl PezMaxApp {
         theme::setup_fonts(&cc.egui_ctx);
         theme::apply_metro_theme(&cc.egui_ctx);
 
+        // 迁移旧缓存目录到 .cache/ 统一结构
+        migrate_old_cache();
+
         let mut app = Self {
             api: ApiClient::new(None),
 
@@ -516,6 +558,9 @@ impl PezMaxApp {
             download_records: AsyncData::new(),
             recent_files: AsyncData::new(),
             user_stats_data: AsyncData::new(),
+            fav_anim: AnimatedCounter::new(),
+            dl_anim: AnimatedCounter::new(),
+            ul_anim: AnimatedCounter::new(),
             file_list_data: AsyncData::new(),
             subjects_data: AsyncData::new(),
             schools_data: AsyncData::new(),
@@ -630,6 +675,9 @@ impl PezMaxApp {
             pdf_loading: false,
             pdf_bytes_rx: None,
         };
+
+        // 从缓存加载用户统计（如果有），让首页个人页能立即显示
+        app.load_user_stats_cache();
 
         // 尝试从本地加载凭证并自动登录
         app.try_auto_login();
@@ -822,7 +870,7 @@ impl PezMaxApp {
         if user_id == 0 {
             return;
         }
-        self.user_stats_data.load(move || {
+        self.user_stats_data.reload(move || {
             let api = api.clone();
             async move {
                 let page_params = crate::api::models::PageParams {
@@ -852,6 +900,22 @@ impl PezMaxApp {
                 })
             }
         });
+    }
+
+    /// 从本地缓存加载用户统计（启动时调用，让首页个人页能立即显示）
+    fn load_user_stats_cache(&mut self) {
+        let path = user_stats_cache_path();
+        if !path.exists() {
+            return;
+        }
+        if let Ok(json) = std::fs::read_to_string(&path) {
+            if let Ok(stats) = serde_json::from_str::<UserStats>(&json) {
+                self.user_stats = Some(stats.clone());
+                self.fav_anim.jump_to(stats.favorite_count);
+                self.dl_anim.jump_to(stats.download_count);
+                self.ul_anim.jump_to(stats.upload_count);
+            }
+        }
     }
 
     /// 异步加载用户头像
@@ -1213,6 +1277,11 @@ impl PezMaxApp {
         }
         self.current_section = section;
         self.current_subsection = section.default_subsection();
+
+        // 导航到首页或个人页时刷新统计
+        if section == Section::Home || section == Section::Profile {
+            self.trigger_load_user_stats();
+        }
     }
 
     /// 直接跳转到指定 Section + Subsection
@@ -1229,6 +1298,11 @@ impl PezMaxApp {
         self.subtab_indicator_anim.set_target(sub_idx);
         self.current_section = section;
         self.current_subsection = sub;
+
+        // 导航到首页或个人页时刷新统计
+        if section == Section::Home || section == Section::Profile {
+            self.trigger_load_user_stats();
+        }
     }
 
     /// 切换当前 Section 内的子标签（带弹簧动画）
@@ -1239,6 +1313,12 @@ impl PezMaxApp {
             .unwrap_or(0) as f64;
         self.subtab_indicator_anim.set_target(sub_idx);
         self.current_subsection = sub;
+
+        // 导航到首页或个人页时刷新统计
+        let section = self.current_section;
+        if section == Section::Home || section == Section::Profile {
+            self.trigger_load_user_stats();
+        }
     }
 
     /// 切换认证子页面（触发淡入动画）
@@ -1263,6 +1343,9 @@ impl PezMaxApp {
         self.token = None;
         self.current_user = None;
         self.user_stats = None;
+        self.fav_anim.jump_to(0);
+        self.dl_anim.jump_to(0);
+        self.ul_anim.jump_to(0);
         self.favorite_file_ids.clear();
         self.favorite_ids_loaded = false;
         self.favorite_ids_rx = None;
@@ -1374,6 +1457,9 @@ impl eframe::App for PezMaxApp {
         self.auth_anim.update(dt);
         self.search_hint_anim.update(dt);
         self.pdf_viewer.update_animations(dt);
+        self.fav_anim.update(dt);
+        self.dl_anim.update(dt);
+        self.ul_anim.update(dt);
         theme::update_accent_transition(dt);
         theme::update_dark_transition(dt);
         for toast in &mut self.toasts {
@@ -1543,6 +1629,9 @@ impl eframe::App for PezMaxApp {
             || !self.page_enter_anim.is_steady()
             || !self.auth_anim.is_steady()
             || !self.search_hint_anim.is_steady()
+            || !self.fav_anim.is_steady()
+            || !self.dl_anim.is_steady()
+            || !self.ul_anim.is_steady()
             || theme::is_transitioning()
             || self.pdf_viewer.is_animating()
             || self.pdf_viewer.is_loading()
@@ -1753,6 +1842,14 @@ impl eframe::App for PezMaxApp {
             self.my_reports_data.poll();
             // 同步 user_stats_data → user_stats（兼容旧代码）
             if let Some(ref stats) = self.user_stats_data.data {
+                // 更新动画计数器（set_target 内部已处理"值未变"的情况）
+                self.fav_anim.set_target(stats.favorite_count);
+                self.dl_anim.set_target(stats.download_count);
+                self.ul_anim.set_target(stats.upload_count);
+                // 写入本地缓存
+                if let Ok(json) = serde_json::to_string(stats) {
+                    let _ = std::fs::write(user_stats_cache_path(), json);
+                }
                 self.user_stats = Some(stats.clone());
             }
         }

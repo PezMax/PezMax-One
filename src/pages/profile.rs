@@ -11,6 +11,7 @@
 
 use crate::app::{AccountEditSection, PezMaxApp};
 use crate::api::models::SecurityQuestion;
+use crate::components::animated_counter::render_odometer_value;
 use crate::theme::colors;
 use crate::theme::{ThemeMode, ACCENT_PRESETS};
 use egui::{Color32, CornerRadius, FontId, Rect, Stroke, Vec2, pos2, StrokeKind};
@@ -109,9 +110,6 @@ pub fn render_personal_center(app: &mut PezMaxApp, ui: &mut egui::Ui) {
             if let Some(ref user) = app.current_user {
                 let display_name = if user.nick_name.is_empty() { &user.user_name } else { &user.nick_name };
                 let first_char = display_name.chars().next().unwrap_or('?').to_string();
-                let (fav, dl, ul) = app.user_stats.as_ref().map_or((0, 0, 0), |s| {
-                    (s.favorite_count, s.download_count, s.upload_count)
-                });
 
                 // ── 顶部信息卡：头像 + 信息（左）| 统计（右）─────────
                 let card_height = 100.0;
@@ -170,23 +168,24 @@ pub fn render_personal_center(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                     colors::text_secondary(),
                 );
 
-                // 右半区：统计列
+                // 右半区：统计列（电表风格数显）
                 let stat_x = rect.right() - 140.0;
                 let stat_items = [
-                    (format!("{}", dl), "下载量"),
-                    (format!("{}", fav), "收藏数"),
-                    (format!("{}", ul), "上传数"),
+                    (&app.dl_anim, "下载量"),
+                    (&app.fav_anim, "收藏数"),
+                    (&app.ul_anim, "上传数"),
                 ];
                 let stat_gap = 28.0;
                 let stat_start_y = rect.top() + (card_height - (stat_items.len() as f32 * stat_gap)) / 2.0 + stat_gap / 2.0;
-                for (i, (value, label)) in stat_items.iter().enumerate() {
+                for (i, (counter, label)) in stat_items.iter().enumerate() {
                     let y = stat_start_y + i as f32 * stat_gap;
-                    // 数值
-                    ui.painter().text(
-                        pos2(stat_x, y),
-                        egui::Align2::LEFT_CENTER,
-                        value,
-                        FontId::new(18.0, egui::FontFamily::Proportional),
+                    // 数值（电表滚动）
+                    let font_size = 18.0;
+                    render_odometer_value(
+                        ui,
+                        pos2(stat_x, y - font_size * 0.6),
+                        counter,
+                        font_size,
                         colors::text_primary(),
                     );
                     // 标签

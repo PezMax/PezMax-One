@@ -2,6 +2,7 @@
 // 欢迎语 → 色块（无 emoji）→ 双栏（快速入口 + 最近更新）
 
 use crate::app::{PezMaxApp, Section, Subsection};
+use crate::components::animated_counter::render_odometer_value;
 use crate::theme::colors;
 use egui::{CornerRadius, FontId, Vec2, Color32, Stroke, pos2, UiBuilder};
 
@@ -71,46 +72,45 @@ fn render_welcome(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 // 纯色色块，白字，无 emoji
 
 fn render_metric_blocks(app: &PezMaxApp, ui: &mut egui::Ui) {
-    let (fav, dl, ul) = app.user_stats.as_ref().map_or((0, 0, 0), |s| {
-        (s.favorite_count, s.download_count, s.upload_count)
-    });
-
     let metrics = [
-        (format!("{}", dl), "下载量", colors::primary()),
-        (format!("{}", fav), "收藏数", colors::accent_orange()),
-        (format!("{}", ul), "上传数", colors::accent_green()),
+        (&app.dl_anim, "下载量", colors::primary()),
+        (&app.fav_anim, "收藏数", colors::accent_orange()),
+        (&app.ul_anim, "上传数", colors::accent_green()),
     ];
 
     let block_w = 160.0;
     let block_h = 80.0;
 
     ui.horizontal(|ui| {
-        for (i, (value, label, color)) in metrics.iter().enumerate() {
+        for (i, (counter, label, color)) in metrics.iter().enumerate() {
             if i > 0 {
                 ui.add_space(GAP);
             }
             let (rect, _) = ui.allocate_exact_size(Vec2::new(block_w, block_h), egui::Sense::hover());
             ui.painter().rect_filled(rect, CornerRadius::ZERO, *color);
 
-            let mut child_ui = ui.new_child(
-                UiBuilder::new()
-                    .max_rect(rect)
-                    .layout(egui::Layout::top_down(egui::Align::Center)),
+            // 电表风格数字
+            let font_size = 28.0;
+            let (dw, _) = (font_size * 0.58, font_size * 1.15);
+            let total_w = counter.digit_count() as f32 * dw;
+            let num_x = rect.center().x - total_w / 2.0;
+            let num_y = rect.top() + 15.0;
+            render_odometer_value(
+                ui,
+                pos2(num_x, num_y),
+                counter,
+                font_size,
+                colors::text_on_primary(),
             );
-            child_ui.vertical_centered(|ui| {
-                ui.label(
-                    egui::RichText::new(value)
-                        .font(FontId::new(28.0, egui::FontFamily::Proportional))
-                        .color(colors::text_on_primary())
-                        .strong(),
-                );
-                ui.add_space(2.0);
-                ui.label(
-                    egui::RichText::new(*label)
-                        .font(FontId::new(12.0, egui::FontFamily::Proportional))
-                        .color(colors::text_on_primary()),
-                );
-            });
+
+            // 标签
+            ui.painter().text(
+                pos2(rect.center().x, rect.top() + 58.0),
+                egui::Align2::CENTER_CENTER,
+                *label,
+                FontId::new(13.0, egui::FontFamily::Proportional),
+                colors::text_on_primary(),
+            );
         }
     });
 }
