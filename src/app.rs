@@ -1836,41 +1836,38 @@ impl PezMaxApp {
     pub fn sync_auto_launch(&self) {
         #[cfg(target_os = "windows")]
         {
-            let app_name = "PezMax";
+            let enable = self.setting_auto_launch;
             let current_exe = std::env::current_exe().ok();
-
-            if self.setting_auto_launch {
-                // 添加开机自启
-                if let Some(exe) = current_exe {
-                    let exe_str = exe.to_string_lossy().to_string();
-                    // 使用 winreg 或直接调用 RegSetValueExW
-                    // 这里用注册表命令方式（需要 winreg crate 或 reg.exe）
+            std::thread::spawn(move || {
+                let app_name = "PezMax";
+                if enable {
+                    if let Some(exe) = current_exe {
+                        let exe_str = exe.to_string_lossy().to_string();
+                        let _ = std::process::Command::new("reg")
+                            .args([
+                                "add", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+                                "/v", app_name,
+                                "/t", "REG_SZ",
+                                "/d", &exe_str,
+                                "/f",
+                            ])
+                            .output();
+                        log::info!("已设置开机自启: {}", exe_str);
+                    }
+                } else {
                     let _ = std::process::Command::new("reg")
                         .args([
-                            "add", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+                            "delete", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
                             "/v", app_name,
-                            "/t", "REG_SZ",
-                            "/d", &exe_str,
                             "/f",
                         ])
                         .output();
-                    log::info!("已设置开机自启: {}", exe_str);
+                    log::info!("已移除开机自启");
                 }
-            } else {
-                // 移除开机自启
-                let _ = std::process::Command::new("reg")
-                    .args([
-                        "delete", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
-                        "/v", app_name,
-                        "/f",
-                    ])
-                    .output();
-                log::info!("已移除开机自启");
-            }
+            });
         }
         #[cfg(not(target_os = "windows"))]
         {
-            // macOS/Linux 暂不支持开机自启
             if self.setting_auto_launch {
                 log::info!("开机自启仅在 Windows 平台支持");
             }
@@ -1917,9 +1914,10 @@ impl eframe::App for PezMaxApp {
 
         // 主题/强调色变化时保存设置
         let dir_changed = self.settings.download_dir.as_deref() != Some(self.setting_download_dir.as_str());
+        let auto_launch_changed = self.settings.setting_auto_launch != self.setting_auto_launch;
         if self.settings.theme_mode != self.theme_mode
             || self.settings.accent_idx != self.accent_idx
-            || self.settings.setting_auto_launch != self.setting_auto_launch
+            || auto_launch_changed
             || self.settings.setting_silent_download != self.setting_silent_download
             || self.settings.pdf_view_mode != self.setting_pdf_view_mode
             || self.settings.pdf_scale != self.setting_pdf_scale
@@ -1934,8 +1932,10 @@ impl eframe::App for PezMaxApp {
             self.settings.download_dir = Some(self.setting_download_dir.clone());
             self.settings.save(&self.cache_manager);
 
-            // 开机自启变化时同步注册表
-            self.sync_auto_launch();
+            // 仅在开机自启开关实际变化时同步注册表（注册表 I/O 在后台线程执行，避免阻塞 UI）
+            if auto_launch_changed {
+                self.sync_auto_launch();
+            }
         }
 
         // 同步 PDF 设置到 PdfViewer（仅在登录后）
