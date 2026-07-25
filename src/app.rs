@@ -2157,6 +2157,8 @@ impl PezMaxApp {
         }
         self.browse_batch_downloading = true;
         self.browse_batch_progress = (0, files.len());
+        // 每次批量清空上次的失败清单，避免上次错误一直挂在 UI (review 反馈)
+        self.browse_batch_errors.clear();
 
         let api = self.api.clone();
         let default_dir = self.setting_download_dir.clone();
@@ -2987,15 +2989,13 @@ impl eframe::App for PezMaxApp {
                 } else {
                     self.add_toast("全部上传失败", crate::app::ToastLevel::Error);
                 }
-                // 成功后清空队列和表单；有失败保留 errors 供 UI 显示
+                // 一律清空队列；错误清单保留在 UI 供用户查看后再选一遍。
+                // 后续如需 一键重试失败 可基于 errors 反查 files。
+                self.contribute_files.clear();
                 if self.contribute_upload_errors.is_empty() {
-                    self.contribute_files.clear();
                     self.contribute_subject.clear();
                     self.contribute_school.clear();
                     self.contribute_year.clear();
-                } else {
-                    // 保留失败的文件供用户重试；这里简单起见清空队列
-                    self.contribute_files.clear();
                 }
             }
         }
