@@ -100,8 +100,8 @@ pub struct UserInfo {
     pub sex: String,
     #[serde(default)]
     pub status: String,
-    /// 上传数量（来自 getInfo 接口）
-    #[serde(default, deserialize_with = "null_to_default")]
+    /// 上传数量（来自 getInfo 接口，后端字段名为 `count`）
+    #[serde(default, alias = "count", deserialize_with = "null_to_default")]
     pub upload_count: i64,
 }
 
