@@ -281,6 +281,8 @@ pub struct PdfViewer {
 
     // 总览面板折叠状态
     pub overview_open: bool,
+    // 总览面板宽度过渡动画：1.0 = 完全展开(OVERVIEW_PANEL_WIDTH)，0.0 = 完全收起
+    pub overview_anim: SpringAnim,
 
     // 所有页面是否已渲染完成（未完成时显示加载进度）
     all_rendered: bool,
@@ -322,6 +324,7 @@ impl PdfViewer {
             view_mode: ViewMode::Line,
             scroll_to_page: None,
             overview_open: true,
+            overview_anim: { let mut a = SpringAnim::new(0.4, 0.8, 1.0); let _ = a.update(100.0); a },
             all_rendered: false,
             re_render_in_progress: false,
             next_render_idx: 0,
@@ -358,6 +361,9 @@ impl PdfViewer {
         self.grid_size_anim = { let mut a = SpringAnim::new(0.4, 0.8, 0.0); let _ = a.update(100.0); a };
         self.display_scale_anim = SpringAnim::new(0.4, 0.8, 1.0);
         let _ = self.display_scale_anim.update(100.0);
+        // 复用当前 overview_open 状态：初始化到对应稳态，避免刚打开文档时播动画
+        self.overview_anim = SpringAnim::new(0.4, 0.8, if self.overview_open { 1.0 } else { 0.0 });
+        let _ = self.overview_anim.update(100.0);
 
         // 同步获取文档元数据
         let bytes = self.pdf_bytes.as_ref().unwrap().clone();
@@ -702,10 +708,13 @@ impl PdfViewer {
     pub fn update_animations(&mut self, dt: f64) {
         self.display_scale_anim.update(dt);
         self.grid_size_anim.update(dt);
+        self.overview_anim.update(dt);
     }
 
     pub fn is_animating(&self) -> bool {
-        !self.display_scale_anim.is_steady() || !self.grid_size_anim.is_steady()
+        !self.display_scale_anim.is_steady()
+            || !self.grid_size_anim.is_steady()
+            || !self.overview_anim.is_steady()
     }
 
     pub fn page_count(&self) -> usize {
@@ -968,6 +977,7 @@ fn render_toolbar(ui: &mut egui::Ui, viewer: &mut PdfViewer, engine: &Arc<PdfEng
                     .clicked()
                 {
                     viewer.overview_open = !viewer.overview_open;
+                    viewer.overview_anim.set_target(if viewer.overview_open { 1.0 } else { 0.0 });
                 }
             }
         });
@@ -1076,15 +1086,24 @@ fn render_line_mode(ui: &mut egui::Ui, viewer: &mut PdfViewer, engine: &Arc<PdfE
     let (outer_rect, _) = ui.allocate_exact_size(avail, egui::Sense::hover());
     let mut outer = ui.child_ui(outer_rect, egui::Layout::left_to_right(egui::Align::TOP), None);
 
-    // ── 左侧总览面板（固定宽度） ────────────────────────────
-    if viewer.overview_open {
+    // ── 左侧总览面板（SpringAnim 驱动的宽度，1.0 = 完全展开） ─────────
+    let panel_t = (viewer.overview_anim.value() as f32).clamp(0.0, 1.0);
+    let panel_w = OVERVIEW_PANEL_WIDTH * panel_t;
+    if panel_w > 0.5 {
         let (o_rect, _) = outer.allocate_exact_size(
-            egui::vec2(OVERVIEW_PANEL_WIDTH, outer_rect.height()),
+            egui::vec2(panel_w, outer_rect.height()),
             egui::Sense::hover(),
         );
-        let mut o_ui = outer.child_ui(o_rect, egui::Layout::top_down(egui::Align::LEFT), None);
+        // 内容按满宽 OVERVIEW_PANEL_WIDTH 布局，通过 clip_rect 裁剪到实际可见的 o_rect
+        // 效果：收起时缩略图向左滑出、露出右侧主区，而不是内部布局压缩
+        let content_rect = egui::Rect::from_min_size(
+            o_rect.min,
+            egui::vec2(OVERVIEW_PANEL_WIDTH, o_rect.height()),
+        );
+        let mut o_ui = outer.child_ui(content_rect, egui::Layout::top_down(egui::Align::LEFT), None);
+        o_ui.set_clip_rect(o_rect);
         o_ui.painter().rect_filled(o_rect, egui::CornerRadius::ZERO, colors::bg_card());
-        let sep = o_rect.right() + 2.0;
+        let sep = o_rect.right() - 1.0;
         o_ui.painter().line_segment(
             [egui::pos2(sep, o_rect.top()), egui::pos2(sep, o_rect.bottom())],
             egui::Stroke::new(1.0, colors::border()),
@@ -1093,7 +1112,7 @@ fn render_line_mode(ui: &mut egui::Ui, viewer: &mut PdfViewer, engine: &Arc<PdfE
     }
 
     // ── 右侧主内容区（填满剩余宽度） ────────────────────────
-    let c_w = (outer_rect.width() - if viewer.overview_open { OVERVIEW_PANEL_WIDTH } else { 0.0 }).max(200.0);
+    let c_w = (outer_rect.width() - panel_w).max(200.0);
     let (c_rect, _) = outer.allocate_exact_size(
         egui::vec2(c_w, outer_rect.height()),
         egui::Sense::hover(),

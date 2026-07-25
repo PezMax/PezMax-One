@@ -20,6 +20,7 @@ Phase 1 完成。核心原语已稳定，已接入前端 UI 组件。
 | `search_hint_anim` | `SpringAnim` | `app.rs` | 🔍 左滑出场 + 占位文字右滑入场（response=0.25, damping=0.7） |
 | `bookmark_detail_anim` | `SpringAnim` | `app.rs` / `browse.rs` | 书签详情页入场（20px 下滑 + 透明度）response=0.4, damping=0.8 |
 | `grid_size_anim` | `SpringAnim` | `pdf/mod.rs` | 平摊模式下页面宽度平滑过渡（response=0.4, damping=0.825） |
+| `overview_anim` | `SpringAnim` | `pdf/mod.rs` | Line 模式左侧总览面板宽度过渡（response=0.4, damping=0.8）；0.0=收起、1.0=展开（OVERVIEW_PANEL_WIDTH=150px）。内容按满宽布局，通过 `set_clip_rect` 裁到实际可见区域，收起时缩略图向左滑出 |
 | `accent_transition` | `MetroAnim` | `theme/mod.rs` | 强调色切换 RGB 插值（0.3s, Quadratic/EaseOut） |
 | `dark_transition` | `MetroAnim` | `theme/mod.rs` | 深色/浅色模式切换全颜色插值（0.3s, Quadratic/EaseOut） |
 | 设置页 toggle 开关滑块 | `Progress` | `pages/profile.rs::render_toggle_switch` | 开关滑块横向位移 + 背景色插值（0.22s, EaseOutCubic）。每开关按 `id_source` 独立存储到 `ctx.data_mut`，首次渲染 `jump_to` 避免开场动画。 |
