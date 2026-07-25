@@ -51,7 +51,7 @@ pub fn render_resource_manager(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     // Phase 1: 读取当前筛选状态（clone 避免后续借用冲突）
     let active_sub   = app.filters.subject.clone();
     let active_school = app.filters.school.clone();
-    let search_q     = app.search_query.to_lowercase();
+    let search_q     = app.search_query_debounced.to_lowercase();
 
     // 从数据中提取已审核文件，并派生筛选选项
     let (subjects, schools, filtered_files) = {

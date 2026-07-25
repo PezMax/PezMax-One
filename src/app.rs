@@ -391,6 +391,11 @@ pub struct PezMaxApp {
 
     // 浏览状态
     pub search_query: String,
+    /// 搜索防抖后的字符串——UI 上 search_query 实时更新，页面过滤/服务器查询
+    /// 需读取此字段。停止输入 300ms 后由 update() 同步。
+    pub search_query_debounced: String,
+    /// search_query 最近一次变化的时刻（秒，来自 ctx.input.time）
+    pub search_query_changed_at: Option<f64>,
     pub filters: FilterState,
     pub file_list: Vec<PaperFile>,
     pub file_total: i64,
@@ -665,6 +670,8 @@ impl PezMaxApp {
             },
             subsection_transition_dir: 0.0,
             search_query: String::new(),
+            search_query_debounced: String::new(),
+            search_query_changed_at: None,
             filters: FilterState::default(),
             file_list: vec![],
             file_total: 0,
@@ -2035,6 +2042,21 @@ impl eframe::App for PezMaxApp {
         // 清理缓存后刷新大小显示（toast 已添加，不需要额外操作）
 
         let dt = ctx.input(|i| i.stable_dt) as f64;
+
+        // 搜索防抖：停止输入 300ms 后再把 search_query 同步到 debounced
+        if let Some(t) = self.search_query_changed_at {
+            let now = ctx.input(|i| i.time);
+            if now - t >= 0.3 {
+                self.search_query_debounced = self.search_query.clone();
+                self.search_query_changed_at = None;
+            } else {
+                let remaining_ms = ((0.3 - (now - t)) * 1000.0).ceil() as u64;
+                ctx.request_repaint_after(std::time::Duration::from_millis(remaining_ms + 10));
+            }
+        } else if self.search_query != self.search_query_debounced {
+            // 兜底：例如以编程方式改了 search_query 但未触发 TextEdit changed
+            self.search_query_debounced = self.search_query.clone();
+        }
 
         // 每帧推进所有动画状态
         self.sidebar_anim.update(dt);

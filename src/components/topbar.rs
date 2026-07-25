@@ -48,6 +48,11 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                             .margin(egui::Margin::symmetric(14, 10)),
                     )
                 });
+                // 每次按键都记录时间戳，供 update() 做 300ms 防抖后同步到
+                // search_query_debounced，减少过滤/未来服务器查询的抖动。
+                if resp.inner.changed() {
+                    app.search_query_changed_at = Some(ctx.input(|i| i.time));
+                }
 
                 // 追踪焦点变化，触发 🔍 滑出/滑入
                 let now_focused = resp.inner.has_focus();
