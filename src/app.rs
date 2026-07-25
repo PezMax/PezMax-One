@@ -602,6 +602,9 @@ pub struct PezMaxApp {
     /// 本地下载记录缓存：file_id → 最新一次成功下载的本地记录。
     /// 用于下载记录列表 "本地打开" 按钮和 "已删除" 标记。
     pub local_downloads_by_file_id: std::collections::HashMap<i64, crate::db::LocalDownload>,
+    /// 已确认本地文件不可用的 file_id（被删/移动 或 系统打开失败）
+    /// 用于让下载记录 UI 隐藏"打开"按钮而不必每帧调 .exists()
+    pub unavailable_downloads: std::collections::HashSet<i64>,
     /// 下载完成通知通道（成功写盘后由后台任务发信号，update() 消费后
     /// 刷新计数/列表；失败不会发信号，避免把失败也算成一次下载）
     pub download_complete_tx: tokio::sync::mpsc::UnboundedSender<()>,
@@ -878,6 +881,7 @@ impl PezMaxApp {
             download_complete_tx,
             download_complete_rx,
             local_downloads_by_file_id: std::collections::HashMap::new(),
+            unavailable_downloads: std::collections::HashSet::new(),
             browse_select_mode: false,
             browse_selection: std::collections::HashSet::new(),
             browse_batch_downloading: false,
@@ -2058,6 +2062,7 @@ impl PezMaxApp {
     /// 同一 file_id 可能被下载多次，取 downloaded_at 最大的一条。
     pub fn reload_local_downloads(&mut self) {
         self.local_downloads_by_file_id.clear();
+        self.unavailable_downloads.clear();
         let Some(db) = self.download_db.as_ref() else {
             return;
         };
@@ -2074,6 +2079,12 @@ impl PezMaxApp {
                 _ => {
                     self.local_downloads_by_file_id.insert(rec.file_id, rec);
                 }
+            }
+        }
+        // 预扫每条记录的路径，缺失的入 unavailable，之后渲染就不用再 stat
+        for (file_id, rec) in &self.local_downloads_by_file_id {
+            if !std::path::Path::new(&rec.path).exists() {
+                self.unavailable_downloads.insert(*file_id);
             }
         }
     }

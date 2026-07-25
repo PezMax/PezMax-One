@@ -1329,12 +1329,13 @@ pub fn render_download_history(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                     // 查找本地记录（有则可以本地打开）
                     let local = app.local_downloads_by_file_id.get(&record.file_id).cloned();
                     let local_path = local.as_ref().map(|l| std::path::PathBuf::from(&l.path));
-                    let file_exists = local_path.as_ref().map(|p| p.exists()).unwrap_or(false);
                     let has_local = local.is_some();
+                    // 用缓存判定可用性；reload 时预扫过，无需每帧 .exists()
+                    let file_exists = has_local && !app.unavailable_downloads.contains(&record.file_id);
 
-                    let (rect, resp) = ui.allocate_exact_size(
+                    let (rect, _resp) = ui.allocate_exact_size(
                         Vec2::new(ui.available_width(), 64.0),
-                        egui::Sense::click(),
+                        egui::Sense::hover(),
                     );
 
                     ui.painter().rect_filled(rect, CornerRadius::ZERO, colors::bg_card());
@@ -1368,15 +1369,15 @@ pub fn render_download_history(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                         colors::text_primary(),
                     );
 
-                    // 右侧两个按钮：打开 / 隐藏
-                    // 有本地路径才显示 打开
-                    let hide_rect = Rect::from_min_size(
+                    // 右侧两个按钮：打开 / 删除
+                    // 只有本地文件仍可用（file_exists）才显示"打开"，否则该位置留空
+                    let delete_rect = Rect::from_min_size(
                         pos2(rect.right() - 68.0, rect.top() + 18.0),
                         Vec2::new(56.0, 28.0),
                     );
-                    let open_rect = if has_local {
+                    let open_rect = if file_exists {
                         Some(Rect::from_min_size(
-                            pos2(hide_rect.left() - 68.0, rect.top() + 18.0),
+                            pos2(delete_rect.left() - 68.0, rect.top() + 18.0),
                             Vec2::new(56.0, 28.0),
                         ))
                     } else {
@@ -1388,10 +1389,10 @@ pub fn render_download_history(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                     let leftmost_btn_left = open_rect
                         .as_ref()
                         .map(|r| r.left())
-                        .unwrap_or_else(|| hide_rect.left());
+                        .unwrap_or_else(|| delete_rect.left());
                     let text_width = (leftmost_btn_left - 12.0 - text_left).max(40.0);
 
-                    // 文件名（自动截断）
+                    // 文件名（左对齐，自动截断）
                     let name_color = if has_local && !file_exists {
                         colors::text_secondary()
                     } else {
@@ -1401,8 +1402,12 @@ pub fn render_download_history(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                         pos2(text_left, rect.top() + 8.0),
                         Vec2::new(text_width, 20.0),
                     );
-                    ui.put(
-                        name_rect,
+                    let mut name_ui = ui.new_child(
+                        egui::UiBuilder::new()
+                            .max_rect(name_rect)
+                            .layout(egui::Layout::left_to_right(egui::Align::Center)),
+                    );
+                    name_ui.add(
                         egui::Label::new(
                             egui::RichText::new(&record.file_name)
                                 .font(FontId::new(14.0, egui::FontFamily::Proportional))
@@ -1420,8 +1425,12 @@ pub fn render_download_history(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                         pos2(text_left, rect.top() + 32.0),
                         Vec2::new(text_width, 18.0),
                     );
-                    ui.put(
-                        meta_rect,
+                    let mut meta_ui = ui.new_child(
+                        egui::UiBuilder::new()
+                            .max_rect(meta_rect)
+                            .layout(egui::Layout::left_to_right(egui::Align::Center)),
+                    );
+                    meta_ui.add(
                         egui::Label::new(
                             egui::RichText::new(&meta)
                                 .font(FontId::new(12.0, egui::FontFamily::Proportional))
@@ -1430,30 +1439,27 @@ pub fn render_download_history(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                         .truncate(),
                     );
 
-                    // 打开按钮（仅当有本地记录）
+                    // 打开按钮（仅当本地文件仍可用）
                     if let Some(open_rect) = open_rect {
-                        let enabled = file_exists;
                         let open_id = egui::Id::new(("dl_open", record.download_id, record.file_id));
                         let open_resp = ui.interact(open_rect, open_id, egui::Sense::click());
-                        if enabled && open_resp.hovered() {
+                        if open_resp.hovered() {
                             ui.painter().rect_filled(open_rect, CornerRadius::ZERO, colors::bg_hover());
                         }
-                        let stroke_c = if enabled { colors::primary() } else { colors::border() };
                         ui.painter().rect_stroke(
                             open_rect,
                             CornerRadius::ZERO,
-                            Stroke::new(1.0, stroke_c),
+                            Stroke::new(1.0, colors::primary()),
                             StrokeKind::Outside,
                         );
-                        let label_c = if enabled { colors::primary() } else { colors::text_secondary() };
                         ui.painter().text(
                             open_rect.center(),
                             egui::Align2::CENTER_CENTER,
-                            if enabled { "打开" } else { "已删除" },
+                            "打开",
                             FontId::new(12.0, egui::FontFamily::Proportional),
-                            label_c,
+                            colors::primary(),
                         );
-                        if enabled && open_resp.clicked() {
+                        if open_resp.clicked() {
                             if let Some(path) = local_path.as_ref() {
                                 match PezMaxApp::open_path_with_system(path) {
                                     Ok(_) => {
@@ -1461,33 +1467,38 @@ pub fn render_download_history(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                     }
                                     Err(e) => {
                                         log::error!("打开本地文件失败 {}: {}", path.display(), e);
-                                        app.add_toast(format!("打开失败: {}", e), crate::app::ToastLevel::Error);
+                                        app.add_toast(
+                                            format!("打开失败：文件可能已被移动或删除（{}）", e),
+                                            crate::app::ToastLevel::Error,
+                                        );
+                                        // 标记为不可用，下一帧起隐藏"打开"按钮
+                                        app.unavailable_downloads.insert(record.file_id);
                                     }
                                 }
                             }
                         }
                     }
 
-                    // 隐藏按钮
-                    let hide_id = egui::Id::new(("dl_hide", record.download_id, record.file_id));
-                    let hide_resp = ui.interact(hide_rect, hide_id, egui::Sense::click());
-                    if hide_resp.hovered() {
-                        ui.painter().rect_filled(hide_rect, CornerRadius::ZERO, colors::bg_hover());
+                    // 删除按钮
+                    let delete_id = egui::Id::new(("dl_delete", record.download_id, record.file_id));
+                    let delete_resp = ui.interact(delete_rect, delete_id, egui::Sense::click());
+                    if delete_resp.hovered() {
+                        ui.painter().rect_filled(delete_rect, CornerRadius::ZERO, colors::bg_hover());
                     }
                     ui.painter().rect_stroke(
-                        hide_rect,
+                        delete_rect,
                         CornerRadius::ZERO,
                         Stroke::new(1.0, colors::border()),
                         StrokeKind::Outside,
                     );
                     ui.painter().text(
-                        hide_rect.center(),
+                        delete_rect.center(),
                         egui::Align2::CENTER_CENTER,
-                        "隐藏",
+                        "删除",
                         FontId::new(12.0, egui::FontFamily::Proportional),
                         colors::text_secondary(),
                     );
-                    if hide_resp.clicked() {
+                    if delete_resp.clicked() {
                         if let Some(ref user) = app.current_user {
                             let api = app.api.clone();
                             let uid = user.user_id;
@@ -1496,33 +1507,13 @@ pub fn render_download_history(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                 let _ = api.hide_download(uid, fid).await;
                             });
                         }
-                        // 若有本地记录，同步隐藏
+                        // 本地记录硬删（用户已表明"删除"意图，不留隐藏残余）
                         if let (Some(local_rec), Some(db)) =
                             (local.as_ref(), app.download_db.as_ref())
                         {
-                            let _ = db.hide(local_rec.id);
+                            let _ = db.delete(local_rec.id);
                         }
                         app.reload_local_downloads();
-                    }
-
-                    // 悬停效果 + 整卡点击 = 本地打开（若可用）
-                    if resp.hovered() && file_exists {
-                        let c = colors::primary();
-                        let overlay = Color32::from_rgba_premultiplied(c.r(), c.g(), c.b(), 10);
-                        ui.painter().rect_filled(rect, CornerRadius::ZERO, overlay);
-                    }
-                    if resp.clicked() && file_exists {
-                        if let Some(path) = local_path.as_ref() {
-                            match PezMaxApp::open_path_with_system(path) {
-                                Ok(_) => {
-                                    app.add_toast("已用系统默认程序打开", crate::app::ToastLevel::Success);
-                                }
-                                Err(e) => {
-                                    log::error!("打开本地文件失败 {}: {}", path.display(), e);
-                                    app.add_toast(format!("打开失败: {}", e), crate::app::ToastLevel::Error);
-                                }
-                            }
-                        }
                     }
 
                     ui.add_space(4.0);
