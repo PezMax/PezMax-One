@@ -1499,9 +1499,12 @@ pub fn render_download_history(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                         colors::text_secondary(),
                     );
                     if delete_resp.clicked() {
-                        // 乐观从服务端记录列表里剔除（否则卡片仍会显示，看起来"没生效"）
+                        // 乐观从服务端记录列表里剔除。注意：desktop 端点返回的是
+                        // PtmjFile 列表（不是 PtmjFileDownload），downloadId 恒为 0，
+                        // 必须按 file_id 过滤，否则一按就全清空。
+                        let target_fid = record.file_id;
                         if let Some(ref mut list) = app.download_records.data {
-                            list.retain(|r| r.download_id != record.download_id);
+                            list.retain(|r| r.file_id != target_fid);
                         }
                         if let Some(ref user) = app.current_user {
                             let api = app.api.clone();
