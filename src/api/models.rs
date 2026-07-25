@@ -158,9 +158,11 @@ pub struct RegisterRequest {
 }
 
 /// 密保问题
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SecurityQuestion {
+    #[serde(default)]
     pub question: String,
+    #[serde(default)]
     pub answer: String,
 }
 

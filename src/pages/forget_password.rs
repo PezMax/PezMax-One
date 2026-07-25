@@ -183,21 +183,25 @@ fn render_step_answers(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 }
 
 fn render_step_new_password(app: &mut PezMaxApp, ui: &mut egui::Ui) {
-    label(ui, "新密码");
-    ui.add(
-        egui::TextEdit::singleline(&mut app.forget_new_password)
-            .password(true)
-            .hint_text("至少 6 位")
-            .desired_width(f32::INFINITY),
-    );
+    ui.push_id("forget_new_pwd_scope", |ui| {
+        label(ui, "新密码");
+        ui.add(
+            egui::TextEdit::singleline(&mut app.forget_new_password)
+                .password(true)
+                .hint_text("至少 6 位")
+                .desired_width(f32::INFINITY),
+        );
+    });
     ui.add_space(10.0);
-    label(ui, "确认新密码");
-    ui.add(
-        egui::TextEdit::singleline(&mut app.forget_confirm_password)
-            .password(true)
-            .hint_text("再次输入")
-            .desired_width(f32::INFINITY),
-    );
+    ui.push_id("forget_confirm_pwd_scope", |ui| {
+        label(ui, "确认新密码");
+        ui.add(
+            egui::TextEdit::singleline(&mut app.forget_confirm_password)
+                .password(true)
+                .hint_text("再次输入")
+                .desired_width(f32::INFINITY),
+        );
+    });
 
     ui.add_space(16.0);
     ui.horizontal(|ui| {
@@ -217,9 +221,11 @@ fn render_step_new_password(app: &mut PezMaxApp, ui: &mut egui::Ui) {
             .corner_radius(CornerRadius::ZERO)
             .min_size(egui::vec2(148.0, 32.0));
             if ui.add_enabled(!app.forget_loading, btn).clicked() {
-                if app.forget_new_password.len() < 6 {
+                let new_pwd = app.forget_new_password.trim();
+                let confirm_pwd = app.forget_confirm_password.trim();
+                if new_pwd.chars().count() < 6 {
                     app.forget_error = "密码至少 6 位".to_string();
-                } else if app.forget_new_password != app.forget_confirm_password {
+                } else if new_pwd != confirm_pwd {
                     app.forget_error = "两次输入的密码不一致".to_string();
                 } else {
                     app.forget_error.clear();

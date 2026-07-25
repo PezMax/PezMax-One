@@ -1030,11 +1030,13 @@ impl PezMaxApp {
         self.forget_error.clear();
 
         // 组装 payload：参考 ref 的 resetPasswordBySecurity({ userName, code, uuid, securityAnswerOne, Two, Three, newPassword })
+        let new_pwd = self.forget_new_password.trim();
         let mut payload = serde_json::json!({
-            "userName": self.forget_username,
-            "code": self.forget_captcha,
+            "userName": self.forget_username.trim(),
+            "code": self.forget_captcha.trim(),
             "uuid": self.forget_captcha_uuid,
-            "newPassword": self.forget_new_password,
+            "newPassword": new_pwd,
+            "confirmPassword": new_pwd,
         });
         if let Some(m) = payload.as_object_mut() {
             for (i, q) in self.forget_questions.iter().enumerate() {
