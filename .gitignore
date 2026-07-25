@@ -1,15 +1,20 @@
 PezMax-Desktop/
 target/
-build/
 dist/
 node_modules/
 .qoder/
 **/*.rs.bk
 Cargo.lock
 
-# PDFium 运行库（用户自行下载，不提交）
-pdfium.dll
-*.lib
+# build 产物（不提交编译结果和 pdfium 二进制，但提交构建脚本）
+build/dist/
+build/rust-target/
+
+# PDFium 预编译库（各平台自动下载，不提交）
+build/pdfium/**/*.so
+build/pdfium/**/*.dylib
+build/pdfium/**/*.dll
+build/pdfium/**/*.lib
 
 # 敏感凭证（本地登录 token/加密密码等）
 credentials.json
