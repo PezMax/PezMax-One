@@ -726,7 +726,7 @@ fn render_avatar_edit(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 
         ui.add_space(8.0);
         ui.label(
-            egui::RichText::new("支持 JPG / PNG / GIF 格式，文件大小不超过 2MB")
+            egui::RichText::new("支持 JPG / PNG / GIF 格式，文件大小不超过 10MB")
                 .font(FontId::new(12.0, egui::FontFamily::Proportional))
                 .color(colors::text_secondary()),
         );

@@ -1387,6 +1387,15 @@ impl PezMaxApp {
             };
             let path = file.path().to_string_lossy().to_string();
             let result: anyhow::Result<Option<UserInfo>> = async {
+                // 头像大小限制 10MB
+                const MAX_AVATAR_BYTES: u64 = 10 * 1024 * 1024;
+                let meta = tokio::fs::metadata(&path).await?;
+                if meta.len() > MAX_AVATAR_BYTES {
+                    return Err(anyhow::anyhow!(
+                        "文件过大：{:.1}MB，超过 10MB 上限",
+                        meta.len() as f64 / (1024.0 * 1024.0),
+                    ));
+                }
                 let up = api.upload_avatar(&path).await?;
                 if up.code != 200 {
                     return Err(anyhow::anyhow!("{}", up.msg));
