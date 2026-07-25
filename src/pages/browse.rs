@@ -254,11 +254,31 @@ pub fn render_resource_manager(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     }
     if let Some(file) = select_file {
         let fid = file.file_id;
+        let is_image = is_image_file(&file.file_name, &file.file_format);
+        app.clear_preview_state();
         app.selected_file = Some(file);
         app.preview_anim = crate::sokuou::SpringAnim::with_target(0.4, 0.8, 0.0, 0.0, 1.0);
-        // 直接启动 PDF 加载，跳过预览按钮中间步骤
-        app.trigger_load_pdf_bytes(fid);
+        if is_image {
+            app.trigger_load_image_bytes(fid);
+        } else {
+            app.trigger_load_pdf_bytes(fid);
+        }
     }
+}
+
+/// 判断文件名/格式是否属于内建图片预览支持的类型
+pub fn is_image_file(name: &str, format: &str) -> bool {
+    const EXTS: &[&str] = &["jpg", "jpeg", "png", "webp", "gif", "bmp"];
+    let ext_from_name = std::path::Path::new(name)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase());
+    let fmt_lower = format.trim_start_matches('.').to_ascii_lowercase();
+    ext_from_name
+        .as_deref()
+        .map(|e| EXTS.contains(&e))
+        .unwrap_or(false)
+        || EXTS.contains(&fmt_lower.as_str())
 }
 
 /// 文件预览面板（全屏 PDF 阅读器 + 底部操作栏由 app.rs 渲染）
@@ -285,6 +305,7 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
         Action::Back => {
             app.selected_file = None;
             app.preview_anim.set_target(0.0);
+            app.clear_preview_state();
             return;
         }
         Action::Download => {
@@ -356,8 +377,11 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
         Action::None => {}
     }
 
-    // ── 主内容：PDF 阅读器（全宽渲染） ────────────────────────
-    if app.pdf_viewer.loaded {
+    // ── 主内容：根据文件类型分派 PDF / 图片 ──────────────────
+    let is_image = is_image_file(&file_name, &app.selected_file.as_ref().map(|f| f.file_format.clone()).unwrap_or_default());
+    if is_image {
+        render_image_preview(ui, app, file_id, &file_name);
+    } else if app.pdf_viewer.loaded {
         let engine = app.pdf_engine.clone();
         pdf::render_pdf_viewer(ui, &mut app.pdf_viewer, &engine);
     } else {
@@ -522,6 +546,95 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                 });
             });
     }
+}
+
+/// 图片文件预览（JPG/PNG/WEBP 等），保持长宽比 fit 到可用区域并支持垂直滚动
+fn render_image_preview(
+    ui: &mut egui::Ui,
+    app: &mut PezMaxApp,
+    file_id: i64,
+    file_name: &str,
+) {
+    if let Some(err) = app.image_error.clone() {
+        egui::Frame::new()
+            .fill(colors::bg_card())
+            .stroke(egui::Stroke::NONE)
+            .show(ui, |ui| {
+                ui.set_min_size(egui::vec2(ui.available_width(), ui.available_height()));
+                ui.vertical_centered(|ui| {
+                    ui.add_space(160.0);
+                    ui.label(
+                        egui::RichText::new("图片加载失败")
+                            .font(FontId::new(15.0, egui::FontFamily::Proportional))
+                            .color(colors::text_secondary()),
+                    );
+                    ui.add_space(6.0);
+                    ui.label(
+                        egui::RichText::new(err)
+                            .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                            .color(colors::text_secondary()),
+                    );
+                });
+            });
+        return;
+    }
+
+    if app.image_loading {
+        egui::Frame::new()
+            .fill(colors::bg_card())
+            .stroke(egui::Stroke::NONE)
+            .show(ui, |ui| {
+                ui.set_min_size(egui::vec2(ui.available_width(), ui.available_height()));
+                ui.vertical_centered(|ui| {
+                    ui.add_space(160.0);
+                    ui.label(
+                        egui::RichText::new("加载中...")
+                            .font(FontId::new(15.0, egui::FontFamily::Proportional))
+                            .color(colors::text_secondary()),
+                    );
+                    ui.add_space(8.0);
+                    ui.label(
+                        egui::RichText::new(format!("正在下载 {}", file_name))
+                            .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                            .color(colors::text_secondary()),
+                    );
+                });
+            });
+        ui.ctx().request_repaint();
+        return;
+    }
+
+    if app.image_texture.is_none() {
+        // 极短窗口：刚选中文件但尚未触发加载
+        app.trigger_load_image_bytes(file_id);
+        return;
+    }
+
+    // 有纹理 → 按可用宽度等比缩放（最大不超过原始尺寸），垂直滚动
+    let avail_w = ui.available_width();
+    let avail_h = ui.available_height();
+    let (orig_w, orig_h) = app.image_size.unwrap_or((1, 1));
+    let orig_w = orig_w as f32;
+    let orig_h = orig_h as f32;
+    // 目标宽度：不超过可用宽度 - 32 边距，不超过原始宽度的 1.5 倍（防止小图被放太大）
+    let target_w = avail_w.min(orig_w * 1.5).max(64.0);
+    let scale = target_w / orig_w;
+    let target_h = orig_h * scale;
+
+    egui::ScrollArea::vertical()
+        .auto_shrink([false; 2])
+        .id_salt(("image_preview_scroll", file_id))
+        .show(ui, |ui| {
+            ui.vertical_centered(|ui| {
+                ui.set_min_height(avail_h);
+                ui.add_space(16.0);
+                if let Some(tex) = &app.image_texture {
+                    let img = egui::Image::new(tex).fit_to_exact_size(egui::vec2(target_w, target_h));
+                    ui.add(img);
+                }
+                ui.add_space(16.0);
+            });
+        });
 }
 
 /// PDF 未加载时的占位（加载中动画）

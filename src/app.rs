@@ -555,6 +555,14 @@ pub struct PezMaxApp {
     // PDF 字节加载
     pub pdf_loading: bool,
     pub pdf_bytes_rx: Option<oneshot::Receiver<anyhow::Result<Vec<u8>>>>,
+
+    // ── 图片预览（JPG/PNG/WEBP/GIF/BMP） ────────────────────────
+    pub image_file_id: Option<i64>,
+    pub image_loading: bool,
+    pub image_bytes_rx: Option<oneshot::Receiver<anyhow::Result<Vec<u8>>>>,
+    pub image_texture: Option<egui::TextureHandle>,
+    pub image_size: Option<(u32, u32)>,
+    pub image_error: Option<String>,
 }
 
 impl PezMaxApp {
@@ -797,6 +805,13 @@ impl PezMaxApp {
             pdf_viewer: PdfViewer::new(),
             pdf_loading: false,
             pdf_bytes_rx: None,
+
+            image_file_id: None,
+            image_loading: false,
+            image_bytes_rx: None,
+            image_texture: None,
+            image_size: None,
+            image_error: None,
 
             // 新字段
             cache_manager,
@@ -1896,6 +1911,42 @@ impl PezMaxApp {
         });
     }
 
+    /// 异步加载图片字节（用于 JPG/PNG/WEBP 等非 PDF 预览）
+    pub fn trigger_load_image_bytes(&mut self, file_id: i64) {
+        if self.image_loading || self.image_bytes_rx.is_some() {
+            return;
+        }
+        self.image_file_id = Some(file_id);
+        self.image_loading = true;
+        self.image_error = None;
+        self.image_texture = None;
+        self.image_size = None;
+        let api = self.api.clone();
+        let (tx, rx) = oneshot::channel();
+        self.image_bytes_rx = Some(rx);
+        tokio::spawn(async move {
+            let result = api.download_paper(file_id).await;
+            tx.send(result.map_err(|e| anyhow::anyhow!("下载图片失败: {}", e))).ok();
+        });
+    }
+
+    /// 清空所有预览状态（Back / 切换文件时调用）
+    pub fn clear_preview_state(&mut self) {
+        self.pdf_viewer.clear_textures();
+        self.pdf_viewer.loaded = false;
+        self.pdf_viewer.error = None;
+        self.pdf_viewer.file_id = None;
+        self.pdf_loading = false;
+        self.pdf_bytes_rx = None;
+        self.pdf_file_id = None;
+        self.image_texture = None;
+        self.image_size = None;
+        self.image_loading = false;
+        self.image_bytes_rx = None;
+        self.image_file_id = None;
+        self.image_error = None;
+    }
+
     /// 统一的试卷下载入口。
     /// - `setting_silent_download == true` → 直接落到 `setting_download_dir/{file_name}`
     /// - 否则弹保存对话框，初始目录预置为 `setting_download_dir`
@@ -2333,6 +2384,41 @@ impl eframe::App for PezMaxApp {
                         log::error!("PDF 下载失败: {}", e);
                         self.pdf_viewer.error = Some(e.to_string());
                         self.pdf_viewer.loaded = true;
+                    }
+                }
+            }
+        }
+
+        // 轮询图片字节下载结果并解码
+        if let Some(rx) = &mut self.image_bytes_rx {
+            if let Ok(result) = rx.try_recv() {
+                self.image_loading = false;
+                self.image_bytes_rx = None;
+                match result {
+                    Ok(bytes) => match image::load_from_memory(&bytes) {
+                        Ok(img) => {
+                            let rgba = img.to_rgba8();
+                            let (w, h) = rgba.dimensions();
+                            let color_img = egui::ColorImage::from_rgba_unmultiplied(
+                                [w as usize, h as usize],
+                                rgba.as_raw(),
+                            );
+                            let tex = ctx.load_texture(
+                                format!("image_preview_{:?}", self.image_file_id),
+                                color_img,
+                                egui::TextureOptions::LINEAR,
+                            );
+                            self.image_texture = Some(tex);
+                            self.image_size = Some((w, h));
+                        }
+                        Err(e) => {
+                            log::error!("图片解码失败: {}", e);
+                            self.image_error = Some(format!("图片解码失败: {}", e));
+                        }
+                    },
+                    Err(e) => {
+                        log::error!("图片下载失败: {}", e);
+                        self.image_error = Some(e.to_string());
                     }
                 }
             }
