@@ -7,6 +7,7 @@ mod api;
 mod app;
 mod cache;
 mod components;
+mod db;
 mod pages;
 mod pdf;
 mod settings;

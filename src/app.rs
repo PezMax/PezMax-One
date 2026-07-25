@@ -563,6 +563,10 @@ pub struct PezMaxApp {
     pub image_texture: Option<egui::TextureHandle>,
     pub image_size: Option<(u32, u32)>,
     pub image_error: Option<String>,
+
+    // ── 本地下载记录（SQLite） ─────────────────────────────────
+    /// None 表示数据库打开失败，功能降级为不写本地。
+    pub download_db: Option<crate::db::DownloadDb>,
 }
 
 impl PezMaxApp {
@@ -814,6 +818,16 @@ impl PezMaxApp {
             image_error: None,
 
             // 新字段
+            download_db: {
+                let path = crate::db::default_db_path(cache_manager.cache_dir());
+                match crate::db::DownloadDb::open(&path) {
+                    Ok(db) => Some(db),
+                    Err(e) => {
+                        log::error!("打开下载数据库失败 {}: {}", path.display(), e);
+                        None
+                    }
+                }
+            },
             cache_manager,
             settings,
             pdf_file_id: None,
@@ -1957,6 +1971,7 @@ impl PezMaxApp {
         let api = self.api.clone();
         let silent = self.setting_silent_download;
         let default_dir = self.setting_download_dir.clone();
+        let db = self.download_db.clone();
         tokio::spawn(async move {
             let target_path: Option<std::path::PathBuf> = if silent {
                 let dir = std::path::PathBuf::from(&default_dir);
@@ -1973,7 +1988,6 @@ impl PezMaxApp {
                 if start_dir.exists() {
                     dlg = dlg.set_directory(&start_dir);
                 }
-                // 尽量按文件扩展名过滤
                 let ext = std::path::Path::new(&file_name)
                     .extension()
                     .and_then(|e| e.to_str())
@@ -1992,8 +2006,14 @@ impl PezMaxApp {
                 Ok(bytes) => {
                     if let Err(e) = std::fs::write(&path, &bytes) {
                         log::error!("下载写盘失败 {}: {}", path.display(), e);
-                    } else {
-                        log::info!("下载完成 file_id={} → {}", file_id, path.display());
+                        return;
+                    }
+                    log::info!("下载完成 file_id={} → {}", file_id, path.display());
+                    // 仅在真的写盘成功后才写本地记录（#22）
+                    if let Some(db) = db {
+                        if let Err(e) = db.insert(file_id, &file_name, &path) {
+                            log::error!("写入下载记录失败 file_id={}: {}", file_id, e);
+                        }
                     }
                 }
                 Err(e) => {

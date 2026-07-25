@@ -64,8 +64,9 @@ webbrowser = "1"
 # ── 本地持久化 ────────────────────────────────────────────
 # 跨平台数据目录（APPDATA / ~/.local/share / ~/Library）
 dirs = "6"
-# 嵌入式 KV 数据库（本地下载记录）
-sled = "0.34"
+# 本地下载记录持久化（SQLite）
+# bundled: 编译 SQLite 静态库，避免用户机器需要安装 libsqlite3
+rusqlite = { version = "0.31", features = ["bundled"] }
 # 配置文件持久化（用户设置）
 confy = "0.6"
 # 本地凭证混淆用的 machine-uid
