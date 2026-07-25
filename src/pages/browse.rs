@@ -311,13 +311,9 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
         Action::Download => {
             let fid = file_id;
             let fname = file_name.clone();
-            // 乐观更新下载统计
-            if let Some(ref mut stats) = app.user_stats {
-                stats.download_count += 1;
-            }
+            // 不再乐观 +1：真实下载完成信号由 download_complete_rx 触发
+            // stats 刷新与 toast，这样失败下载不会让计数虚假上涨（#22）。
             app.trigger_download_paper(fid, fname);
-            // 后台刷新统计（确保下次打开时数据一致）
-            app.trigger_load_user_stats();
         }
         Action::Favorite => {
             let api = app.api.clone();

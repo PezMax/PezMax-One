@@ -567,6 +567,10 @@ pub struct PezMaxApp {
     // ── 本地下载记录（SQLite） ─────────────────────────────────
     /// None 表示数据库打开失败，功能降级为不写本地。
     pub download_db: Option<crate::db::DownloadDb>,
+    /// 下载完成通知通道（成功写盘后由后台任务发信号，update() 消费后
+    /// 刷新计数/列表；失败不会发信号，避免把失败也算成一次下载）
+    pub download_complete_tx: tokio::sync::mpsc::UnboundedSender<()>,
+    pub download_complete_rx: tokio::sync::mpsc::UnboundedReceiver<()>,
 }
 
 impl PezMaxApp {
@@ -581,6 +585,10 @@ impl PezMaxApp {
         // 应用设置到主题全局变量
         theme::set_accent(settings.accent_idx);
         theme::set_dark(matches!(settings.theme_mode, theme::ThemeMode::Dark));
+
+        // 下载完成通道
+        let (download_complete_tx, download_complete_rx) =
+            tokio::sync::mpsc::unbounded_channel();
 
         let mut app = Self {
             api: ApiClient::new(None),
@@ -828,6 +836,8 @@ impl PezMaxApp {
                     }
                 }
             },
+            download_complete_tx,
+            download_complete_rx,
             cache_manager,
             settings,
             pdf_file_id: None,
@@ -1972,6 +1982,7 @@ impl PezMaxApp {
         let silent = self.setting_silent_download;
         let default_dir = self.setting_download_dir.clone();
         let db = self.download_db.clone();
+        let complete_tx = self.download_complete_tx.clone();
         tokio::spawn(async move {
             let target_path: Option<std::path::PathBuf> = if silent {
                 let dir = std::path::PathBuf::from(&default_dir);
@@ -2015,9 +2026,12 @@ impl PezMaxApp {
                             log::error!("写入下载记录失败 file_id={}: {}", file_id, e);
                         }
                     }
+                    // 通知主线程刷新计数/列表
+                    let _ = complete_tx.send(());
                 }
                 Err(e) => {
                     log::error!("下载失败 file_id={}: {}", file_id, e);
+                    // 失败不发信号，UI 上不会把这次算作一次下载
                 }
             }
         });
@@ -2407,6 +2421,18 @@ impl eframe::App for PezMaxApp {
                     }
                 }
             }
+        }
+
+        // 轮询下载完成事件（仅在真的写盘成功后才会有信号）
+        // 收到 → 权威计数刷新 + 下载记录列表失效
+        let mut got_complete = false;
+        while let Ok(()) = self.download_complete_rx.try_recv() {
+            got_complete = true;
+        }
+        if got_complete {
+            self.trigger_load_user_stats();
+            self.download_records.reset();
+            self.add_toast("下载完成", ToastLevel::Success);
         }
 
         // 轮询图片字节下载结果并解码
