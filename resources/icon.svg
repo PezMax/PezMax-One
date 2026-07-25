@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- 白色直角背景块 -->
+  <rect x="64" y="64" width="384" height="384" fill="white"/>
+  <!-- 外框直角环（四边不连续，宛如拼图分离） -->
+  <rect x="96" y="96" width="320" height="320" fill="none" stroke="#3B82F6" stroke-width="20"/>
+  <!-- 四边直角切割缺口 -->
+  <rect x="236" y="76" width="40" height="40" fill="white"/>
+  <rect x="236" y="396" width="40" height="40" fill="white"/>
+  <rect x="76" y="236" width="40" height="40" fill="white"/>
+  <rect x="396" y="236" width="40" height="40" fill="white"/>
+  <!-- 居中勾（Microsoft To Do 风格） -->
+  <polyline points="200,268 244,312 324,216" fill="none" stroke="#3B82F6" stroke-width="24" stroke-linecap="square" stroke-linejoin="miter"/>
+</svg>

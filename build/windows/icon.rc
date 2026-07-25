@@ -1,0 +1,8 @@
+// PezMax-One 图标资源文件
+// 编译：windres icon.rc -O coff -o icon.res
+// 链接：在 Cargo.toml 中使用 rustc-link-arg 或 build.rs
+
+#include <windows.h>
+
+// 应用图标
+IDI_APP ICON "../../resources/icon.ico"
