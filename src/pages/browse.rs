@@ -637,7 +637,7 @@ fn resource_type_info(key: &str) -> (&str, Color32) {
         .unwrap_or(("🔖", colors::text_secondary()))
 }
 
-/// ── 书签列表主视图（扁平列表，无搜索框）──────────────────────────────────────
+/// ── 书签列表主视图（扁平列表，带本地搜索框）────────────────────────────────
 fn render_bookmark_list(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     if !app.bookmarks_data.is_loaded() && !app.bookmarks_data.is_loading() {
         app.trigger_load_bookmarks();
@@ -682,6 +682,23 @@ fn render_bookmark_list(app: &mut PezMaxApp, ui: &mut egui::Ui) {
             .color(colors::text_secondary()),
     );
     ui.add_space(12.0);
+
+    // 本地搜索框
+    ui.horizontal(|ui| {
+        ui.scope(|ui| {
+            crate::theme::apply_search_style(ui);
+            ui.add(
+                egui::TextEdit::singleline(&mut app.external_bookmarks_search)
+                    .hint_text("搜索标题 / 域名 / 专栏 / 学科")
+                    .desired_width(300.0)
+                    .font(FontId::new(13.0, egui::FontFamily::Proportional)),
+            );
+        });
+        if !app.external_bookmarks_search.is_empty() && ui.small_button("清除").clicked() {
+            app.external_bookmarks_search.clear();
+        }
+    });
+    ui.add_space(10.0);
 
     // 创建/编辑表单
     if app.show_bookmark_form {
@@ -739,10 +756,36 @@ fn render_bookmark_list(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     }
 
     // ── 扁平列表 ──────────────────────────────────────────────────────
+    let q_lower = app.external_bookmarks_search.to_lowercase();
+    let filtered: Vec<Bookmark> = list_clone
+        .into_iter()
+        .filter(|bm| {
+            if q_lower.is_empty() {
+                return true;
+            }
+            bm.title.to_lowercase().contains(&q_lower)
+                || bm.url.to_lowercase().contains(&q_lower)
+                || bm.collection.to_lowercase().contains(&q_lower)
+                || bm.subject.to_lowercase().contains(&q_lower)
+        })
+        .collect();
+
+    if filtered.is_empty() {
+        ui.add_space(20.0);
+        ui.vertical_centered(|ui| {
+            ui.label(
+                egui::RichText::new("无匹配的书签")
+                    .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                    .color(colors::text_secondary()),
+            );
+        });
+        return;
+    }
+
     egui::ScrollArea::vertical()
         .id_salt("bookmark_list_scroll")
         .show(ui, |ui| {
-            for bm in &list_clone {
+            for bm in &filtered {
                 let row_clicked = render_bookmark_row(ui, bm, app);
                 if row_clicked {
                     app.selected_bookmark = Some(bm.clone());
