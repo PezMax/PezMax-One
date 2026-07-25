@@ -716,30 +716,12 @@ fn render_avatar_edit(app: &mut PezMaxApp, ui: &mut egui::Ui) {
         ui.add_space(12.0);
 
         // 上传按钮
-        if primary_button(ui, "选择图片并上传", false) {
+        if primary_button(ui, "选择图片并上传", app.account_edit_loading) {
             app.account_edit_error.clear();
             app.account_edit_success.clear();
             app.account_edit_message_timer = 0.0;
-
-            let api = app.api.clone();
-            tokio::spawn(async move {
-                // 使用 rfd 打开文件选择对话框
-                let file = rfd::AsyncFileDialog::new()
-                    .add_filter("图片", &["jpg", "jpeg", "png", "gif"])
-                    .pick_file()
-                    .await;
-                if let Some(file) = file {
-                    let path = file.path().to_string_lossy().to_string();
-                    match api.upload_avatar(&path).await {
-                        Ok(resp) => {
-                            log::info!("头像上传成功: {:?}", resp);
-                        }
-                        Err(e) => {
-                            log::error!("头像上传失败: {}", e);
-                        }
-                    }
-                }
-            });
+            app.account_edit_loading = true;
+            app.trigger_upload_avatar();
         }
 
         ui.add_space(8.0);
@@ -771,23 +753,17 @@ fn render_username_edit(app: &mut PezMaxApp, ui: &mut egui::Ui) {
         );
         ui.add_space(8.0);
 
-        let resp = ui.add(
-            egui::TextEdit::singleline(&mut app.account_edit_username)
-                .font(FontId::new(14.0, egui::FontFamily::Proportional))
-                .text_color(colors::text_primary())
-                .desired_width(240.0)
-                .margin(egui::Vec2::new(8.0, 6.0))
-                .hint_text("请输入新用户名"),
-        );
-        // 设置背景色
-        let bg_rect = resp.rect;
-        ui.painter().rect_filled(bg_rect, CornerRadius::ZERO, colors::bg_input());
-        ui.painter().rect_stroke(
-            bg_rect,
-            CornerRadius::ZERO,
-            Stroke::new(1.0, colors::border()),
-            StrokeKind::Outside,
-        );
+        ui.scope(|ui| {
+            crate::theme::apply_search_style(ui);
+            ui.add(
+                egui::TextEdit::singleline(&mut app.account_edit_username)
+                    .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                    .text_color(colors::text_primary())
+                    .desired_width(240.0)
+                    .margin(egui::Vec2::new(8.0, 6.0))
+                    .hint_text("请输入新用户名"),
+            );
+        });
 
         ui.add_space(16.0);
 

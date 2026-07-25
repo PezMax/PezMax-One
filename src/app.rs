@@ -508,6 +508,8 @@ pub struct PezMaxApp {
     pub avatar_texture: Option<egui::TextureHandle>,
     pub avatar_image_size: Option<(usize, usize)>,
     pub avatar_load_rx: Option<oneshot::Receiver<anyhow::Result<Vec<u8>>>>,
+    // 头像上传（Ok(None) 表示用户取消选择文件）
+    pub avatar_upload_rx: Option<oneshot::Receiver<anyhow::Result<Option<UserInfo>>>>,
 
     // 账号设置状态
     pub account_edit_section: AccountEditSection,
@@ -743,6 +745,7 @@ impl PezMaxApp {
             avatar_texture: None,
             avatar_image_size: None,
             avatar_load_rx: None,
+            avatar_upload_rx: None,
 
             account_edit_section: AccountEditSection::None,
             account_edit_username: String::new(),
@@ -1354,6 +1357,40 @@ impl PezMaxApp {
         });
     }
 
+    /// 打开文件选择器上传头像，成功后拉取最新 profile 返回
+    pub fn trigger_upload_avatar(&mut self) {
+        if self.avatar_upload_rx.is_some() {
+            return;
+        }
+        let api = self.api.clone();
+        let (tx, rx) = oneshot::channel();
+        self.avatar_upload_rx = Some(rx);
+        tokio::spawn(async move {
+            let file = rfd::AsyncFileDialog::new()
+                .add_filter("图片", &["jpg", "jpeg", "png", "gif"])
+                .pick_file()
+                .await;
+            let Some(file) = file else {
+                tx.send(Ok(None)).ok();
+                return;
+            };
+            let path = file.path().to_string_lossy().to_string();
+            let result: anyhow::Result<Option<UserInfo>> = async {
+                let up = api.upload_avatar(&path).await?;
+                if up.code != 200 {
+                    return Err(anyhow::anyhow!("{}", up.msg));
+                }
+                let profile = api.get_profile().await?;
+                if profile.code != 200 {
+                    return Err(anyhow::anyhow!("{}", profile.msg));
+                }
+                Ok(profile.data)
+            }
+            .await;
+            tx.send(result).ok();
+        });
+    }
+
     /// 异步加载密保问题（账号设置用）
     pub fn trigger_load_security_questions(&mut self) {
         let api = self.api.clone();
@@ -1765,6 +1802,7 @@ impl PezMaxApp {
         self.favorite_ids_rx = None;
         self.avatar_texture = None;
         self.avatar_load_rx = None;
+        self.avatar_upload_rx = None;
         self.rank_avatar_textures.clear();
         self.rank_avatar_delays.clear();
         self.rank_avatar_timer.clear();
@@ -2020,6 +2058,32 @@ impl eframe::App for PezMaxApp {
             }
         }
 
+        // 轮询头像上传结果
+        if let Some(rx) = &mut self.avatar_upload_rx {
+            if let Ok(result) = rx.try_recv() {
+                self.avatar_upload_rx = None;
+                self.account_edit_loading = false;
+                match result {
+                    Ok(Some(user)) => {
+                        self.current_user = Some(user);
+                        self.avatar_texture = None;
+                        self.avatar_image_size = None;
+                        self.trigger_load_avatar();
+                        self.account_edit_success = "头像上传成功".to_string();
+                        self.account_edit_message_timer = 3.0;
+                        self.account_edit_section = AccountEditSection::None;
+                    }
+                    Ok(None) => {
+                        // 用户取消，静默处理
+                    }
+                    Err(e) => {
+                        self.account_edit_error = format!("头像上传失败: {}", e);
+                        self.account_edit_message_timer = 3.0;
+                    }
+                }
+            }
+        }
+
         // 轮询收藏 ID 列表加载结果
         if let Some(rx) = &mut self.favorite_ids_rx {
             if let Ok(result) = rx.try_recv() {
@@ -2171,6 +2235,7 @@ impl eframe::App for PezMaxApp {
             || self.pdf_viewer.is_loading()
             || self.toasts.iter().any(|t| !t.enter.is_steady() || !t.exit.is_steady())
             || self.avatar_load_rx.is_some()
+            || self.avatar_upload_rx.is_some()
             || self.rank_avatar_rx.is_some()
             || self.bookmark_cover_rx.is_some()
             || self.bookmark_cover_bulk_rx.is_some()
