@@ -292,7 +292,7 @@ fn render_recent_files(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                 colors::text_primary(),
             );
 
-            let meta = format!("{} · {} · {}", file.file_subject, file.file_year, file.create_by);
+            let meta = format!("{} · {}", file.file_subject, file.create_by);
             ui.painter().text(
                 pos2(rect.left() + 14.0 + 28.0, rect.center().y + 8.0),
                 egui::Align2::LEFT_CENTER,
