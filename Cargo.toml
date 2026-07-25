@@ -2,7 +2,14 @@
 name = "pezmax-egui"
 version = "1.0.0"
 description = "PezMax - 高性能试卷资源管理桌面客户端 (egui + Metro Design)"
+authors = ["Takahashi Rinta <mc1586182829@outlook.com>"]
+license = "MIT"
 edition = "2021"
+repository = "https://github.com/PezMax/PezMax-One"
+homepage = "https://github.com/PezMax/PezMax-One"
+readme = "README.md"
+keywords = ["pdf", "exam", "education", "egui", "desktop"]
+categories = ["gui", "education"]
 
 [dependencies]
 # GUI framework
@@ -64,3 +71,7 @@ confy = "0.6"
 # 本地凭证混淆用的 machine-uid
 machine-uid = "0.5"
 hostname = "0.4"
+
+[build-dependencies]
+# Windows resource compilation (icon embedding)
+embed-resource = "3"

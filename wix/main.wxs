@@ -1,0 +1,221 @@
+<?xml version='1.0' encoding='windows-1252'?>
+<!--
+  Copyright (C) 2017 Christopher R. Field.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<!--
+  The "cargo wix" subcommand provides a variety of predefined variables available
+  for customization of this template. The values for each variable are set at
+  installer creation time. The following variables are available:
+
+  TargetTriple      = The rustc target triple name.
+  TargetEnv         = The rustc target environment. This is typically either
+                      "msvc" or "gnu" depending on the toolchain downloaded and
+                      installed.
+  TargetVendor      = The rustc target vendor. This is typically "pc", but Rust
+                      does support other vendors, like "uwp".
+  CargoTargetBinDir = The complete path to the directory containing the
+                      binaries (exes) to include. The default would be
+                      "target\release\". If an explicit rustc target triple is
+                      used, i.e. cross-compiling, then the default path would
+                      be "target\<CARGO_TARGET>\<CARGO_PROFILE>",
+                      where "<CARGO_TARGET>" is replaced with the "CargoTarget"
+                      variable value and "<CARGO_PROFILE>" is replaced with the
+                      value from the "CargoProfile" variable. This can also
+                      be overridden manually with the "target-bin-dir" flag.
+  CargoTargetDir    = The path to the directory for the build artifacts, i.e.
+                      "target".
+  CargoProfile      = The cargo profile used to build the binaries
+                      (usually "debug" or "release").
+  Version           = The version for the installer. The default is the
+                      "Major.Minor.Fix" semantic versioning number of the Rust
+                      package.
+-->
+
+<!--
+  Please do not remove these pre-processor If-Else blocks. These are used with
+  the `cargo wix` subcommand to automatically determine the installation
+  destination for 32-bit versus 64-bit installers. Removal of these lines will
+  cause installation errors.
+-->
+<?if $(sys.BUILDARCH) = x64 or $(sys.BUILDARCH) = arm64 ?>
+    <?define PlatformProgramFilesFolder = "ProgramFiles64Folder" ?>
+<?else ?>
+    <?define PlatformProgramFilesFolder = "ProgramFilesFolder" ?>
+<?endif ?>
+
+<Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'>
+
+    <Product
+        Id='*'
+        Name='PezMax One'
+        UpgradeCode='CAAF0540-96F0-463A-9657-5656A458D4B3'
+        Manufacturer='Takahashi Rinta'
+        Language='1033'
+        Codepage='1252'
+        Version='$(var.Version)'>
+
+        <Package Id='*'
+            Keywords='Installer'
+            Description='PezMax One - High-performance exam paper resource manager'
+            Manufacturer='Takahashi Rinta'
+            InstallerVersion='450'
+            Languages='1033'
+            Compressed='yes'
+            InstallScope='perMachine'
+            SummaryCodepage='1252'
+            />
+
+        <MajorUpgrade
+            Schedule='afterInstallInitialize'
+            DowngradeErrorMessage='A newer version of [ProductName] is already installed. Setup will now exit.'/>
+
+        <Media Id='1' Cabinet='media1.cab' EmbedCab='yes' DiskPrompt='CD-ROM #1'/>
+        <Property Id='DiskPrompt' Value='PezMax One Installation'/>
+
+        <Directory Id='TARGETDIR' Name='SourceDir'>
+            <Directory Id='$(var.PlatformProgramFilesFolder)' Name='PFiles'>
+                <Directory Id='APPLICATIONFOLDER' Name='PezMax One'>
+                    <!--
+                      Disabling the license sidecar file in the installer is a two step process:
+
+                      1. Comment out or remove the `Component` tag along with its contents.
+                      2. Comment out or remove the `ComponentRef` tag with the "License" Id
+                         attribute value further down in this file.
+                    -->
+                    <Component Id='License' Guid='*'>
+                        <File Id='LicenseFile'
+                            DiskId='1'
+                            Source='wix\License.rtf'
+                            KeyPath='yes'/>
+                    </Component>
+
+                    <Directory Id='Bin' Name='bin'>
+                        <Component Id='binary0' Guid='*'>
+                            <File
+                                Id='exe0'
+                                Name='pezmax-egui.exe'
+                                DiskId='1'
+                                Source='$(var.CargoTargetBinDir)\pezmax-egui.exe'
+                                KeyPath='yes'/>
+                        </Component>
+
+                        <Component Id='dll0' Guid='*'>
+                            <File
+                                Id='pdfium'
+                                Name='pdfium.dll'
+                                DiskId='1'
+                                Source='$(var.CargoTargetBinDir)\pdfium.dll'
+                                KeyPath='yes'/>
+                        </Component>
+                    </Directory>
+
+                    <!-- Start Menu shortcut -->
+                    <Directory Id='ProgramMenuFolder'>
+                        <Directory Id='ApplicationProgramsFolder' Name='PezMax One'>
+                            <Component Id='StartMenuShortcut' Guid='*'>
+                                <Shortcut Id='ApplicationStartMenuShortcut'
+                                    Name='PezMax One'
+                                    Description='PezMax One - High-performance exam paper resource manager'
+                                    Target='[Bin]pezmax-egui.exe'
+                                    WorkingDirectory='Bin'
+                                    IconIndex='0'/>
+                                <RemoveFolder Id='RemoveApplicationProgramsFolder'
+                                    Directory='ApplicationProgramsFolder'
+                                    On='uninstall'/>
+                                <RegistryValue Root='HKCU'
+                                    Key='Software\PezMax\PezMax-One'
+                                    Name='installed'
+                                    Type='integer'
+                                    Value='1'
+                                    KeyPath='yes'/>
+                            </Component>
+                        </Directory>
+                    </Directory>
+
+                    <!-- Desktop shortcut -->
+                    <Directory Id='DesktopFolder' Name='Desktop'>
+                        <Component Id='DesktopShortcut' Guid='*'>
+                            <Shortcut Id='ApplicationDesktopShortcut'
+                                Name='PezMax One'
+                                Description='PezMax One - High-performance exam paper resource manager'
+                                Target='[Bin]pezmax-egui.exe'
+                                WorkingDirectory='Bin'
+                                IconIndex='0'/>
+                            <RemoveFolder Id='RemoveDesktopFolder'
+                                Directory='DesktopFolder'
+                                On='uninstall'/>
+                            <RegistryValue Root='HKCU'
+                                Key='Software\PezMax\PezMax-One'
+                                Name='desktop_shortcut'
+                                Type='integer'
+                                Value='1'
+                                KeyPath='yes'/>
+                        </Component>
+                    </Directory>
+                </Directory>
+            </Directory>
+        </Directory>
+
+        <Feature
+            Id='Binaries'
+            Title='Application'
+            Description='Installs the main application and required files'
+            Level='1'
+            ConfigurableDirectory='APPLICATIONFOLDER'
+            AllowAdvertise='no'
+            Display='expand'
+            Absent='disallow'>
+            <ComponentRef Id='License'/>
+            <ComponentRef Id='binary0'/>
+            <ComponentRef Id='dll0'/>
+            <ComponentRef Id='StartMenuShortcut'/>
+
+            <Feature
+                Id='DesktopShortcut'
+                Title='Desktop Shortcut'
+                Description='Creates a shortcut on the desktop'
+                Level='1'
+                Absent='allow'>
+                <ComponentRef Id='DesktopShortcut'/>
+            </Feature>
+        </Feature>
+
+        <SetProperty Id='ARPINSTALLLOCATION' Value='[APPLICATIONFOLDER]' After='CostFinalize'/>
+
+        <!-- App icon for Add/Remove Programs -->
+        <Icon Id='ProductICO' SourceFile='wix\Product.ico'/>
+        <Property Id='ARPPRODUCTICON' Value='ProductICO' />
+
+        <Property Id='ARPHELPLINK' Value='https://github.com/PezMax/PezMax-One'/>
+        <Property Id='ARPURLINFOABOUT' Value='https://github.com/PezMax/PezMax-One'/>
+        <Property Id='ARPCOMMENTS' Value='PezMax One v$(var.Version) - High-performance exam paper resource manager'/>
+        <Property Id='ARPCONTACT' Value='Takahashi Rinta'/>
+
+        <UI>
+            <UIRef Id='WixUI_FeatureTree'/>
+        </UI>
+
+        <WixVariable Id='WixUILicenseRtf' Value='wix\License.rtf'/>
+
+        <!--
+          TODO: Uncomment when custom banner/dialog images are ready
+          <WixVariable Id='WixUIBannerBmp' Value='wix\Banner.bmp'/>
+          <WixVariable Id='WixUIDialogBmp' Value='wix\Dialog.bmp'/>
+        -->
+
+    </Product>
+
+</Wix>

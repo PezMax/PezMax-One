@@ -1717,7 +1717,7 @@ SOFTWARE.";
                 );
                 ui.add_space(10.0);
                 ui.label(
-                    egui::RichText::new("v0.1.0")
+                    egui::RichText::new(env!("CARGO_PKG_VERSION"))
                         .font(FontId::new(13.0, egui::FontFamily::Proportional))
                         .color(colors::text_secondary()),
                 );
@@ -1743,7 +1743,7 @@ SOFTWARE.";
 
             // ── 信息列表（key 列固定 84px 宽度对齐）─────────
             let info_items: &[(&str, &str)] = &[
-                ("版本号", "v0.1.0 (build 2026-07)"),
+                ("版本号", concat!("v", env!("CARGO_PKG_VERSION"), " (build 2026-07)")),
                 ("作者", "Takahashi Rinta"),
                 ("QQ交流群", "1077605719"),
                 ("许可证", "MIT License"),
