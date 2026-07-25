@@ -1570,6 +1570,25 @@ fn render_paper_favorites(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     });
     ui.add_space(8.0);
 
+    // ── 本地搜索框 ─────────────────────────────────────
+    ui.horizontal(|ui| {
+        ui.scope(|ui| {
+            crate::theme::apply_search_style(ui);
+            ui.add(
+                egui::TextEdit::singleline(&mut app.paper_favorites_search)
+                    .hint_text("搜索文件名/学科")
+                    .desired_width(240.0)
+                    .font(FontId::new(13.0, egui::FontFamily::Proportional)),
+            );
+        });
+        if !app.paper_favorites_search.is_empty() && ui.small_button("清除").clicked() {
+            app.paper_favorites_search.clear();
+        }
+    });
+    ui.add_space(8.0);
+
+    let q_lower = app.paper_favorites_search.to_lowercase();
+
     egui::ScrollArea::vertical()
         .id_salt("favorites_scroll")
         .show(ui, |ui| {
@@ -1598,7 +1617,26 @@ fn render_paper_favorites(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                     });
                     return;
                 }
-                let items = list.clone();
+                let items: Vec<_> = list
+                    .iter()
+                    .filter(|f| {
+                        q_lower.is_empty()
+                            || f.file_name.to_lowercase().contains(&q_lower)
+                            || f.file_subject.to_lowercase().contains(&q_lower)
+                    })
+                    .cloned()
+                    .collect();
+                if items.is_empty() {
+                    ui.add_space(40.0);
+                    ui.vertical_centered(|ui| {
+                        ui.label(
+                            egui::RichText::new("无匹配的收藏")
+                                .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                                .color(colors::text_secondary()),
+                        );
+                    });
+                    return;
+                }
                 for fav in &items {
                     egui::Frame::new()
                         .fill(colors::bg_card())
@@ -1734,6 +1772,25 @@ fn render_bookmark_favorites(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     });
     ui.add_space(8.0);
 
+    // ── 本地搜索框 ─────────────────────────────────────
+    ui.horizontal(|ui| {
+        ui.scope(|ui| {
+            crate::theme::apply_search_style(ui);
+            ui.add(
+                egui::TextEdit::singleline(&mut app.bookmark_favorites_search)
+                    .hint_text("搜索书签标题")
+                    .desired_width(240.0)
+                    .font(FontId::new(13.0, egui::FontFamily::Proportional)),
+            );
+        });
+        if !app.bookmark_favorites_search.is_empty() && ui.small_button("清除").clicked() {
+            app.bookmark_favorites_search.clear();
+        }
+    });
+    ui.add_space(8.0);
+
+    let q_lower = app.bookmark_favorites_search.to_lowercase();
+
     egui::ScrollArea::vertical()
         .id_salt("bookmark_favorites_scroll")
         .show(ui, |ui| {
@@ -1792,6 +1849,11 @@ fn render_bookmark_favorites(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                         }
                         format!("书签 #{}", bm_id)
                     });
+
+                // 本地搜索过滤
+                if !q_lower.is_empty() && !bm_title.to_lowercase().contains(&q_lower) {
+                    continue;
+                }
 
                 egui::Frame::new()
                     .fill(colors::bg_card())

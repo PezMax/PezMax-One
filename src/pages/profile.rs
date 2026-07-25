@@ -1248,7 +1248,30 @@ pub fn render_download_history(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 
     ui.add_space(8.0);
     section_title(ui, "下载记录");
-    ui.add_space(16.0);
+    ui.add_space(8.0);
+
+    // ── 本地搜索框 ─────────────────────────────────────
+    ui.horizontal(|ui| {
+        ui.scope(|ui| {
+            crate::theme::apply_search_style(ui);
+            ui.add(
+                egui::TextEdit::singleline(&mut app.download_history_search)
+                    .hint_text("搜索文件名/格式")
+                    .desired_width(240.0)
+                    .font(FontId::new(13.0, egui::FontFamily::Proportional)),
+            );
+        });
+        if !app.download_history_search.is_empty()
+            && ui
+                .small_button("清除")
+                .clicked()
+        {
+            app.download_history_search.clear();
+        }
+    });
+    ui.add_space(12.0);
+
+    let q_lower = app.download_history_search.to_lowercase();
 
     egui::ScrollArea::vertical()
         .id_salt("download_scroll")
@@ -1259,7 +1282,22 @@ pub fn render_download_history(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                     return;
                 }
 
-                for record in list {
+                let filtered: Vec<&crate::api::models::DownloadRecord> = list
+                    .iter()
+                    .filter(|r| {
+                        q_lower.is_empty()
+                            || r.file_name.to_lowercase().contains(&q_lower)
+                            || r.file_format.to_lowercase().contains(&q_lower)
+                    })
+                    .collect();
+
+                if filtered.is_empty() {
+                    empty_state(ui, "🔍", "无匹配的下载记录");
+                    return;
+                }
+
+                for record in &filtered {
+                    let record = *record;
                     let (rect, resp) = ui.allocate_exact_size(
                         Vec2::new(ui.available_width(), 64.0),
                         egui::Sense::click(),

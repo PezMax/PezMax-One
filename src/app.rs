@@ -396,6 +396,10 @@ pub struct PezMaxApp {
     pub search_query_debounced: String,
     /// search_query 最近一次变化的时刻（秒，来自 ctx.input.time）
     pub search_query_changed_at: Option<f64>,
+    // 各 subsection 局部搜索（不走顶栏全局搜索）
+    pub download_history_search: String,
+    pub paper_favorites_search: String,
+    pub bookmark_favorites_search: String,
     pub filters: FilterState,
     pub file_list: Vec<PaperFile>,
     pub file_total: i64,
@@ -672,6 +676,9 @@ impl PezMaxApp {
             search_query: String::new(),
             search_query_debounced: String::new(),
             search_query_changed_at: None,
+            download_history_search: String::new(),
+            paper_favorites_search: String::new(),
+            bookmark_favorites_search: String::new(),
             filters: FilterState::default(),
             file_list: vec![],
             file_total: 0,
