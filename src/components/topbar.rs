@@ -108,10 +108,8 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                     });
                 }
 
-                // 搜索框回车 → 跳转到「浏览-资源管理」
-                if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
-                    app.navigate_to(Section::Browse, Subsection::ResourceManager);
-                }
+                // 搜索框保持全局可见，但不再劫持回车键跳转到试卷库。
+                // 各页面自己决定如何消费 search_query。
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.add_space(24.0);
