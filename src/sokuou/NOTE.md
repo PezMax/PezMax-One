@@ -26,6 +26,7 @@ Phase 1 完成。核心原语已稳定，已接入前端 UI 组件。
 | `auth_step_anim` | `SpringAnim` | `app.rs` / `components/step_indicator.rs` | 注册 4 步、找回密码 3 步向导的步骤指示器滑动（0.3s, damping 0.85） |
 | `register_disclaimer_countdown` | `Progress` | `app.rs` / `components/disclaimer_dialog.rs` | 免责声明弹窗 1 秒倒计时门（Linear）；`value() >= 1.0` 才可点确认 |
 | `report_timeline_anim` | `SpringAnim` | `app.rs` / `components/timeline_panel.rs` | 举报时间线弹窗入场（0.4/0.8，24px 下滑 + alpha 淡入）。用 `SpringAnim::with_target` 重置状态而不加 `jump_to` API |
+| `subsection_transition_anim` | `MetroAnim` | `app.rs` | 子分页切换（浏览/社区/个人内的水平标签）内容区左右滑入 + 淡入（0.28s, Quadratic/EaseOut）。通过 `inner_margin` 对称增减实现横向位移 48px；`navigate_subsection` / 同 Section 内 `navigate_to` 触发；方向由目标索引与当前索引对比决定（右移→从右滑入，左移→从左滑入） |
 
 ## 新增原语
 
@@ -42,7 +43,8 @@ Phase 1 完成。核心原语已稳定，已接入前端 UI 组件。
 - `SpringAnim::set_target_with_velocity` — 暂无用例（无手势驱动交互）
 - `Progress::jump_to` — `render_toggle_switch` 首次渲染时用它跳到当前布尔态，避免开场播动画；其余 Progress 实例均使用 `set_target` 平滑过渡
 - `Animator` / `Animation` trait — 预留存根，尚未验证
-- `MetroAnim::default_metro` / `MetroAnim::jump_to` — 仅使用 `new` + `set_target` + `update`
+- `MetroAnim::default_metro` — 各接入点显式传入 duration/variant/mode
+- `MetroAnim::jump_to` — `subsection_transition_anim` 每次切换用它归零重播；初始化时也用它跳到 1.0 稳态
 - `UwpEasing` 非-Quadratic 变体（Cubic, Sine, Back, Bounce, Elastic 等）— 暂无用例，但保留供后续参考
 
 ## 需要新增的原语（持续更新）

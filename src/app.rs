@@ -5,7 +5,7 @@ use crate::components::action_bar;
 use crate::components::animated_counter::AnimatedCounter;
 use crate::pdf::{PdfEngine, PdfViewer};
 use crate::settings::AppSettings;
-use crate::sokuou::{map_range, Easing, Progress, SpringAnim};
+use crate::sokuou::{map_range, EasingMode, Easing, MetroAnim, Progress, SpringAnim, UwpEasing};
 use crate::theme;
 use anyhow;
 use base64::Engine;
@@ -383,6 +383,11 @@ pub struct PezMaxApp {
     pub sidebar_indicator_anim: SpringAnim,
     // 子标签下划线 X 位置（值 = 当前 subsection 在列表中的浮点索引）
     pub subtab_indicator_anim: SpringAnim,
+    // 子分页切换过渡（内容区左右滑入 + 淡入）
+    // value: 0.0 = 起始（新页在偏移位置、半透明）；1.0 = 稳态（无偏移、完全不透明）
+    // dir: +1.0 = 从右侧滑入（切到更右侧的分页）；-1.0 = 从左侧滑入
+    pub subsection_transition_anim: MetroAnim,
+    pub subsection_transition_dir: f32,
 
     // 浏览状态
     pub search_query: String,
@@ -653,6 +658,12 @@ impl PezMaxApp {
             sidebar_anim: SpringAnim::new(0.5, 0.825, 1.0),
             sidebar_indicator_anim: SpringAnim::new(0.3, 0.8, 0.0), // 初始指向 Home(0)
             subtab_indicator_anim: SpringAnim::new(0.25, 0.85, 0.0),
+            subsection_transition_anim: {
+                let mut m = MetroAnim::new(0.28, UwpEasing::Quadratic, EasingMode::EaseOut);
+                m.jump_to(1.0);
+                m
+            },
+            subsection_transition_dir: 0.0,
             search_query: String::new(),
             filters: FilterState::default(),
             file_list: vec![],
@@ -1737,16 +1748,25 @@ impl PezMaxApp {
 
     /// 直接跳转到指定 Section + Subsection
     pub fn navigate_to(&mut self, section: Section, sub: Subsection) {
-        if self.current_section != section {
+        let same_section = self.current_section == section;
+        if !same_section {
             self.page_enter_anim = SpringAnim::with_target(0.4, 0.8, 0.0, 0.0, 1.0);
             self.sidebar_indicator_anim.set_target(section.index() as f64);
             self.subtab_indicator_anim.set_target(0.0);
         }
-        let sub_idx = section.subsections()
-            .iter()
-            .position(|&(s, _)| s == sub)
-            .unwrap_or(0) as f64;
-        self.subtab_indicator_anim.set_target(sub_idx);
+        let subs = section.subsections();
+        let new_idx = subs.iter().position(|&(s, _)| s == sub).unwrap_or(0);
+        // 同 Section 内跳转：走子分页过渡；跨 Section 跳转由 page_enter_anim 处理
+        if same_section {
+            if let Some(old) = subs.iter().position(|&(s, _)| s == self.current_subsection) {
+                if old != new_idx {
+                    self.subsection_transition_dir = if new_idx > old { 1.0 } else { -1.0 };
+                    self.subsection_transition_anim.jump_to(0.0);
+                    self.subsection_transition_anim.set_target(1.0);
+                }
+            }
+        }
+        self.subtab_indicator_anim.set_target(new_idx as f64);
         self.current_section = section;
         self.current_subsection = sub;
 
@@ -1758,11 +1778,18 @@ impl PezMaxApp {
 
     /// 切换当前 Section 内的子标签（带弹簧动画）
     pub fn navigate_subsection(&mut self, sub: Subsection) {
-        let sub_idx = self.current_section.subsections()
-            .iter()
-            .position(|&(s, _)| s == sub)
-            .unwrap_or(0) as f64;
-        self.subtab_indicator_anim.set_target(sub_idx);
+        let subs = self.current_section.subsections();
+        let old_idx = subs.iter().position(|&(s, _)| s == self.current_subsection);
+        let new_idx = subs.iter().position(|&(s, _)| s == sub).unwrap_or(0);
+        // 触发内容区左右滑动过渡（仅当索引真正变化）
+        if let Some(o) = old_idx {
+            if o != new_idx {
+                self.subsection_transition_dir = if new_idx > o { 1.0 } else { -1.0 };
+                self.subsection_transition_anim.jump_to(0.0);
+                self.subsection_transition_anim.set_target(1.0);
+            }
+        }
+        self.subtab_indicator_anim.set_target(new_idx as f64);
         self.current_subsection = sub;
 
         // 导航到首页或个人页时刷新统计
@@ -2004,6 +2031,7 @@ impl eframe::App for PezMaxApp {
         self.sidebar_anim.update(dt);
         self.sidebar_indicator_anim.update(dt);
         self.subtab_indicator_anim.update(dt);
+        self.subsection_transition_anim.update(dt);
         self.preview_anim.update(dt);
         self.bookmark_detail_anim.update(dt);
         self.favorites_tab_anim.update(dt);
@@ -2218,6 +2246,7 @@ impl eframe::App for PezMaxApp {
         if !self.sidebar_anim.is_steady()
             || !self.sidebar_indicator_anim.is_steady()
             || !self.subtab_indicator_anim.is_steady()
+            || !self.subsection_transition_anim.is_steady()
             || !self.preview_anim.is_steady()
             || !self.bookmark_detail_anim.is_steady()
             || !self.favorites_tab_anim.is_steady()
@@ -2751,20 +2780,45 @@ impl eframe::App for PezMaxApp {
 
         // 内容区
         let enter_v = self.page_enter_anim.value();
+        // 子分页切换过渡：把内容整体沿 X 轴滑入，同时淡入
+        // 通过左右 inner_margin 的对称增减实现横向位移（不改变可视宽度）
+        let sub_t = self.subsection_transition_anim.value();
+        let sub_active = !self.subsection_transition_anim.is_steady();
+        let (baseline_h, baseline_v) = if preview_mode && self.current_subsection == Subsection::ResourceManager {
+            (0.0f64, 0.0f64)
+        } else {
+            (20.0f64, 0.0f64)
+        };
+        let slide_dist: f64 = 48.0;
+        let sub_offset = self.subsection_transition_dir as f64 * slide_dist * (1.0 - sub_t);
+        let left = (baseline_h + sub_offset).clamp(i8::MIN as f64 + 1.0, i8::MAX as f64) as i8;
+        let right = (baseline_h - sub_offset).clamp(i8::MIN as f64 + 1.0, i8::MAX as f64) as i8;
+        let content_margin = egui::Margin {
+            left,
+            right,
+            top: baseline_v as i8,
+            bottom: baseline_v as i8,
+        };
         egui::CentralPanel::default()
             .frame(egui::Frame::new()
                 .fill(theme::colors::bg_white())
-                .inner_margin(if preview_mode && self.current_subsection == Subsection::ResourceManager { egui::Margin::ZERO } else { egui::Margin::symmetric(20, 0) })
+                .inner_margin(content_margin)
                 .stroke(egui::Stroke::NONE),
             )
             .show(ctx, |ui| {
+                let mut alpha_final: f32 = 1.0;
                 if !self.page_enter_anim.is_steady() {
                     let offset = map_range(enter_v, 20.0, 0.0) as f32;
-                    let alpha = map_range(enter_v, 0.4, 1.0) as f32;
-                    ui.set_opacity(alpha.clamp(0.0, 1.0));
+                    alpha_final = alpha_final.min(map_range(enter_v, 0.4, 1.0) as f32);
                     if offset > 0.1 {
                         ui.add_space(offset);
                     }
+                }
+                if sub_active {
+                    alpha_final = alpha_final.min(map_range(sub_t, 0.35, 1.0) as f32);
+                }
+                if alpha_final < 0.999 {
+                    ui.set_opacity(alpha_final.clamp(0.0, 1.0));
                 }
 
                 match self.current_section {
