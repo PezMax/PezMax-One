@@ -574,6 +574,10 @@ pub struct PezMaxApp {
     pub image_size: Option<(u32, u32)>,
     pub image_error: Option<String>,
 
+    // 设置页缓存大小的缓存，避免每帧递归 walk 整个 .cache/ 目录导致单核 100% (#10)
+    // (value, computed_at)
+    pub cache_size_cache: Option<(u64, std::time::Instant)>,
+
     // ── 试卷批量选择 & 批量下载 ────────────────────────────────
     /// 选择模式开关：开启后 file_row 点击是勾选，而不是打开预览
     pub browse_select_mode: bool,
@@ -871,6 +875,7 @@ impl PezMaxApp {
             browse_batch_progress: (0, 0),
             browse_batch_progress_rx: None,
             browse_batch_errors: Vec::new(),
+            cache_size_cache: None,
             cache_manager,
             settings,
             pdf_file_id: None,
@@ -2232,6 +2237,8 @@ impl PezMaxApp {
         self.avatar_texture = None;
         self.avatar_image_size = None;
         self.pdf_viewer.clear_textures();
+        // 使设置页缓存大小指示器立即刷新
+        self.cache_size_cache = None;
         self.add_toast("缓存已清理", ToastLevel::Success);
     }
 

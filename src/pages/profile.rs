@@ -1651,7 +1651,19 @@ pub fn render_app_settings(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 
             // ── 隐私 ──────────────────────────────────────────────
             setting_section_title(ui, "隐私");
-            let cache_size = format_cache_size(compute_cache_size(&app.cache_manager));
+            // 每帧递归 walk 整个 .cache/ 会把单核吃满 (#10)。
+            // 缓存 30 秒，clear_cache() 会主动失效。
+            let now = std::time::Instant::now();
+            let need_refresh = match app.cache_size_cache {
+                Some((_, t)) => now.duration_since(t).as_secs() >= 30,
+                None => true,
+            };
+            if need_refresh {
+                let size = compute_cache_size(&app.cache_manager);
+                app.cache_size_cache = Some((size, now));
+            }
+            let cache_size_bytes = app.cache_size_cache.map(|(s, _)| s).unwrap_or(0);
+            let cache_size = format_cache_size(cache_size_bytes);
             setting_card(ui, "缓存大小", "头像、PDF 页面、书签封面等本地缓存占用", 100.0, |ui| {
                 ui.label(
                     egui::RichText::new(&cache_size)
