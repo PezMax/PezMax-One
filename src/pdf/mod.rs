@@ -584,6 +584,11 @@ impl PdfViewer {
         self.pending_thumbnails
             .retain(|t| !thumb_completed.contains(&t.page_idx));
 
+        // 有缩略图完成 → 触发下一批（受 MAX_CONCURRENT_RENDERS 限制串行推进）
+        if !thumb_completed.is_empty() {
+            self.request_all_thumbnails(engine, ctx);
+        }
+
         // 检查是否所有页面已渲染完成
         if !self.all_rendered && self.textures.len() >= page_count && self.pending_renders.is_empty() {
             self.all_rendered = true;
@@ -1155,7 +1160,7 @@ fn render_overview_content(ui: &mut egui::Ui, viewer: &mut PdfViewer, _engine: &
                 } else {
                     ui.painter().rect_filled(
                         thumb_rect,
-                        egui::CornerRadius::same(2),
+                        egui::CornerRadius::ZERO,
                         egui::Color32::from_gray(220),
                     );
                 }
