@@ -2544,21 +2544,48 @@ impl eframe::App for PezMaxApp {
         }
 
         // 更新 GIF 动图帧
-        if !self.rank_avatar_delays.is_empty() {
-            for (&user_id, delays) in &self.rank_avatar_delays.clone() {
+        // #10 之前：无条件每帧 request_repaint()，加上末尾 request_repaint()
+        // 条件里也用 delays.len() > 1，导致只要有任何 GIF 头像，即便切到别的
+        // 页面也全屏 60fps 空转，是背景 CPU 高占用的主要来源。
+        // 修正：
+        //   1. 只有当前页是 Community/UserRanking 时才推进 GIF 帧
+        //   2. 用 request_repaint_after(next_delay) 让 egui 空闲等待
+        let on_ranking = matches!(self.current_section, Section::Community)
+            && matches!(self.current_subsection, Subsection::UserRanking);
+        if on_ranking && !self.rank_avatar_delays.is_empty() {
+            let mut next_wake = f32::MAX;
+            let user_ids: Vec<i64> = self
+                .rank_avatar_delays
+                .iter()
+                .filter(|(_, d)| d.len() > 1)
+                .map(|(id, _)| *id)
+                .collect();
+            for user_id in user_ids {
+                let delays = self
+                    .rank_avatar_delays
+                    .get(&user_id)
+                    .cloned()
+                    .unwrap_or_default();
                 if delays.len() <= 1 {
-                    continue; // 单帧不需要动画
+                    continue;
                 }
                 let timer = self.rank_avatar_timer.entry(user_id).or_insert(0.0);
                 *timer += dt as f32;
-                let current_delay = delays[*self.rank_avatar_frame_idx.get(&user_id).unwrap_or(&0)];
+                let cur_idx = *self.rank_avatar_frame_idx.get(&user_id).unwrap_or(&0);
+                let current_delay = delays[cur_idx];
                 if *timer >= current_delay {
                     *timer = 0.0;
                     let idx = self.rank_avatar_frame_idx.entry(user_id).or_insert(0);
                     *idx = (*idx + 1) % delays.len();
+                    let new_idx = *idx;
+                    next_wake = next_wake.min(delays[new_idx].max(0.02));
+                } else {
+                    next_wake = next_wake.min((current_delay - *timer).max(0.02));
                 }
             }
-            ctx.request_repaint();
+            if next_wake < f32::MAX {
+                ctx.request_repaint_after(std::time::Duration::from_secs_f32(next_wake));
+            }
         }
 
         // 轮询 PDF 字节下载结果
@@ -2692,7 +2719,8 @@ impl eframe::App for PezMaxApp {
             || self.rank_avatar_rx.is_some()
             || self.bookmark_cover_rx.is_some()
             || self.bookmark_cover_bulk_rx.is_some()
-            || self.rank_avatar_delays.values().any(|d| d.len() > 1)
+            // GIF 头像帧推进已用 request_repaint_after 调度，且只在排行页做，
+            // 这里不再列为 request_repaint 条件（原实现导致后台常驻 60fps）
         {
             ctx.request_repaint();
         }
