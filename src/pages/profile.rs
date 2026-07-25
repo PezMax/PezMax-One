@@ -1494,11 +1494,15 @@ pub fn render_download_history(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                     ui.painter().text(
                         delete_rect.center(),
                         egui::Align2::CENTER_CENTER,
-                        "删除",
+                        "清除",
                         FontId::new(12.0, egui::FontFamily::Proportional),
                         colors::text_secondary(),
                     );
                     if delete_resp.clicked() {
+                        // 乐观从服务端记录列表里剔除（否则卡片仍会显示，看起来"没生效"）
+                        if let Some(ref mut list) = app.download_records.data {
+                            list.retain(|r| r.download_id != record.download_id);
+                        }
                         if let Some(ref user) = app.current_user {
                             let api = app.api.clone();
                             let uid = user.user_id;
@@ -1507,7 +1511,7 @@ pub fn render_download_history(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                 let _ = api.hide_download(uid, fid).await;
                             });
                         }
-                        // 本地记录硬删（用户已表明"删除"意图，不留隐藏残余）
+                        // 本地记录硬删（用户已表明"清除"意图，不留隐藏残余）
                         if let (Some(local_rec), Some(db)) =
                             (local.as_ref(), app.download_db.as_ref())
                         {
