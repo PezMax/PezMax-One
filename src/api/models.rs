@@ -135,16 +135,26 @@ pub struct CaptchaResponse {
 fn default_true() -> bool { true }
 
 /// 注册请求
+/// 后端字段命名沿用 `securityQuestionOne/Two/Three` + `securityAnswerOne/Two/Three` 六列，
+/// 而不是数组；同时需要 `confirmPassword` 与 `password` 一起校验，否则后端返回
+/// "两次密码不一致"。这里通过 `#[serde(rename_all = "camelCase")]` 让 snake_case 字段自动映射。
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RegisterRequest {
     pub username: String,
     pub password: String,
+    pub confirm_password: String,
     pub nickname: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub code: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub uuid: Option<String>,
-    pub security_questions: Vec<SecurityQuestion>,
+    pub security_question_one: String,
+    pub security_answer_one: String,
+    pub security_question_two: String,
+    pub security_answer_two: String,
+    pub security_question_three: String,
+    pub security_answer_three: String,
 }
 
 /// 密保问题

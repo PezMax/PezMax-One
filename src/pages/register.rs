@@ -256,16 +256,17 @@ fn render_step_final(app: &mut PezMaxApp, ui: &mut egui::Ui) {
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let text = if app.register_loading { "注册中…" } else { "阅读免责声明并注册" };
-            let btn = egui::Button::new(
-                egui::RichText::new(text)
-                    .font(FontId::new(13.0, egui::FontFamily::Proportional))
-                    .color(colors::text_on_primary()),
-            )
-            .fill(colors::primary())
-            .stroke(Stroke::NONE)
-            .corner_radius(CornerRadius::ZERO)
-            .min_size(egui::vec2(180.0, 32.0));
-            if ui.add_enabled(!app.register_loading, btn).clicked() && validate_step_final(app) {
+            let resp = metro_button(
+                ui,
+                text,
+                13.0,
+                egui::vec2(180.0, 32.0),
+                colors::primary(),
+                colors::text_on_primary(),
+                true,
+                !app.register_loading,
+            );
+            if resp.clicked() && !app.register_loading && validate_step_final(app) {
                 app.register_error.clear();
                 app.register_disclaimer_open = true;
                 app.register_disclaimer_countdown.jump_to(0.0);
@@ -325,45 +326,135 @@ fn label(ui: &mut egui::Ui, text: &str) {
     ui.add_space(2.0);
 }
 
+/// Metro 强调色主按钮。手绘背景 + 文本，按 hover / press 切换色调，
+/// 因为 `egui::Button::fill()` 会覆盖 hover 视觉。
 fn primary_btn(ui: &mut egui::Ui, text: &str) -> egui::Response {
-    ui.add(
-        egui::Button::new(
-            egui::RichText::new(text)
-                .font(FontId::new(13.0, egui::FontFamily::Proportional))
-                .color(colors::text_on_primary()),
-        )
-        .fill(colors::primary())
-        .stroke(Stroke::NONE)
-        .corner_radius(CornerRadius::ZERO)
-        .min_size(egui::vec2(120.0, 32.0)),
+    metro_button(
+        ui,
+        text,
+        13.0,
+        egui::vec2(120.0, 32.0),
+        colors::primary(),
+        colors::text_on_primary(),
+        /* is_primary = */ true,
+        /* enabled  = */ true,
     )
 }
 
 fn ghost_btn(ui: &mut egui::Ui, text: &str) -> egui::Response {
-    ui.add(
-        egui::Button::new(
-            egui::RichText::new(text)
-                .font(FontId::new(13.0, egui::FontFamily::Proportional))
-                .color(colors::text_secondary()),
-        )
-        .fill(colors::bg_input())
-        .stroke(Stroke::NONE)
-        .corner_radius(CornerRadius::ZERO)
-        .min_size(egui::vec2(96.0, 32.0)),
+    metro_button(
+        ui,
+        text,
+        13.0,
+        egui::vec2(96.0, 32.0),
+        colors::bg_input(),
+        colors::text_secondary(),
+        false,
+        true,
     )
 }
 
 fn link_btn(ui: &mut egui::Ui, text: &str) -> egui::Response {
-    ui.scope(|ui| {
-        ui.visuals_mut().widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
-        ui.add(
-            egui::Button::new(
-                egui::RichText::new(text)
-                    .font(FontId::new(12.0, egui::FontFamily::Proportional))
-                    .color(colors::primary()),
-            )
-            .stroke(Stroke::NONE)
-            .corner_radius(CornerRadius::ZERO),
-        )
-    }).inner
+    let font = FontId::new(12.0, egui::FontFamily::Proportional);
+    let galley = ui.painter().layout_no_wrap(
+        text.to_string(),
+        font.clone(),
+        colors::primary(),
+    );
+    let desired = egui::vec2(galley.size().x + 8.0, 20.0);
+    let (rect, response) = ui.allocate_exact_size(desired, egui::Sense::click());
+    let color = if response.is_pointer_button_down_on() {
+        colors::primary_dark()
+    } else if response.hovered() {
+        colors::primary_light()
+    } else {
+        colors::primary()
+    };
+    ui.painter().text(
+        rect.center(),
+        egui::Align2::CENTER_CENTER,
+        text,
+        font,
+        color,
+    );
+    if response.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+    response
+}
+
+/// 通用 Metro 按钮渲染：手绘背景 + 描边 + 文本，带 hover / active 反馈。
+/// `is_primary=true` 用于强调色按钮（hover 加深，active 更深）；否则灰底按钮（hover/active 略深）。
+pub(crate) fn metro_button(
+    ui: &mut egui::Ui,
+    text: &str,
+    font_size: f32,
+    size: egui::Vec2,
+    base_fill: Color32,
+    text_color: Color32,
+    is_primary: bool,
+    enabled: bool,
+) -> egui::Response {
+    let font = FontId::new(font_size, egui::FontFamily::Proportional);
+    let sense = if enabled { egui::Sense::click() } else { egui::Sense::hover() };
+    let (rect, response) = ui.allocate_exact_size(size, sense);
+
+    let (fill, stroke_color) = if !enabled {
+        // 禁用态：底色半透明，无描边
+        let f = Color32::from_rgba_premultiplied(
+            base_fill.r(), base_fill.g(), base_fill.b(), 90,
+        );
+        (f, Color32::TRANSPARENT)
+    } else if response.is_pointer_button_down_on() {
+        if is_primary {
+            (colors::primary_dark(), colors::primary_dark())
+        } else {
+            (colors::bg_selected(), colors::border())
+        }
+    } else if response.hovered() {
+        if is_primary {
+            // hover 时略微加深并加亮描边
+            (darken(base_fill, 0.88), colors::primary_light())
+        } else {
+            (colors::bg_hover(), colors::border())
+        }
+    } else {
+        (base_fill, Color32::TRANSPARENT)
+    };
+
+    ui.painter().rect_filled(rect, CornerRadius::ZERO, fill);
+    if stroke_color != Color32::TRANSPARENT {
+        ui.painter().rect_stroke(
+            rect,
+            CornerRadius::ZERO,
+            Stroke::new(1.0, stroke_color),
+            egui::StrokeKind::Inside,
+        );
+    }
+    let final_text_color = if enabled {
+        text_color
+    } else {
+        Color32::from_rgba_premultiplied(text_color.r(), text_color.g(), text_color.b(), 150)
+    };
+    ui.painter().text(
+        rect.center(),
+        egui::Align2::CENTER_CENTER,
+        text,
+        font,
+        final_text_color,
+    );
+
+    if enabled && response.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+    response
+}
+
+fn darken(c: Color32, factor: f32) -> Color32 {
+    let f = factor.clamp(0.0, 1.0);
+    Color32::from_rgb(
+        (c.r() as f32 * f).round().clamp(0.0, 255.0) as u8,
+        (c.g() as f32 * f).round().clamp(0.0, 255.0) as u8,
+        (c.b() as f32 * f).round().clamp(0.0, 255.0) as u8,
+    )
 }

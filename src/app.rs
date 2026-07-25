@@ -961,9 +961,11 @@ impl PezMaxApp {
         self.register_error.clear();
 
         let api = self.api.clone();
+        let qs = &self.register_security_questions;
         let req = RegisterRequest {
             username: self.register_username.clone(),
             password: self.register_password.clone(),
+            confirm_password: self.register_confirm_password.clone(),
             nickname: if self.register_nickname.is_empty() {
                 self.register_username.clone()
             } else {
@@ -971,7 +973,12 @@ impl PezMaxApp {
             },
             code: if self.register_captcha_enabled { Some(self.register_captcha.clone()) } else { None },
             uuid: if self.register_captcha_enabled { Some(self.register_captcha_uuid.clone()) } else { None },
-            security_questions: self.register_security_questions.clone(),
+            security_question_one:   qs[0].question.trim().to_string(),
+            security_answer_one:     qs[0].answer.trim().to_string(),
+            security_question_two:   qs[1].question.trim().to_string(),
+            security_answer_two:     qs[1].answer.trim().to_string(),
+            security_question_three: qs[2].question.trim().to_string(),
+            security_answer_three:   qs[2].answer.trim().to_string(),
         };
 
         let (tx, rx) = oneshot::channel();
