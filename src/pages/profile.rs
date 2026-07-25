@@ -1290,31 +1290,53 @@ pub fn render_download_history(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                         colors::text_primary(),
                     );
 
-                    // 文件名
-                    ui.painter().text(
-                        pos2(rect.left() + 50.0, rect.top() + 16.0),
-                        egui::Align2::LEFT_CENTER,
-                        &record.file_name,
-                        FontId::new(14.0, egui::FontFamily::Proportional),
-                        colors::text_primary(),
-                    );
-
-                    // 格式标签 + 时间
-                    let meta = format!("{} · {}", record.file_format, record.download_time);
-                    ui.painter().text(
-                        pos2(rect.left() + 50.0, rect.top() + 40.0),
-                        egui::Align2::LEFT_CENTER,
-                        &meta,
-                        FontId::new(12.0, egui::FontFamily::Proportional),
-                        colors::text_secondary(),
-                    );
-
-                    // 隐藏按钮
+                    // 隐藏按钮（先声明矩形，供文字区宽度计算使用）
                     let hide_rect = Rect::from_min_size(
                         pos2(rect.right() - 68.0, rect.top() + 18.0),
                         Vec2::new(56.0, 28.0),
                     );
-                    let hide_resp = ui.interact(hide_rect, ui.next_auto_id(), egui::Sense::click());
+
+                    // 文字区宽度：从图标右边到隐藏按钮左边留 12px 间距
+                    let text_left = rect.left() + 50.0;
+                    let text_width = (hide_rect.left() - 12.0 - text_left).max(40.0);
+
+                    // 文件名（自动截断）
+                    let name_rect = Rect::from_min_size(
+                        pos2(text_left, rect.top() + 8.0),
+                        Vec2::new(text_width, 20.0),
+                    );
+                    ui.put(
+                        name_rect,
+                        egui::Label::new(
+                            egui::RichText::new(&record.file_name)
+                                .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                                .color(colors::text_primary()),
+                        )
+                        .truncate(),
+                    );
+
+                    // 格式标签 + 时间（自动截断）
+                    let meta = format!("{} · {}", record.file_format, record.download_time);
+                    let meta_rect = Rect::from_min_size(
+                        pos2(text_left, rect.top() + 32.0),
+                        Vec2::new(text_width, 18.0),
+                    );
+                    ui.put(
+                        meta_rect,
+                        egui::Label::new(
+                            egui::RichText::new(&meta)
+                                .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                                .color(colors::text_secondary()),
+                        )
+                        .truncate(),
+                    );
+
+                    // 隐藏按钮交互（用 download_id 生成稳定唯一 ID）
+                    let hide_id = egui::Id::new(("dl_hide", record.download_id, record.file_id));
+                    let hide_resp = ui.interact(hide_rect, hide_id, egui::Sense::click());
+                    if hide_resp.hovered() {
+                        ui.painter().rect_filled(hide_rect, CornerRadius::ZERO, colors::bg_hover());
+                    }
                     ui.painter().rect_stroke(
                         hide_rect,
                         CornerRadius::ZERO,
@@ -1328,9 +1350,6 @@ pub fn render_download_history(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                         FontId::new(12.0, egui::FontFamily::Proportional),
                         colors::text_secondary(),
                     );
-                    if hide_resp.hovered() {
-                        ui.painter().rect_filled(hide_rect, CornerRadius::ZERO, colors::bg_hover());
-                    }
                     if hide_resp.clicked() {
                         if let Some(ref user) = app.current_user {
                             let api = app.api.clone();
