@@ -12,7 +12,6 @@
 use crate::app::{AccountEditSection, PezMaxApp, ToastLevel};
 use crate::api::models::SecurityQuestion;
 use crate::components::animated_counter::render_odometer_value;
-use crate::pdf::ViewMode;
 use crate::theme::colors;
 use crate::theme::{ThemeMode, ACCENT_PRESETS};
 use egui::{Color32, CornerRadius, FontId, Rect, Stroke, Vec2, pos2, StrokeKind};
@@ -1603,17 +1602,6 @@ pub fn render_app_settings(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 
             // ── PDF ──────────────────────────────────────────────
             setting_section_title(ui, "PDF");
-            setting_card(ui, "视图模式", "网格 / 单页 / 双页", 240.0, |ui| {
-                let modes: Vec<ViewMode> = ViewMode::all().iter().rev().copied().collect();
-                for variant in modes {
-                    let selected = app.setting_pdf_view_mode == variant;
-                    if render_choice_button(ui, variant.label(), selected).clicked() {
-                        app.setting_pdf_view_mode = variant;
-                    }
-                    ui.add_space(4.0);
-                }
-            });
-            ui.add_space(6.0);
             setting_card(ui, "默认缩放", "PDF 打开时的默认显示比例", 130.0, |ui| {
                 // 预设缩放档位
                 const SCALES: &[f32] = &[0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];

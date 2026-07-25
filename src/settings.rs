@@ -1,7 +1,6 @@
 //! 本地设置持久化 —— 所有用户偏好保存在 `settings.json` 中。
 
 use crate::cache::CacheManager;
-use crate::pdf::ViewMode;
 use crate::theme::ThemeMode;
 use serde::{Deserialize, Serialize};
 
@@ -16,8 +15,6 @@ pub struct AppSettings {
     pub setting_auto_launch: bool,
     /// 静默下载
     pub setting_silent_download: bool,
-    /// PDF 默认视图模式
-    pub pdf_view_mode: ViewMode,
     /// PDF 默认缩放
     pub pdf_scale: f32,
     /// 默认下载目录（None = 使用平台默认 ~/Downloads/PezMax）
@@ -36,7 +33,6 @@ impl Default for AppSettings {
             accent_idx: 0,
             setting_auto_launch: false,
             setting_silent_download: false,
-            pdf_view_mode: ViewMode::Line,
             pdf_scale: 1.0,
             download_dir: None,
             window_size: None,

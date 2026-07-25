@@ -497,7 +497,6 @@ pub struct PezMaxApp {
     pub setting_download_dir: String,
 
     // PDF 设置
-    pub setting_pdf_view_mode: crate::pdf::ViewMode,
     pub setting_pdf_scale: f32,
 
     // 关于弹窗
@@ -804,7 +803,6 @@ impl PezMaxApp {
                 .download_dir
                 .clone()
                 .unwrap_or_else(default_download_dir),
-            setting_pdf_view_mode: settings.pdf_view_mode,
             setting_pdf_scale: settings.pdf_scale,
             theme_mode: settings.theme_mode,
             accent_idx: settings.accent_idx,
@@ -2331,7 +2329,6 @@ impl eframe::App for PezMaxApp {
             || self.settings.accent_idx != self.accent_idx
             || auto_launch_changed
             || self.settings.setting_silent_download != self.setting_silent_download
-            || self.settings.pdf_view_mode != self.setting_pdf_view_mode
             || self.settings.pdf_scale != self.setting_pdf_scale
             || dir_changed
         {
@@ -2339,7 +2336,6 @@ impl eframe::App for PezMaxApp {
             self.settings.accent_idx = self.accent_idx;
             self.settings.setting_auto_launch = self.setting_auto_launch;
             self.settings.setting_silent_download = self.setting_silent_download;
-            self.settings.pdf_view_mode = self.setting_pdf_view_mode;
             self.settings.pdf_scale = self.setting_pdf_scale;
             self.settings.download_dir = Some(self.setting_download_dir.clone());
             self.settings.save(&self.cache_manager);
@@ -2347,17 +2343,6 @@ impl eframe::App for PezMaxApp {
             // 仅在开机自启开关实际变化时同步注册表（注册表 I/O 在后台线程执行，避免阻塞 UI）
             if auto_launch_changed {
                 self.sync_auto_launch();
-            }
-        }
-
-        // 同步 PDF 设置到 PdfViewer（仅在登录后）
-        if self.is_logged_in {
-            if self.pdf_viewer.view_mode != self.setting_pdf_view_mode {
-                self.pdf_viewer.set_view_mode(
-                    self.setting_pdf_view_mode,
-                    &self.pdf_engine,
-                    ctx,
-                );
             }
         }
 
