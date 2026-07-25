@@ -1553,11 +1553,11 @@ pub fn render_app_settings(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 
 // ── 内部组件 ──────────────────────────────────────────────────────────────────
 
-/// 默认下载路径卡片 — 高度加大以容纳完整路径，整卡片可点击打开系统文件夹选择器
+/// 默认下载路径卡片 — 与 setting_card 同高（60px），整卡片可点击打开系统文件夹选择器
 fn render_download_path_card(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     let path = app.setting_download_dir.clone();
     let (rect, resp) = ui.allocate_exact_size(
-        Vec2::new(ui.available_width(), 80.0),
+        Vec2::new(ui.available_width(), 60.0),
         egui::Sense::click(),
     );
     ui.painter().rect_filled(rect, CornerRadius::ZERO, colors::bg_card());
@@ -1594,7 +1594,6 @@ fn render_download_path_card(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                 );
             });
         });
-        ui.add_space(4.0);
         // 第二行：路径（超长时截断，避免撑破卡片）
         ui.add(
             egui::Label::new(

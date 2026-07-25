@@ -1581,6 +1581,48 @@ pub fn render_favorites(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     }
 }
 
+/// 收藏列表行内 Metro 风格按钮（比 small_button 更高、饱满，且带 hover / press 反馈）
+fn favorite_row_button(ui: &mut egui::Ui, text: &str) -> egui::Response {
+    let font = FontId::new(13.0, egui::FontFamily::Proportional);
+    let galley = ui.painter().layout_no_wrap(
+        text.to_string(),
+        font.clone(),
+        colors::text_primary(),
+    );
+    let desired = egui::vec2((galley.size().x + 24.0).max(72.0), 30.0);
+    let (rect, response) = ui.allocate_exact_size(desired, egui::Sense::click());
+
+    // 按状态切换填充 / 描边颜色，让 hover / 按下有明显视觉反馈
+    let (fill, stroke_color) = if response.is_pointer_button_down_on() {
+        (colors::bg_selected(), colors::primary())
+    } else if response.hovered() {
+        (colors::bg_input(), colors::primary())
+    } else {
+        (colors::bg_hover(), colors::border())
+    };
+
+    ui.painter().rect_filled(rect, CornerRadius::ZERO, fill);
+    ui.painter().rect_stroke(
+        rect,
+        CornerRadius::ZERO,
+        egui::Stroke::new(1.0, stroke_color),
+        egui::StrokeKind::Outside,
+    );
+    ui.painter().text(
+        rect.center(),
+        egui::Align2::CENTER_CENTER,
+        text,
+        font,
+        colors::text_primary(),
+    );
+
+    if response.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+
+    response
+}
+
 /// 试卷收藏列表
 fn render_paper_favorites(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     if !app.favorites_data.is_loaded() && !app.favorites_data.is_loading() {
@@ -1672,7 +1714,7 @@ fn render_paper_favorites(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                 });
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                     ui.add_space(12.0);
-                                    if ui.small_button("取消收藏").clicked() {
+                                    if favorite_row_button(ui, "取消收藏").clicked() {
                                         let api = app.api.clone();
                                         let uid = app.current_user.as_ref().map(|u| u.user_id).unwrap_or(0);
                                         let fid = fav.file_id;
@@ -1685,7 +1727,7 @@ fn render_paper_favorites(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                         tokio::spawn(async move { let _ = api.remove_favorite(uid, fid).await; });
                                     }
                                     ui.add_space(4.0);
-                                    if ui.small_button("📥 下载").clicked() {
+                                    if favorite_row_button(ui, "📥 下载").clicked() {
                                         let api = app.api.clone();
                                         let fid = fav.file_id;
                                         let fname = fav.file_name.clone();
@@ -1709,7 +1751,7 @@ fn render_paper_favorites(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                     }
                                     ui.add_space(4.0);
                                     // 访问文件按钮
-                                    if ui.small_button("访问文件").clicked() {
+                                    if favorite_row_button(ui, "访问文件").clicked() {
                                         let fid = fav.file_id;
                                         let fname = fav.file_name.clone();
                                         let fsubj = fav.file_subject.clone();
@@ -1866,7 +1908,7 @@ fn render_bookmark_favorites(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                 ui.add_space(12.0);
                                 // 取消收藏按钮（在右侧，先渲染）
-                                if ui.small_button("取消收藏").clicked() {
+                                if favorite_row_button(ui, "取消收藏").clicked() {
                                     let api = app.api.clone();
                                     let uid = app.current_user.as_ref().map(|u| u.user_id).unwrap_or(0);
                                     app.favorite_bookmark_ids.remove(&bm_id);
@@ -1881,7 +1923,7 @@ fn render_bookmark_favorites(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                 }
                                 ui.add_space(4.0);
                                 // 查看详情按钮（在左侧，后渲染）
-                                if ui.small_button("查看详情").clicked() {
+                                if favorite_row_button(ui, "查看详情").clicked() {
                                     let api = app.api.clone();
                                     let (tx, rx) = tokio::sync::oneshot::channel();
                                     app.bookmark_detail_rx = Some(rx);
