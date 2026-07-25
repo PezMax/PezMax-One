@@ -1297,24 +1297,7 @@ fn render_bookmark_detail(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                             // 使书签收藏缓存失效，下次进入我的收藏页面时重新加载
                             app.bookmark_favorites_data.reset();
                         }
-
-                        ui.add_space(8.0);
-
-                        // 举报
-                        let report_btn = egui::Button::new(
-                            egui::RichText::new("🚩 举报")
-                                .font(FontId::new(13.0, egui::FontFamily::Proportional))
-                                .color(colors::text_primary()),
-                        )
-                            .fill(colors::bg_hover())
-                            .stroke(egui::Stroke::new(1.0, colors::border()))
-                            .corner_radius(CornerRadius::same(0))
-                            .min_size(egui::vec2(80.0, 32.0));
-                        if ui.add(report_btn).clicked() {
-                            app.show_report_dialog = true;
-                            app.report_type = "侵权".to_string();
-                            app.report_content.clear();
-                        }
+                        // 书签举报入口暂未适配后端流程，先移除
                     });
                 });
                 ui.add_space(16.0);
@@ -1323,66 +1306,6 @@ fn render_bookmark_detail(app: &mut PezMaxApp, ui: &mut egui::Ui) {
         });
 
     ui.add_space(12.0);
-
-    // ── 举报对话框 ────────────────────────────────────────────────────
-    if app.show_report_dialog {
-        egui::Window::new("举报书签")
-            .collapsible(false)
-            .resizable(false)
-            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-            .show(ui.ctx(), |ui| {
-                ui.set_min_width(360.0);
-                ui.label(
-                    egui::RichText::new("举报原因")
-                        .font(FontId::new(14.0, egui::FontFamily::Proportional))
-                        .color(colors::text_primary()),
-                );
-                ui.add_space(8.0);
-                egui::ComboBox::from_id_salt("bm_detail_report_type")
-                    .selected_text(&app.report_type)
-                    .show_ui(ui, |ui| {
-                        for t in &["侵权", "色情", "暴力", "广告", "其他"] {
-                            ui.selectable_value(&mut app.report_type, t.to_string(), *t);
-                        }
-                    });
-                ui.add_space(8.0);
-                ui.add(
-                    egui::TextEdit::multiline(&mut app.report_content)
-                        .hint_text("补充说明（可选）")
-                        .desired_rows(3)
-                        .desired_width(340.0),
-                );
-                ui.add_space(12.0);
-                ui.horizontal(|ui| {
-                    if ui.button("取消").clicked() {
-                        app.show_report_dialog = false;
-                    }
-                    ui.add_space(8.0);
-                    let can_submit = !app.report_type.is_empty();
-                    if ui
-                        .add_enabled(can_submit, egui::Button::new("提交举报"))
-                        .clicked()
-                    {
-                        let api = app.api.clone();
-                        let r#type = app.report_type.clone();
-                        let content = app.report_content.clone();
-                        tokio::spawn(async move {
-                            let report = Report {
-                                report_type: r#type,
-                                content,
-                                ..Default::default()
-                            };
-                            match api.create_report(&report).await {
-                                Ok(_) => log::info!("举报成功"),
-                                Err(e) => log::error!("举报失败: {}", e),
-                            }
-                        });
-                        app.add_toast("举报已提交".to_string(), ToastLevel::Success);
-                        app.show_report_dialog = false;
-                    }
-                });
-            });
-    }
 
     // ── Bento Grid: 2列 ────────────────────────────────────────────────
     ui.add_space(8.0);
