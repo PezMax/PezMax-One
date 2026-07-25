@@ -1340,14 +1340,34 @@ impl PezMaxApp {
         });
     }
 
-    /// 异步加载下载记录
+    /// 异步加载下载记录 —— 逐页拉取全部数据，
+    /// 之前只取 page_size=20，导致下载量 (100) 与下载记录列表长度 (20) 不符 (#15)。
     pub fn trigger_load_download_records(&mut self) {
         let api = self.api.clone();
         let user_id = self.current_user.as_ref().map(|u| u.user_id).unwrap_or(0);
         self.download_records.load(move || async move {
-            let params = PageParams { page_num: 1, page_size: 20, ..Default::default() };
-            let resp = api.get_download_list(user_id, &params).await?;
-            Ok(resp.rows)
+            const PAGE_SIZE: i32 = 100;
+            let mut all = Vec::new();
+            let mut page_num = 1i32;
+            loop {
+                let params = PageParams {
+                    page_num,
+                    page_size: PAGE_SIZE,
+                    ..Default::default()
+                };
+                let resp = api.get_download_list(user_id, &params).await?;
+                let n = resp.rows.len();
+                all.extend(resp.rows);
+                if n < PAGE_SIZE as usize {
+                    break;
+                }
+                // 兜底：不要无限拉页，10 页 = 1000 条已经很够
+                page_num += 1;
+                if page_num > 10 {
+                    break;
+                }
+            }
+            Ok(all)
         });
     }
 

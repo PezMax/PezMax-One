@@ -1247,7 +1247,20 @@ pub fn render_download_history(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     }
 
     ui.add_space(8.0);
-    section_title(ui, "下载记录");
+    ui.horizontal(|ui| {
+        section_title(ui, "下载记录");
+        // 右侧显示实际记录数，避免与首页 下载量 不一致引发疑问 (#15)
+        if let Some(ref list) = app.download_records.data {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.add_space(4.0);
+                ui.label(
+                    egui::RichText::new(format!("共 {} 项", list.len()))
+                        .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                        .color(colors::text_secondary()),
+                );
+            });
+        }
+    });
     ui.add_space(8.0);
 
     // ── 本地搜索框 ─────────────────────────────────────
