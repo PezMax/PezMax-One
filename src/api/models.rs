@@ -388,3 +388,14 @@ pub struct BookmarkFavorite {
     #[serde(default)]
     pub create_time: String,
 }
+
+/// 桌面端按 userId 查询的用户简要信息（后端 PtmjDesktopUserVO）
+/// 后端 nickName 一直为空，userName（登录名）才是唯一标识
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopUser {
+    #[serde(default)]
+    pub user_name: String,
+    #[serde(default)]
+    pub avatar: String,
+}

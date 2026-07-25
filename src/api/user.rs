@@ -63,4 +63,9 @@ impl ApiClient {
     pub async fn get_user_rank(&self) -> Result<ApiResponse<Vec<UserRankItem>>> {
         self.get("/datum/user/rank", None).await
     }
+
+    /// 按 userId 查询用户简要信息（userName + avatar），用于文件详情弹窗兜底
+    pub async fn get_desktop_user_by_id(&self, user_id: i64) -> Result<ApiResponse<DesktopUser>> {
+        self.get(&format!("/datum/desktop/user/{}", user_id), None).await
+    }
 }

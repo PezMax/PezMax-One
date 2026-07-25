@@ -505,13 +505,20 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
             "-".to_string()
         };
 
-        // 上传者兜底：create_by 非空则显示，否则显示 "匿名"
+        // 上传者兜底：create_by 非空则显示；否则按 user_id 异步拉 userName
+        // （后端 nickName 一直为空，userName 是唯一标识）
         let uploader_str = if !create_by.is_empty() {
             create_by.clone()
+        } else if user_id > 0 {
+            app.trigger_load_uploader_name(user_id);
+            match app.uploader_names.get(&user_id) {
+                Some(name) if !name.is_empty() => name.clone(),
+                Some(_) => "匿名".to_string(),
+                None => "加载中…".to_string(),
+            }
         } else {
             "匿名".to_string()
         };
-        let _ = user_id;
         let format_str = if file_format.is_empty() { "-".to_string() } else { file_format.to_uppercase() };
         let time_str = if create_time.is_empty() { "-".to_string() } else { create_time.clone() };
 

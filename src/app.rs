@@ -373,6 +373,12 @@ pub struct PezMaxApp {
     pub rank_avatar_failed: HashSet<i64>,
     pub rank_avatar_pending: HashSet<i64>,
 
+    /// 上传者 userName 缓存（按 user_id）。空字符串表示后端返回空 / 请求失败。
+    pub uploader_names: HashMap<i64, String>,
+    pub uploader_names_pending: HashSet<i64>,
+    pub uploader_name_rx: Option<mpsc::UnboundedReceiver<(i64, Option<String>)>>,
+    pub uploader_name_tx: Option<mpsc::UnboundedSender<(i64, Option<String>)>>,
+
     // 认证
     pub is_logged_in: bool,
     pub auth_page: AuthPage,
@@ -705,6 +711,11 @@ impl PezMaxApp {
             rank_avatar_tx: None,
             rank_avatar_failed: HashSet::new(),
             rank_avatar_pending: HashSet::new(),
+
+            uploader_names: HashMap::new(),
+            uploader_names_pending: HashSet::new(),
+            uploader_name_rx: None,
+            uploader_name_tx: None,
 
             is_logged_in: false,
             auth_page: AuthPage::Login,
@@ -1724,6 +1735,32 @@ impl PezMaxApp {
         }
     }
 
+    /// 异步拉取指定 user_id 的 userName（用于文件详情弹窗上传者字段兜底）
+    /// 幂等：已在缓存或加载中的 user_id 会被跳过
+    pub fn trigger_load_uploader_name(&mut self, user_id: i64) {
+        if user_id <= 0
+            || self.uploader_names.contains_key(&user_id)
+            || self.uploader_names_pending.contains(&user_id)
+        {
+            return;
+        }
+        if self.uploader_name_tx.is_none() || self.uploader_name_rx.is_none() {
+            let (tx, rx) = mpsc::unbounded_channel();
+            self.uploader_name_tx = Some(tx);
+            self.uploader_name_rx = Some(rx);
+        }
+        let tx = self.uploader_name_tx.clone().unwrap();
+        let api = self.api.clone();
+        self.uploader_names_pending.insert(user_id);
+        tokio::spawn(async move {
+            let name = match api.get_desktop_user_by_id(user_id).await {
+                Ok(resp) if resp.code == 200 => resp.data.map(|u| u.user_name),
+                _ => None,
+            };
+            tx.send((user_id, name)).ok();
+        });
+    }
+
     /// 处理单个排行头像的下载结果，支持 GIF 动图解码
     /// 返回值表示是否成功处理
     fn process_rank_avatar_result(&mut self, ctx: &egui::Context, user_id: i64, bytes: Vec<u8>) -> bool {
@@ -2493,6 +2530,19 @@ impl eframe::App for PezMaxApp {
         }
         for (user_id, bytes) in results {
             self.process_rank_avatar_result(ctx, user_id, bytes);
+        }
+
+        // 轮询上传者 userName 请求结果
+        if let Some(rx) = &mut self.uploader_name_rx {
+            let mut got_any = false;
+            while let Ok((user_id, name)) = rx.try_recv() {
+                self.uploader_names_pending.remove(&user_id);
+                self.uploader_names.insert(user_id, name.unwrap_or_default());
+                got_any = true;
+            }
+            if got_any {
+                ctx.request_repaint();
+            }
         }
 
         // 轮询书签封面加载结果（详情页）
