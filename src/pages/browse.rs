@@ -213,11 +213,110 @@ pub fn render_resource_manager(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     });
 
     ui.add_space(12.0);
+
+    // ── 批量选择工具栏 ─────────────────────────────────────
+    let sel_mode = app.browse_select_mode;
+    let sel_count = app.browse_selection.len();
+    let batch_dl = app.browse_batch_downloading;
+
+    ui.horizontal(|ui| {
+        if batch_dl {
+            let (done, total) = app.browse_batch_progress;
+            ui.label(
+                egui::RichText::new(format!("批量下载中 {} / {}", done, total))
+                    .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                    .color(colors::primary()),
+            );
+        } else if !sel_mode {
+            let btn = egui::Button::new(
+                egui::RichText::new("选择").font(FontId::new(13.0, egui::FontFamily::Proportional)),
+            )
+            .fill(colors::bg_hover())
+            .stroke(egui::Stroke::new(1.0, colors::border()))
+            .corner_radius(CornerRadius::same(0));
+            if ui.add(btn).clicked() {
+                app.browse_select_mode = true;
+                app.browse_selection.clear();
+                app.browse_batch_errors.clear();
+            }
+        } else {
+            ui.label(
+                egui::RichText::new(format!("已选 {} 项", sel_count))
+                    .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                    .color(colors::text_primary()),
+            );
+            ui.add_space(8.0);
+
+            let all_ids: Vec<i64> = filtered_files.iter().map(|f| f.file_id).collect();
+            let all_selected = !all_ids.is_empty()
+                && all_ids.iter().all(|id| app.browse_selection.contains(id));
+
+            let sel_all_btn = egui::Button::new(
+                egui::RichText::new(if all_selected { "全不选" } else { "全选" })
+                    .font(FontId::new(12.0, egui::FontFamily::Proportional)),
+            )
+            .fill(colors::bg_hover())
+            .stroke(egui::Stroke::new(1.0, colors::border()))
+            .corner_radius(CornerRadius::same(0));
+            if ui.add(sel_all_btn).clicked() {
+                if all_selected {
+                    app.browse_selection.clear();
+                } else {
+                    for id in &all_ids {
+                        app.browse_selection.insert(*id);
+                    }
+                }
+            }
+            ui.add_space(6.0);
+
+            let can_download = sel_count > 0;
+            let dl_btn = egui::Button::new(
+                egui::RichText::new(format!("下载选中 ({})", sel_count))
+                    .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                    .color(colors::text_on_primary()),
+            )
+            .fill(if can_download { colors::primary() } else { colors::bg_hover() })
+            .corner_radius(CornerRadius::same(0));
+            if ui.add_enabled(can_download, dl_btn).clicked() {
+                let list: Vec<(i64, String)> = filtered_files
+                    .iter()
+                    .filter(|f| app.browse_selection.contains(&f.file_id))
+                    .map(|f| (f.file_id, f.file_name.clone()))
+                    .collect();
+                app.trigger_batch_download(list);
+            }
+            ui.add_space(6.0);
+
+            let cancel_btn = egui::Button::new(
+                egui::RichText::new("取消").font(FontId::new(12.0, egui::FontFamily::Proportional)),
+            )
+            .fill(colors::bg_hover())
+            .stroke(egui::Stroke::new(1.0, colors::border()))
+            .corner_radius(CornerRadius::same(0));
+            if ui.add(cancel_btn).clicked() {
+                app.browse_select_mode = false;
+                app.browse_selection.clear();
+            }
+        }
+    });
+    if !app.browse_batch_errors.is_empty() {
+        ui.add_space(4.0);
+        for e in &app.browse_batch_errors {
+            ui.label(
+                egui::RichText::new(format!("✗ {}", e))
+                    .font(FontId::new(11.0, egui::FontFamily::Proportional))
+                    .color(colors::error()),
+            );
+        }
+    }
+
+    ui.add_space(8.0);
     ui.separator();
     ui.add_space(8.0);
 
     // Phase 4: 纵向文件列表
     let mut select_file: Option<PaperFile> = None;
+    let mut toggle_sel: Option<i64> = None;
     egui::ScrollArea::vertical()
         .id_salt("browse_scroll")
         .show(ui, |ui| {
@@ -232,13 +331,24 @@ pub fn render_resource_manager(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                 });
             } else {
                 for file in &filtered_files {
-                    if file_row(ui, file, app) {
+                    let is_sel = app.browse_selection.contains(&file.file_id);
+                    let (clicked, sel_toggle) = file_row(ui, file, app, sel_mode, is_sel);
+                    if sel_toggle {
+                        toggle_sel = Some(file.file_id);
+                    } else if clicked {
                         select_file = Some(file.clone());
                     }
                     ui.add_space(4.0);
                 }
             }
         });
+    if let Some(id) = toggle_sel {
+        if app.browse_selection.contains(&id) {
+            app.browse_selection.remove(&id);
+        } else {
+            app.browse_selection.insert(id);
+        }
+    }
 
     // Phase 5: 应用状态变更
     if let Some(s) = new_sub {
@@ -2056,27 +2166,61 @@ fn render_bookmark_favorites(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 // ── 内部组件 ─────────────────────────────────────────────────────────────────
 
 /// 全宽纵向文件行，返回是否点击（打开预览）
-fn file_row(ui: &mut egui::Ui, file: &PaperFile, app: &PezMaxApp) -> bool {
+/// 返回 (打开预览, 切换选择状态)。选择模式下点击整行只切换选择。
+fn file_row(
+    ui: &mut egui::Ui,
+    file: &PaperFile,
+    _app: &PezMaxApp,
+    select_mode: bool,
+    is_selected: bool,
+) -> (bool, bool) {
     let size_str = if file.file_size > 0 {
         format!("{:.1} MB", file.file_size as f64 / 1048576.0)
     } else {
         "-".to_string()
     };
 
+    let bg = if select_mode && is_selected {
+        let c = colors::primary();
+        egui::Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), 30)
+    } else {
+        colors::bg_card()
+    };
+
     let resp = egui::Frame::new()
-        .fill(colors::bg_card())
+        .fill(bg)
         .corner_radius(CornerRadius::same(0))
         .stroke(egui::Stroke::new(1.0, colors::border()))
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
             ui.horizontal(|ui| {
                 ui.add_space(14.0);
+                // 选择模式下前置画一个方框指示是否选中
+                if select_mode {
+                    let box_area = egui::vec2(20.0, 55.0);
+                    let (box_rect, _) = ui.allocate_exact_size(box_area, egui::Sense::hover());
+                    let cb_rect = egui::Rect::from_center_size(box_rect.center(), egui::vec2(18.0, 18.0));
+                    ui.painter().rect_stroke(
+                        cb_rect,
+                        CornerRadius::ZERO,
+                        egui::Stroke::new(1.5, colors::primary()),
+                        egui::StrokeKind::Outside,
+                    );
+                    if is_selected {
+                        ui.painter().rect_filled(cb_rect, CornerRadius::ZERO, colors::primary());
+                        ui.painter().text(
+                            cb_rect.center(),
+                            egui::Align2::CENTER_CENTER,
+                            "✓",
+                            FontId::new(14.0, egui::FontFamily::Proportional),
+                            colors::text_on_primary(),
+                        );
+                    }
+                    ui.add_space(6.0);
+                }
 
-                // PDF 文件图标（emoji，使用 painter 精确居中）
                 let icon_area = egui::vec2(36.0, 55.0);
                 let (icon_rect, _) = ui.allocate_exact_size(icon_area, egui::Sense::hover());
-                // egui 中 emoji 的视觉内容位于字框上半部分，
-                // 因此需要额外向下偏移 3px 以达到视觉居中
                 ui.painter().text(
                     icon_rect.center() + egui::vec2(0.0, 3.0),
                     egui::Align2::CENTER_CENTER,
@@ -2093,7 +2237,6 @@ fn file_row(ui: &mut egui::Ui, file: &PaperFile, app: &PezMaxApp) -> bool {
                             .font(FontId::new(14.0, egui::FontFamily::Proportional))
                             .color(colors::text_primary()),
                     );
-                    // 副标题：学科 · 学校 · 大小
                     let parts: Vec<&str> = [
                         file.file_subject.as_str(),
                         file.school_name.as_str(),
@@ -2110,11 +2253,15 @@ fn file_row(ui: &mut egui::Ui, file: &PaperFile, app: &PezMaxApp) -> bool {
                     );
                     ui.add_space(10.0);
                 });
-                // 列表项不再显示下载/收藏按钮，仅在内部预览面板操作
             });
         })
         .response
         .interact(egui::Sense::click());
 
-    resp.clicked()
+    let clicked = resp.clicked();
+    if select_mode {
+        (false, clicked)
+    } else {
+        (clicked, false)
+    }
 }

@@ -574,6 +574,19 @@ pub struct PezMaxApp {
     pub image_size: Option<(u32, u32)>,
     pub image_error: Option<String>,
 
+    // ── 试卷批量选择 & 批量下载 ────────────────────────────────
+    /// 选择模式开关：开启后 file_row 点击是勾选，而不是打开预览
+    pub browse_select_mode: bool,
+    pub browse_selection: std::collections::HashSet<i64>,
+    /// 批量下载进行中标志（禁用按钮，避免重复触发）
+    pub browse_batch_downloading: bool,
+    /// 批量下载进度：(done, total)
+    pub browse_batch_progress: (usize, usize),
+    /// 批量下载后台任务的进度接收端 (index_done, error_message_if_any)
+    pub browse_batch_progress_rx:
+        Option<tokio::sync::mpsc::UnboundedReceiver<(usize, Option<String>)>>,
+    pub browse_batch_errors: Vec<String>,
+
     // ── 本地下载记录（SQLite） ─────────────────────────────────
     /// None 表示数据库打开失败，功能降级为不写本地。
     pub download_db: Option<crate::db::DownloadDb>,
@@ -852,6 +865,12 @@ impl PezMaxApp {
             download_complete_tx,
             download_complete_rx,
             local_downloads_by_file_id: std::collections::HashMap::new(),
+            browse_select_mode: false,
+            browse_selection: std::collections::HashSet::new(),
+            browse_batch_downloading: false,
+            browse_batch_progress: (0, 0),
+            browse_batch_progress_rx: None,
+            browse_batch_errors: Vec::new(),
             cache_manager,
             settings,
             pdf_file_id: None,
@@ -2122,6 +2141,65 @@ impl PezMaxApp {
         });
     }
 
+    /// 批量顺序下载：files 里的每个 (file_id, file_name) 逐个下载到
+    /// setting_download_dir，一次一个避免并发。任务在后台单 tokio 线程执行，
+    /// 进度通过 download_complete_tx 广播（每完成一个发一次信号，
+    /// UI 的 download_complete_rx 消费后刷新计数）。
+    /// 由于批量场景弹保存对话框不合理，这里始终强制静默模式。
+    pub fn trigger_batch_download(&mut self, files: Vec<(i64, String)>) {
+        if self.browse_batch_downloading || files.is_empty() {
+            return;
+        }
+        self.browse_batch_downloading = true;
+        self.browse_batch_progress = (0, files.len());
+
+        let api = self.api.clone();
+        let default_dir = self.setting_download_dir.clone();
+        let db = self.download_db.clone();
+        let complete_tx = self.download_complete_tx.clone();
+        let (progress_tx, progress_rx) = tokio::sync::mpsc::unbounded_channel::<(usize, Option<String>)>();
+        self.browse_batch_progress_rx = Some(progress_rx);
+
+        tokio::spawn(async move {
+            let dir = std::path::PathBuf::from(&default_dir);
+            if !dir.exists() {
+                if let Err(e) = std::fs::create_dir_all(&dir) {
+                    log::error!("批量下载：创建目录失败 {}: {}", dir.display(), e);
+                    let _ = progress_tx.send((0, Some(format!("创建目录失败: {}", e))));
+                    return;
+                }
+            }
+            for (i, (file_id, file_name)) in files.into_iter().enumerate() {
+                let path = dir.join(&file_name);
+                let err = match api.download_paper(file_id).await {
+                    Ok(bytes) => match std::fs::write(&path, &bytes) {
+                        Ok(_) => {
+                            log::info!("批量下载 [{}] {} → {}", i + 1, file_id, path.display());
+                            if let Some(db) = &db {
+                                if let Err(e) = db.insert(file_id, &file_name, &path) {
+                                    log::error!("批量下载写库失败 {}: {}", file_id, e);
+                                }
+                            }
+                            let _ = complete_tx.send(());
+                            None
+                        }
+                        Err(e) => {
+                            log::error!("批量下载写盘失败 {}: {}", path.display(), e);
+                            Some(format!("{}: {}", file_name, e))
+                        }
+                    },
+                    Err(e) => {
+                        log::error!("批量下载失败 {}: {}", file_id, e);
+                        Some(format!("{}: {}", file_name, e))
+                    }
+                };
+                if progress_tx.send((i + 1, err)).is_err() {
+                    break;
+                }
+            }
+        });
+    }
+
     /// 4s 后触发离场动画，4.7s 后移除
     pub fn cleanup_toasts(&mut self) {
         let now = std::time::Instant::now();
@@ -2505,6 +2583,38 @@ impl eframe::App for PezMaxApp {
                         self.pdf_viewer.loaded = true;
                     }
                 }
+            }
+        }
+
+        // 轮询批量下载进度
+        if let Some(rx) = &mut self.browse_batch_progress_rx {
+            while let Ok((done, err)) = rx.try_recv() {
+                self.browse_batch_progress.0 = done;
+                if let Some(e) = err {
+                    self.browse_batch_errors.push(e);
+                }
+            }
+            if self.browse_batch_progress.0 >= self.browse_batch_progress.1
+                && self.browse_batch_progress.1 > 0
+            {
+                self.browse_batch_downloading = false;
+                self.browse_batch_progress_rx = None;
+                let (done, total) = self.browse_batch_progress;
+                let n_err = self.browse_batch_errors.len();
+                let success = done.saturating_sub(n_err);
+                if n_err == 0 {
+                    self.add_toast(format!("批量下载完成：{} 个文件", total), ToastLevel::Success);
+                } else if success > 0 {
+                    self.add_toast(
+                        format!("批量下载完成：{} 成功 / {} 失败", success, n_err),
+                        ToastLevel::Error,
+                    );
+                } else {
+                    self.add_toast("批量下载全部失败", ToastLevel::Error);
+                }
+                // 清空选择
+                self.browse_selection.clear();
+                self.browse_select_mode = false;
             }
         }
 
