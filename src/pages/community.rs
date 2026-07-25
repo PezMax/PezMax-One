@@ -254,6 +254,14 @@ pub fn render_user_ranking(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 
 /// 贡献文件（上传入口 + 元数据表单）
 pub fn render_contribute_file(app: &mut PezMaxApp, ui: &mut egui::Ui) {
+    // 提前触发学科/学校列表加载，用于表单自动补全 (#9)
+    if !app.subjects_data.is_loaded() && !app.subjects_data.is_loading() {
+        app.trigger_load_subjects();
+    }
+    if !app.schools_data.is_loaded() && !app.schools_data.is_loading() {
+        app.trigger_load_schools();
+    }
+
     ui.add_space(16.0);
     ui.label(
         egui::RichText::new("贡献文件")
@@ -447,9 +455,25 @@ pub fn render_contribute_file(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                     ui.set_min_width(ui.available_width());
                     ui.add_space(16.0);
 
-                    contribute_field(ui, "学科", &mut app.contribute_subject, "如：数学");
+                    // 学科：自动补全
+                    let subjects: Vec<String> = app.subjects_data.data.clone().unwrap_or_default();
+                    contribute_field_autocomplete(
+                        ui,
+                        "学科",
+                        &mut app.contribute_subject,
+                        "如：数学",
+                        &subjects,
+                    );
                     ui.add_space(10.0);
-                    contribute_field(ui, "学校", &mut app.contribute_school, "如：全国卷");
+                    // 学校：自动补全
+                    let schools: Vec<String> = app.schools_data.data.clone().unwrap_or_default();
+                    contribute_field_autocomplete(
+                        ui,
+                        "学校",
+                        &mut app.contribute_school,
+                        "如：全国卷",
+                        &schools,
+                    );
                     ui.add_space(10.0);
                     contribute_field(ui, "年份", &mut app.contribute_year, "如：2024");
 
@@ -549,6 +573,107 @@ fn contribute_field(ui: &mut egui::Ui, label: &str, value: &mut String, hint: &s
                     .desired_width(200.0)
                     .font(FontId::new(14.0, egui::FontFamily::Proportional)),
             );
+        });
+    });
+}
+
+/// 带自动补全的字段：候选来源 `options`，最多展示 6 条匹配项。
+/// - 值命中已有条目 → 复用（分组归并）
+/// - 值不为空且未命中 → 提示 "将新建 XX：YY"
+fn contribute_field_autocomplete(
+    ui: &mut egui::Ui,
+    label: &str,
+    value: &mut String,
+    hint: &str,
+    options: &[String],
+) {
+    ui.horizontal(|ui| {
+        ui.add_space(16.0);
+        ui.add_sized(
+            Vec2::new(60.0, 20.0),
+            egui::Label::new(
+                egui::RichText::new(label)
+                    .font(FontId::new(14.0, egui::FontFamily::Proportional))
+                    .color(colors::text_secondary()),
+            ),
+        );
+        ui.add_space(8.0);
+        ui.vertical(|ui| {
+            ui.scope(|ui| {
+                crate::theme::apply_search_style(ui);
+                ui.add(
+                    egui::TextEdit::singleline(value)
+                        .hint_text(hint)
+                        .desired_width(240.0)
+                        .font(FontId::new(14.0, egui::FontFamily::Proportional)),
+                );
+            });
+
+            let v_trim = value.trim().to_string();
+            let v_lower = v_trim.to_lowercase();
+            let exact_match = !v_trim.is_empty()
+                && options.iter().any(|o| o.eq_ignore_ascii_case(&v_trim));
+
+            // 只在有输入 且没有精确命中时才展示候选
+            if !v_lower.is_empty() && !exact_match {
+                let matches: Vec<String> = options
+                    .iter()
+                    .filter(|o| o.to_lowercase().contains(&v_lower))
+                    .take(6)
+                    .cloned()
+                    .collect();
+                if !matches.is_empty() {
+                    ui.add_space(4.0);
+                    egui::Frame::new()
+                        .fill(colors::bg_card())
+                        .stroke(egui::Stroke::new(1.0, colors::border()))
+                        .corner_radius(CornerRadius::same(0))
+                        .show(ui, |ui| {
+                            ui.set_min_width(240.0);
+                            for opt in matches {
+                                let resp = ui.add(
+                                    egui::Label::new(
+                                        egui::RichText::new(&opt)
+                                            .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                                            .color(colors::text_primary()),
+                                    )
+                                    .sense(egui::Sense::click()),
+                                );
+                                if resp.hovered() {
+                                    let bg = colors::bg_hover();
+                                    ui.painter().rect_filled(
+                                        resp.rect,
+                                        CornerRadius::ZERO,
+                                        bg,
+                                    );
+                                    ui.painter().text(
+                                        resp.rect.left_center() + egui::vec2(4.0, 0.0),
+                                        egui::Align2::LEFT_CENTER,
+                                        &opt,
+                                        FontId::new(13.0, egui::FontFamily::Proportional),
+                                        colors::text_primary(),
+                                    );
+                                }
+                                if resp.clicked() {
+                                    *value = opt.clone();
+                                }
+                            }
+                        });
+                }
+                ui.add_space(4.0);
+                ui.label(
+                    egui::RichText::new(format!("提示：将新建{}：{}", label, v_trim))
+                        .font(FontId::new(11.0, egui::FontFamily::Proportional))
+                        .color(colors::text_secondary()),
+                );
+            } else if exact_match {
+                ui.add_space(4.0);
+                ui.label(
+                    egui::RichText::new(format!("✓ 已归入已有{}", label))
+                        .font(FontId::new(11.0, egui::FontFamily::Proportional))
+                        .color(colors::primary()),
+                );
+            }
         });
     });
 }
