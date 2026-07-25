@@ -505,14 +505,13 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
             "-".to_string()
         };
 
-        // 上传者兜底：create_by 非空 → 用户 #id → 匿名
+        // 上传者兜底：create_by 非空则显示，否则显示 "匿名"
         let uploader_str = if !create_by.is_empty() {
             create_by.clone()
-        } else if user_id > 0 {
-            format!("用户 #{}", user_id)
         } else {
             "匿名".to_string()
         };
+        let _ = user_id;
         let format_str = if file_format.is_empty() { "-".to_string() } else { file_format.to_uppercase() };
         let time_str = if create_time.is_empty() { "-".to_string() } else { create_time.clone() };
 
@@ -604,7 +603,7 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 
                 ui.add_space(12.0);
                 ui.separator();
-                ui.add_space(10.0);
+                ui.add_space(12.0);
                 ui.vertical_centered(|ui| {
                     let close_btn = egui::Button::new(
                         egui::RichText::new("  关闭  ")
@@ -619,6 +618,7 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                         app.show_info_dialog = false;
                     }
                 });
+                ui.add_space(20.0);
             });
 
         if let Some(inner) = info_win_resp {
