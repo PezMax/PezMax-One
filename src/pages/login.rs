@@ -63,12 +63,15 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                             );
                             ui.scope(|ui| {
                                 crate::theme::apply_search_style(ui);
-                                ui.add(
+                                let resp = ui.add(
                                     egui::TextEdit::singleline(&mut app.login_username)
                                         .hint_text("请输入用户名")
                                         .desired_width(200.0)
                                         .font(FontId::new(14.0, egui::FontFamily::Proportional)),
                                 );
+                                if resp.changed() {
+                                    app.login_error.clear();
+                                }
                             });
                         });
 
@@ -84,13 +87,16 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                             );
                             ui.scope(|ui| {
                                 crate::theme::apply_search_style(ui);
-                                ui.add(
+                                let resp = ui.add(
                                     egui::TextEdit::singleline(&mut app.login_password)
                                         .hint_text("请输入密码")
                                         .password(true)
                                         .desired_width(200.0)
                                         .font(FontId::new(14.0, egui::FontFamily::Proportional)),
                                 );
+                                if resp.changed() {
+                                    app.login_error.clear();
+                                }
                             });
                         });
 
@@ -106,12 +112,15 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                                 );
                                 ui.scope(|ui| {
                                     crate::theme::apply_search_style(ui);
-                                    ui.add(
+                                    let resp = ui.add(
                                         egui::TextEdit::singleline(&mut app.login_captcha)
                                             .hint_text("验证码")
                                             .desired_width(100.0)
                                             .font(FontId::new(14.0, egui::FontFamily::Proportional)),
                                     );
+                                    if resp.changed() {
+                                        app.login_error.clear();
+                                    }
                                 });
                                 ui.add_space(8.0);
 
