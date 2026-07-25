@@ -299,7 +299,7 @@ pub fn render_contribute_file(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                         );
                         ui.add_space(10.0);
                         let btn = egui::Button::new(
-                            egui::RichText::new("  选择文件  ")
+                            egui::RichText::new("  选择文件（可多选）  ")
                                 .font(FontId::new(14.0, egui::FontFamily::Proportional))
                                 .color(colors::text_on_primary()),
                         )
@@ -308,47 +308,126 @@ pub fn render_contribute_file(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                         if ui.add(btn).clicked() {
                             #[cfg(not(target_arch = "wasm32"))]
                             {
-                                let file = rfd::FileDialog::new()
+                                let files = rfd::FileDialog::new()
                                     .add_filter("PDF", &["pdf"])
-                                    .pick_file();
-                                if let Some(path) = file {
-                                    // 解析出 fileName / fileFormat / fileSize
-                                    let name = path
-                                        .file_name()
-                                        .and_then(|n| n.to_str())
-                                        .unwrap_or("")
-                                        .to_string();
-                                    let fmt = path
-                                        .extension()
-                                        .and_then(|e| e.to_str())
-                                        .map(|s| s.to_lowercase())
-                                        .unwrap_or_else(|| "pdf".to_string());
-                                    let size = std::fs::metadata(&path).ok().map(|m| m.len()).unwrap_or(0);
-                                    app.contribute_file_path = Some(path.display().to_string());
-                                    app.contribute_file_name = Some(name);
-                                    app.contribute_file_format = Some(fmt);
-                                    app.contribute_file_size = Some(size);
+                                    .pick_files();
+                                if let Some(paths) = files {
+                                    for path in paths {
+                                        let name = path
+                                            .file_name()
+                                            .and_then(|n| n.to_str())
+                                            .unwrap_or("")
+                                            .to_string();
+                                        let fmt = path
+                                            .extension()
+                                            .and_then(|e| e.to_str())
+                                            .map(|s| s.to_lowercase())
+                                            .unwrap_or_else(|| "pdf".to_string());
+                                        let size = std::fs::metadata(&path).ok().map(|m| m.len()).unwrap_or(0);
+                                        // 去重（按路径）
+                                        let p_str = path.display().to_string();
+                                        if !app.contribute_files.iter().any(|f| f.path == p_str) {
+                                            app.contribute_files.push(crate::app::ContributeFile {
+                                                path: p_str,
+                                                name,
+                                                format: fmt,
+                                                size,
+                                            });
+                                        }
+                                    }
                                 }
                             }
                         }
                         ui.add_space(12.0);
-                        // 已选文件回显
-                        if let Some(ref name) = app.contribute_file_name {
-                            let size_str = app.contribute_file_size
-                                .map(|s| {
-                                    if s < 1024 * 1024 { format!("{:.1} KB", s as f64 / 1024.0) }
-                                    else { format!("{:.1} MB", s as f64 / 1024.0 / 1024.0) }
-                                })
-                                .unwrap_or_default();
-                            ui.label(
-                                egui::RichText::new(format!("已选：{name}  ·  {size_str}"))
-                                    .font(FontId::new(12.0, egui::FontFamily::Proportional))
-                                    .color(colors::primary()),
-                            );
-                        }
-                        ui.add_space(12.0);
                     });
                 });
+
+            // ── 已选文件列表 ────────────────────────────────────
+            if !app.contribute_files.is_empty() {
+                ui.add_space(12.0);
+                ui.label(
+                    egui::RichText::new(format!("已选 {} 个文件", app.contribute_files.len()))
+                        .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                        .color(colors::text_secondary()),
+                );
+                ui.add_space(6.0);
+                // 上传进行中不能删条目
+                let uploading = app.contribute_uploading;
+                let mut remove_idx: Option<usize> = None;
+                for (i, cf) in app.contribute_files.iter().enumerate() {
+                    egui::Frame::new()
+                        .fill(colors::bg_card())
+                        .stroke(egui::Stroke::new(1.0, colors::border()))
+                        .corner_radius(CornerRadius::same(0))
+                        .show(ui, |ui| {
+                            ui.set_min_width(ui.available_width());
+                            ui.horizontal(|ui| {
+                                ui.add_space(10.0);
+                                let size_str = if cf.size < 1024 * 1024 {
+                                    format!("{:.1} KB", cf.size as f64 / 1024.0)
+                                } else {
+                                    format!("{:.1} MB", cf.size as f64 / 1024.0 / 1024.0)
+                                };
+                                ui.vertical(|ui| {
+                                    ui.add_space(6.0);
+                                    ui.label(
+                                        egui::RichText::new(&cf.name)
+                                            .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                                            .color(colors::text_primary()),
+                                    );
+                                    ui.label(
+                                        egui::RichText::new(size_str)
+                                            .font(FontId::new(11.0, egui::FontFamily::Proportional))
+                                            .color(colors::text_secondary()),
+                                    );
+                                    ui.add_space(6.0);
+                                });
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                    ui.add_space(8.0);
+                                    if ui
+                                        .add_enabled(
+                                            !uploading,
+                                            egui::Button::new(
+                                                egui::RichText::new("移除")
+                                                    .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                                                    .color(colors::text_secondary()),
+                                            )
+                                            .fill(colors::bg_hover())
+                                            .corner_radius(CornerRadius::same(0)),
+                                        )
+                                        .clicked()
+                                    {
+                                        remove_idx = Some(i);
+                                    }
+                                });
+                            });
+                        });
+                    ui.add_space(4.0);
+                }
+                if let Some(i) = remove_idx {
+                    app.contribute_files.remove(i);
+                }
+            }
+
+            // 上传进度显示
+            if app.contribute_uploading || !app.contribute_upload_errors.is_empty() {
+                ui.add_space(12.0);
+                ui.label(
+                    egui::RichText::new(format!(
+                        "已上传 {} / {}",
+                        app.contribute_upload_done, app.contribute_upload_total
+                    ))
+                    .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                    .color(colors::primary()),
+                );
+                for (name, err) in &app.contribute_upload_errors {
+                    ui.label(
+                        egui::RichText::new(format!("✗ {} — {}", name, err))
+                            .font(FontId::new(11.0, egui::FontFamily::Proportional))
+                            .color(colors::error()),
+                    );
+                }
+            }
 
             ui.add_space(20.0);
 
@@ -378,12 +457,18 @@ pub fn render_contribute_file(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 
                     ui.horizontal(|ui| {
                         ui.add_space(16.0);
-                        let has_file = app.contribute_file_path.is_some();
+                        let has_file = !app.contribute_files.is_empty();
                         let can_submit = has_file
                             && !app.contribute_subject.is_empty()
                             && !app.contribute_year.is_empty()
                             && !app.contribute_uploading;
-                        let label = if app.contribute_uploading { "  上传中…  " } else { "  提交上传  " };
+                        let label = if app.contribute_uploading {
+                            "  上传中…  "
+                        } else if app.contribute_files.len() > 1 {
+                            "  批量提交上传  "
+                        } else {
+                            "  提交上传  "
+                        };
                         let btn = egui::Button::new(
                             egui::RichText::new(label)
                                 .font(FontId::new(14.0, egui::FontFamily::Proportional))

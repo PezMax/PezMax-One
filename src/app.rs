@@ -273,6 +273,15 @@ impl<T: Send + 'static> AsyncData<T> {
 }
 
 /// 应用主状态
+/// 贡献文件条目：由 rfd::pick_files 解析出来的候选文件
+#[derive(Debug, Clone)]
+pub struct ContributeFile {
+    pub path: String,
+    pub name: String,
+    pub format: String,
+    pub size: u64,
+}
+
 pub struct PezMaxApp {
     pub api: ApiClient,
 
@@ -449,14 +458,15 @@ pub struct PezMaxApp {
     pub contribute_subject: String,
     pub contribute_school: String,
     pub contribute_year: String,
-    pub contribute_file_path: Option<String>,
-    // 从选中文件解析出的元数据
-    pub contribute_file_name: Option<String>,
-    pub contribute_file_format: Option<String>,
-    pub contribute_file_size: Option<u64>,
-    // 上传流程 rx & 进度动画
-    pub contribute_upload_rx: Option<oneshot::Receiver<anyhow::Result<PaperFile>>>,
+    /// 待上传的文件队列（批量选择时追加）
+    pub contribute_files: Vec<ContributeFile>,
+    // 批量上传进度：done / total / errors；上传中 uploading=true
+    pub contribute_upload_done: usize,
+    pub contribute_upload_total: usize,
+    pub contribute_upload_errors: Vec<(String, String)>, // (filename, error msg)
     pub contribute_uploading: bool,
+    /// 上传任务每完成一个文件就发一次 (filename, Result)
+    pub contribute_upload_rx: Option<tokio::sync::mpsc::UnboundedReceiver<(String, Result<(), String>)>>,
 
     // 举报对话框（新 · 覆盖旧的 report_content/report_type）
     pub report_content: String,           // 保留：旧 UI 兼容，后续移除
@@ -747,10 +757,10 @@ impl PezMaxApp {
             contribute_subject: String::new(),
             contribute_school: String::new(),
             contribute_year: String::new(),
-            contribute_file_path: None,
-            contribute_file_name: None,
-            contribute_file_format: None,
-            contribute_file_size: None,
+            contribute_files: Vec::new(),
+            contribute_upload_done: 0,
+            contribute_upload_total: 0,
+            contribute_upload_errors: Vec::new(),
             contribute_upload_rx: None,
             contribute_uploading: false,
             report_content: String::new(),
@@ -1258,61 +1268,67 @@ impl PezMaxApp {
         });
     }
 
-    /// 贡献文件两阶段上传：先 /datum/file/upload 拿 fileUrl，再 POST /datum/file 建记录。
+    /// 贡献文件两阶段批量上传：对 contribute_files 里每个文件执行
+    /// /datum/file/upload → POST /datum/file，共享同一份元数据(subject/school/year)。
+    /// 每完成一个文件推一次事件到 contribute_upload_rx，UI 可实时更新进度 (#6)。
     pub fn trigger_contribute_upload(&mut self) {
         if self.contribute_uploading || self.contribute_upload_rx.is_some() {
             return;
         }
-        let path = match &self.contribute_file_path {
-            Some(p) if !p.is_empty() => p.clone(),
-            _ => {
-                self.add_toast("请先选择文件", crate::app::ToastLevel::Error);
-                return;
-            }
-        };
-        let file_name = self.contribute_file_name.clone().unwrap_or_default();
-        let file_format = self.contribute_file_format.clone().unwrap_or_else(|| "pdf".to_string());
-        let file_size = self.contribute_file_size.unwrap_or(0) as i64;
+        if self.contribute_files.is_empty() {
+            self.add_toast("请先选择文件", crate::app::ToastLevel::Error);
+            return;
+        }
+        let files = self.contribute_files.clone();
         let subject = self.contribute_subject.clone();
         let school = self.contribute_school.clone();
         let year: i64 = self.contribute_year.trim().parse().unwrap_or(0);
-        let creator = self.current_user.as_ref().map(|u| u.user_name.clone()).unwrap_or_default();
+        let creator = self
+            .current_user
+            .as_ref()
+            .map(|u| u.user_name.clone())
+            .unwrap_or_default();
 
         self.contribute_uploading = true;
-        let api = self.api.clone();
-        let (tx, rx) = oneshot::channel();
+        self.contribute_upload_done = 0;
+        self.contribute_upload_total = files.len();
+        self.contribute_upload_errors.clear();
+
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         self.contribute_upload_rx = Some(rx);
 
+        let api = self.api.clone();
         tokio::spawn(async move {
-            let result = async {
-                // 阶段 1：上传字节
-                let file_url = api.upload_paper_bytes(&path).await?;
-                // 阶段 2：建元数据记录
-                let mut file = PaperFile {
-                    file_name,
-                    file_format,
-                    file_size,
-                    file_url,
-                    file_subject: subject,
-                    school_name: school,
-                    file_year: year,
-                    create_by: creator,
-                    ..Default::default()
-                };
-                let resp = api.create_file(&file).await?;
-                if resp.code != 200 {
-                    anyhow::bail!("{}", resp.msg);
-                }
-                // create_file 若返回 fileId 就填回来（少数后端会返回）
-                if let Some(v) = resp.data {
-                    if let Some(id) = v.get("fileId").and_then(|x| x.as_i64()) {
-                        file.file_id = id;
+            for cf in files {
+                let name_for_event = cf.name.clone();
+                let per_file: Result<(), String> = async {
+                    let file_url = api
+                        .upload_paper_bytes(&cf.path)
+                        .await
+                        .map_err(|e| e.to_string())?;
+                    let file = PaperFile {
+                        file_name: cf.name.clone(),
+                        file_format: cf.format.clone(),
+                        file_size: cf.size as i64,
+                        file_url,
+                        file_subject: subject.clone(),
+                        school_name: school.clone(),
+                        file_year: year,
+                        create_by: creator.clone(),
+                        ..Default::default()
+                    };
+                    let resp = api.create_file(&file).await.map_err(|e| e.to_string())?;
+                    if resp.code != 200 {
+                        return Err(resp.msg);
                     }
+                    Ok(())
                 }
-                Ok(file)
+                .await;
+                if tx.send((name_for_event, per_file)).is_err() {
+                    // UI 已丢弃 rx，中止批量
+                    break;
+                }
             }
-            .await;
-            tx.send(result).ok();
         });
     }
 
@@ -2780,30 +2796,62 @@ impl eframe::App for PezMaxApp {
             }
         }
 
-        // 贡献文件上传
+        // 批量上传进度：逐个消费 (filename, Result)
         if let Some(rx) = &mut self.contribute_upload_rx {
-            if let Ok(result) = rx.try_recv() {
-                self.contribute_uploading = false;
+            let mut any_success = false;
+            while let Ok((name, result)) = rx.try_recv() {
+                self.contribute_upload_done += 1;
                 match result {
-                    Ok(_file) => {
-                        self.add_toast("上传成功，等待审核", crate::app::ToastLevel::Success);
-                        self.contribute_subject.clear();
-                        self.contribute_school.clear();
-                        self.contribute_year.clear();
-                        self.contribute_file_path = None;
-                        self.contribute_file_name = None;
-                        self.contribute_file_format = None;
-                        self.contribute_file_size = None;
+                    Ok(()) => {
+                        any_success = true;
                         if let Some(ref mut stats) = self.user_stats {
                             stats.upload_count += 1;
                         }
-                        self.trigger_load_user_stats();
                     }
                     Err(e) => {
-                        self.add_toast(&format!("上传失败: {}", e), crate::app::ToastLevel::Error);
+                        log::error!("上传失败 {}: {}", name, e);
+                        self.contribute_upload_errors.push((name, e));
                     }
                 }
+            }
+            // 收到成功事件 → 刷新服务器统计（尽量与服务端权威值对齐）
+            if any_success {
+                self.trigger_load_user_stats();
+            }
+            // 全部完成
+            if self.contribute_upload_done >= self.contribute_upload_total
+                && self.contribute_upload_total > 0
+            {
+                self.contribute_uploading = false;
                 self.contribute_upload_rx = None;
+                let succeeded = self.contribute_upload_total - self.contribute_upload_errors.len();
+                if self.contribute_upload_errors.is_empty() {
+                    self.add_toast(
+                        format!("{} 个文件上传成功，等待审核", self.contribute_upload_total),
+                        crate::app::ToastLevel::Success,
+                    );
+                } else if succeeded > 0 {
+                    self.add_toast(
+                        format!(
+                            "{} 成功 / {} 失败",
+                            succeeded,
+                            self.contribute_upload_errors.len()
+                        ),
+                        crate::app::ToastLevel::Error,
+                    );
+                } else {
+                    self.add_toast("全部上传失败", crate::app::ToastLevel::Error);
+                }
+                // 成功后清空队列和表单；有失败保留 errors 供 UI 显示
+                if self.contribute_upload_errors.is_empty() {
+                    self.contribute_files.clear();
+                    self.contribute_subject.clear();
+                    self.contribute_school.clear();
+                    self.contribute_year.clear();
+                } else {
+                    // 保留失败的文件供用户重试；这里简单起见清空队列
+                    self.contribute_files.clear();
+                }
             }
         }
 
@@ -3158,8 +3206,18 @@ impl eframe::App for PezMaxApp {
 
         // 上传进度 toast（右下角）
         if self.contribute_uploading {
-            let name = self.contribute_file_name.clone().unwrap_or_else(|| "文件".to_string());
-            crate::components::upload_progress_toast::render(ctx, &name);
+            let label = if self.contribute_upload_total > 1 {
+                format!(
+                    "批量上传 {}/{}",
+                    self.contribute_upload_done + 1,
+                    self.contribute_upload_total
+                )
+            } else if let Some(cf) = self.contribute_files.first() {
+                cf.name.clone()
+            } else {
+                "文件".to_string()
+            };
+            crate::components::upload_progress_toast::render(ctx, &label);
         }
 
         // 举报对话框（全局，任何页面都能打开）
