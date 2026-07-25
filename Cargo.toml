@@ -1,6 +1,6 @@
 [package]
 name = "pezmax-egui"
-version = "0.1.0"
+version = "1.0.0"
 description = "PezMax - 高性能试卷资源管理桌面客户端 (egui + Metro Design)"
 edition = "2021"
 

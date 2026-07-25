@@ -57,16 +57,15 @@ PezMax-One/                  ← product root, Rust crate root
 │   │   └── mod.rs           ← 7 page modules
 │   ├── pdf/
 │   │   └── mod.rs           ← PdfEngine (pdfium-render) + PdfViewer (Grid/Line modes)
-│   └── sokuou/              ← Sokuou Engine（动画系统）
+│   └── sokuou/              ← Sokuou Engine（动画系统）+ 设计文档
 │       ├── mod.rs           ← 公共 API re-exports + map_range 工具函数
 │       ├── progress.rs      ← Progress：时长驱动线性插值（可中断）
 │       ├── spring.rs        ← SpringAnim：阻尼振荡器解析解
 │       ├── easing.rs        ← 缓动函数（Linear/EaseOutCubic 等）
 │       ├── uwp.rs           ← MetroAnim: UWP-style easing + EasingMode
-│       └── animator.rs      ← Animation trait + Animator（预留存根）
-├── SOKUOU_ENGINE.md         ← Sokuou Engine 完整设计书
-├── SOKUOU_USAGE.md          ← Sokuou Engine 调用手册（开发者必读）
-└── 后端接口列表.md           ← full API contract for all 34 backend controllers
+│       ├── animator.rs      ← Animation trait + Animator（预留存根）
+│       ├── SOKUOU_ENGINE.md ← Sokuou Engine 完整设计书
+│       └── SOKUOU_USAGE.md  ← Sokuou Engine 调用手册（开发者必读）
 ```
 
 ### Key Design Decisions
@@ -196,7 +195,7 @@ Rules:
 
 **PDF 磁盘缓存：** 渲染完成后写入 `.cache/pdf/{file_id}/p{idx}_s{scale}.rgba`。下次打开同文件同缩放级别时，直接从磁盘读取缓存纹理，无需重新渲染。缩放变化会产生新的缓存文件（`scale_encoded = (RENDER_SCALE * scale * 100.0) as u32`）。
 
-### API Layer (mapping to 后端接口列表.md)
+### API Layer
 
 | Module | Backend base path | Key endpoints |
 |--------|------------------|---------------|
@@ -210,7 +209,7 @@ Rules:
 
 ### Current State
 
-The project is a skeleton with all page/routing/API scaffolding in place, but most pages use mock data. High-priority next steps:
+Version 1.0.0 — production-ready release. Sokuou Engine documentation moved to `src/sokuou/`. Build scripts and obsolete design docs removed. The project is a skeleton with all page/routing/API scaffolding in place, but most pages use mock data. High-priority next steps:
 1. Replace mock login with real API calls in `login.rs`
 2. Wire up `file_explorer.rs` to `get_file_list()` / `get_file_tree()`
 3. Implement actual API calls in download, favorite, bookmark, notification pages
