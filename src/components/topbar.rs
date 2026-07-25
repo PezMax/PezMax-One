@@ -4,6 +4,13 @@ use crate::app::{PezMaxApp, Section, Subsection};
 use crate::sokuou::map_range;
 use crate::theme::colors;
 use egui::FontId;
+use std::sync::OnceLock;
+
+/// 搜索框占位文字宽度缓存。
+///
+/// 文案与字号均为常量，字体在启动时一次性加载后不再变。首次渲染时计算一次，
+/// 之后所有帧直接读取。避免每帧都跑一次 `layout_no_wrap` + 两次分配。
+static SEARCH_HINT_WIDTH: OnceLock<f32> = OnceLock::new();
 
 pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
     egui::TopBottomPanel::top("topbar")
@@ -87,11 +94,13 @@ pub fn render(app: &mut PezMaxApp, ctx: &egui::Context) {
                     let text = "搜索试卷、学科、学校...";
                     let font_id = FontId::new(18.0, egui::FontFamily::Proportional);
 
-                    // 计算文字宽度
-                    let text_width = ui.fonts(|f| {
-                        f.layout_no_wrap(text.to_owned(), font_id.clone(), egui::Color32::WHITE)
-                            .size()
-                            .x
+                    // 占位宽度：字体与文案都是常量，首帧算完即锁存。
+                    let text_width = *SEARCH_HINT_WIDTH.get_or_init(|| {
+                        ui.fonts(|f| {
+                            f.layout_no_wrap(text.to_owned(), font_id.clone(), egui::Color32::WHITE)
+                                .size()
+                                .x
+                        })
                     });
 
                     // p=0：文字右端在 🔍 处（整段隐藏）；p=1：文字左端到 TextEdit 边距处

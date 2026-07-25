@@ -22,6 +22,15 @@ pub struct SpringAnim {
 
 const SNAP_THRESHOLD: f64 = 0.001;
 
+/// 长停顿 dt 阈值（秒）：超过则视为"窗口拖拽 / 后台唤醒 / 系统卡顿"，
+/// 直接 snap 到目标，避免恢复渲染后残留一段"慢放尾巴"。
+///
+/// 选择 0.25s（4 Hz）的依据：
+/// - 60 Hz 正常帧间隔 16.7 ms、30 Hz 是 33.3 ms、10 Hz 是 100 ms
+///   —— 4 Hz 以下几乎必然是系统级停滞，用户已经"看不到中间过程"了
+/// - 曲线数学模型不变（依然是欠阻尼解析解）；此处只是策略性提前 snap
+const STALL_SNAP_THRESHOLD: f64 = 0.25;
+
 impl SpringAnim {
     /// 创建弹簧，初始静止于 `initial`，目标也为 `initial`。
     pub fn new(response: f64, damping_ratio: f64, initial: f64) -> Self {
@@ -92,6 +101,12 @@ impl SpringAnim {
     /// 每帧调用。`dt` 单位为秒（来自 `ctx.input(|i| i.stable_dt) as f64`）。
     pub fn update(&mut self, dt: f64) {
         if self.steady {
+            return;
+        }
+        // 长停顿（Windows 拖拽窗口、系统卡顿、后台唤醒）：跳过残余动画，
+        // 恢复渲染时用户看不到"慢放尾巴"，只感觉动画自然完成。
+        if dt > STALL_SNAP_THRESHOLD {
+            self.snap();
             return;
         }
         self.elapsed += dt.min(0.05);

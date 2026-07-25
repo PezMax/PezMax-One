@@ -38,6 +38,7 @@ Phase 1 完成。核心原语已稳定，已接入前端 UI 组件。
 ## 暴露的不足（持续更新）
 
 - **`MetroAnim::set_target` 早期返回陷阱**（2026-07-22 修复）— `set_target` 在 `is_steady() && target == self.target` 时直接返回，不重置 `elapsed`。强调色第二次切换时，`AccentTransition` 的 `from/to` 已更新，但 `set_target(1.0)` 为空操作，导致动画不播放、颜色跳变。修复：在 `set_target` 前调用 `jump_to(0.0)` 强制重置。（`theme/mod.rs:120`）
+- **`SpringAnim` 长停顿慢放尾巴**（2026-07-25 策略修正）— 原实现 `elapsed += dt.min(0.05)`，Windows 拖拽窗口造成 `dt=200~500ms` 时动画只推进 50ms，恢复渲染后残留一段"慢放"。修复：`update` 入口加 `STALL_SNAP_THRESHOLD=0.25s`，超阈值直接 `snap()` 到目标。曲线数学模型（欠阻尼解析解）完全未改。`Progress`/`MetroAnim` 用 `elapsed = (elapsed + dt).min(duration)`，大 dt 自然收敛到终态，不需要额外处理。
 
 ## 从未使用的 API（持续更新）
 

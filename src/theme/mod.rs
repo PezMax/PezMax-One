@@ -544,81 +544,91 @@ pub fn setup_fonts(ctx: &egui::Context) {
 }
 
 /// 应用 Metro Design 主题到 egui 上下文（每次切换模式/强调色后都应调用）
+///
+/// 用 `ctx.style_mut(|s| ...)` 就地改写，避免整份 `Style` 手动 clone + set_style。
+/// 主题过渡期间此函数每帧被调用，克隆成本非常敏感。
 pub fn apply_metro_theme(ctx: &egui::Context) {
     let dark = is_dark();
-    let mut style = (*ctx.style()).clone();
-
-    style.text_styles = metro_text_styles();
-    style.spacing.item_spacing = Vec2::new(12.0, 8.0);
-    style.spacing.button_padding = Vec2::new(16.0, 8.0);
-    style.spacing.indent = 24.0;
-
-    style.visuals = if dark { egui::Visuals::dark() } else { egui::Visuals::light() };
-    style.visuals.dark_mode = dark;
-
-    style.visuals.override_text_color = None;
-    style.visuals.hyperlink_color = colors::primary();
-    style.visuals.selection.stroke = egui::Stroke { width: 1.0, color: colors::primary() };
-    style.visuals.selection.bg_fill = colors::bg_selected();
-    style.visuals.warn_fg_color = colors::warning();
-    style.visuals.error_fg_color = colors::error();
-
-    style.visuals.window_fill = colors::bg_white();
-    style.visuals.panel_fill = colors::bg_white();
-    style.visuals.faint_bg_color = colors::bg_card();
-    style.visuals.extreme_bg_color = colors::bg_card();
-    style.visuals.code_bg_color = colors::bg_input();
-
-    style.visuals.slider_trailing_fill = false;
-
-    let zero = egui::CornerRadius::same(0);
-    style.visuals.window_corner_radius = zero;
-    style.visuals.menu_corner_radius = zero;
-
     let border_color = colors::border();
-    let text_fg   = colors::text_primary();
+    let text_fg = colors::text_primary();
     let text_weak = colors::text_secondary();
+    let bg_white = colors::bg_white();
+    let bg_card = colors::bg_card();
+    let bg_input = colors::bg_input();
+    let bg_hover = colors::bg_hover();
+    let bg_selected = colors::bg_selected();
+    let primary = colors::primary();
+    let primary_light = colors::primary_light();
+    let warning = colors::warning();
+    let error = colors::error();
+    let zero = egui::CornerRadius::same(0);
 
-    style.visuals.widgets.noninteractive = egui::style::WidgetVisuals {
-        bg_fill:       colors::bg_card(),
-        weak_bg_fill:  colors::bg_input(),
-        bg_stroke:     egui::Stroke::NONE,
-        fg_stroke:     egui::Stroke::new(1.0, text_weak),
-        corner_radius: zero,
-        expansion:     0.0,
-    };
-    style.visuals.widgets.inactive = egui::style::WidgetVisuals {
-        bg_fill:       colors::bg_card(),
-        weak_bg_fill:  colors::bg_white(),
-        bg_stroke:     egui::Stroke::new(1.0, border_color),
-        fg_stroke:     egui::Stroke::new(1.5, text_fg),
-        corner_radius: zero,
-        expansion:     0.0,
-    };
-    style.visuals.widgets.hovered = egui::style::WidgetVisuals {
-        bg_fill:       colors::bg_hover(),
-        weak_bg_fill:  colors::bg_hover(),
-        bg_stroke:     egui::Stroke::new(1.0, colors::primary_light()),
-        fg_stroke:     egui::Stroke::new(1.5, text_fg),
-        corner_radius: zero,
-        expansion:     0.0,
-    };
-    style.visuals.widgets.active = egui::style::WidgetVisuals {
-        bg_fill:       colors::bg_selected(),
-        weak_bg_fill:  colors::bg_selected(),
-        bg_stroke:     egui::Stroke::new(1.0, colors::primary()),
-        fg_stroke:     egui::Stroke::new(2.0, text_fg),
-        corner_radius: zero,
-        expansion:     0.0,
-    };
-    style.visuals.widgets.open = egui::style::WidgetVisuals {
-        bg_fill:       colors::bg_selected(),
-        weak_bg_fill:  colors::bg_selected(),
-        bg_stroke:     egui::Stroke::new(1.0, colors::primary()),
-        fg_stroke:     egui::Stroke::new(1.5, text_fg),
-        corner_radius: zero,
-        expansion:     0.0,
-    };
+    ctx.style_mut(|style| {
+        style.text_styles = metro_text_styles();
+        style.spacing.item_spacing = Vec2::new(12.0, 8.0);
+        style.spacing.button_padding = Vec2::new(16.0, 8.0);
+        style.spacing.indent = 24.0;
 
-    ctx.set_style(style);
+        style.visuals = if dark { egui::Visuals::dark() } else { egui::Visuals::light() };
+        style.visuals.dark_mode = dark;
+
+        style.visuals.override_text_color = None;
+        style.visuals.hyperlink_color = primary;
+        style.visuals.selection.stroke = egui::Stroke { width: 1.0, color: primary };
+        style.visuals.selection.bg_fill = bg_selected;
+        style.visuals.warn_fg_color = warning;
+        style.visuals.error_fg_color = error;
+
+        style.visuals.window_fill = bg_white;
+        style.visuals.panel_fill = bg_white;
+        style.visuals.faint_bg_color = bg_card;
+        style.visuals.extreme_bg_color = bg_card;
+        style.visuals.code_bg_color = bg_input;
+
+        style.visuals.slider_trailing_fill = false;
+
+        style.visuals.window_corner_radius = zero;
+        style.visuals.menu_corner_radius = zero;
+
+        style.visuals.widgets.noninteractive = egui::style::WidgetVisuals {
+            bg_fill:       bg_card,
+            weak_bg_fill:  bg_input,
+            bg_stroke:     egui::Stroke::NONE,
+            fg_stroke:     egui::Stroke::new(1.0, text_weak),
+            corner_radius: zero,
+            expansion:     0.0,
+        };
+        style.visuals.widgets.inactive = egui::style::WidgetVisuals {
+            bg_fill:       bg_card,
+            weak_bg_fill:  bg_white,
+            bg_stroke:     egui::Stroke::new(1.0, border_color),
+            fg_stroke:     egui::Stroke::new(1.5, text_fg),
+            corner_radius: zero,
+            expansion:     0.0,
+        };
+        style.visuals.widgets.hovered = egui::style::WidgetVisuals {
+            bg_fill:       bg_hover,
+            weak_bg_fill:  bg_hover,
+            bg_stroke:     egui::Stroke::new(1.0, primary_light),
+            fg_stroke:     egui::Stroke::new(1.5, text_fg),
+            corner_radius: zero,
+            expansion:     0.0,
+        };
+        style.visuals.widgets.active = egui::style::WidgetVisuals {
+            bg_fill:       bg_selected,
+            weak_bg_fill:  bg_selected,
+            bg_stroke:     egui::Stroke::new(1.0, primary),
+            fg_stroke:     egui::Stroke::new(2.0, text_fg),
+            corner_radius: zero,
+            expansion:     0.0,
+        };
+        style.visuals.widgets.open = egui::style::WidgetVisuals {
+            bg_fill:       bg_selected,
+            weak_bg_fill:  bg_selected,
+            bg_stroke:     egui::Stroke::new(1.0, primary),
+            fg_stroke:     egui::Stroke::new(1.5, text_fg),
+            corner_radius: zero,
+            expansion:     0.0,
+        };
+    });
 }

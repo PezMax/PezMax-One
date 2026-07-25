@@ -1,15 +1,127 @@
 // 浏览功能区
 // 三个子标签：资源管理 / 外部书签 / 我的收藏
 
-use crate::app::PezMaxApp;
+use crate::app::{AsyncData, PezMaxApp, ToastLevel};
 use crate::api::models::*;
 use crate::components::action_bar::Action;
 use crate::pdf;
 use crate::sokuou::map_range;
 use crate::theme::colors;
-use crate::app::ToastLevel;
 use egui::{Color32, CornerRadius, FontId, Vec2};
 use tokio::sync::oneshot;
+
+/// 浏览页派生数据缓存。
+///
+/// 数据源：`app.file_list_data` + `app.search_query_debounced` + `app.filters`
+///
+/// 缓存分两层失效：
+/// 1. **数据版本层**（`data_version` 变化时重建）：
+///    - `name_lower` / `subject_lower`：与 `list.data` 一一对齐的小写索引
+///    - `approved_idx`：已审核项在原始 Vec 中的下标
+///    - `subjects`：审核通过条目的全部学科（BTreeSet 去重排序）
+/// 2. **过滤 key 层**（query/subject/school 任一变化时重建）：
+///    - `schools`：随当前 subject 联动
+///    - `filtered`：完整应用 subject/school/query 三重筛选
+///
+/// 用途：避免 `render_resource_manager` 每帧克隆整表 + 每帧遍历 `to_lowercase()`。
+/// 空闲帧（无输入、无数据变化）refresh 直接短路返回。
+#[derive(Default)]
+pub struct BrowseDerived {
+    data_version: u64,
+    name_lower: Vec<String>,
+    subject_lower: Vec<String>,
+    approved_idx: Vec<usize>,
+
+    key_query: String,
+    key_subject: Option<String>,
+    key_school: Option<String>,
+
+    pub subjects: Vec<String>,
+    pub schools: Vec<String>,
+    pub filtered: Vec<PaperFile>,
+
+    ready: bool,
+}
+
+impl BrowseDerived {
+    /// 按需刷新。key 全部命中缓存时直接返回，O(1)。
+    pub fn refresh(
+        &mut self,
+        list: &AsyncData<Vec<PaperFile>>,
+        query: &str,
+        cur_sub: &Option<String>,
+        cur_sch: &Option<String>,
+    ) {
+        let data_version = list.version();
+        let all: &[PaperFile] = list.data.as_deref().unwrap_or(&[]);
+
+        let data_changed = self.data_version != data_version || !self.ready;
+        let key_changed = data_changed
+            || self.key_query != query
+            || &self.key_subject != cur_sub
+            || &self.key_school != cur_sch;
+        if !key_changed {
+            return;
+        }
+
+        if data_changed {
+            self.name_lower.clear();
+            self.subject_lower.clear();
+            self.name_lower.reserve(all.len());
+            self.subject_lower.reserve(all.len());
+            for f in all {
+                self.name_lower.push(f.file_name.to_lowercase());
+                self.subject_lower.push(f.file_subject.to_lowercase());
+            }
+            self.approved_idx.clear();
+            for (i, f) in all.iter().enumerate() {
+                if !matches!(f.file_status, Some(0) | Some(2)) {
+                    self.approved_idx.push(i);
+                }
+            }
+            let mut sub_set = std::collections::BTreeSet::new();
+            for &i in &self.approved_idx {
+                let s = &all[i].file_subject;
+                if !s.is_empty() {
+                    sub_set.insert(s.clone());
+                }
+            }
+            self.subjects = sub_set.into_iter().collect();
+            self.data_version = data_version;
+            self.ready = true;
+        }
+
+        let query_lower = query.to_lowercase();
+
+        let mut sch_set = std::collections::BTreeSet::new();
+        for &i in &self.approved_idx {
+            let f = &all[i];
+            let sub_ok = cur_sub.as_deref().map_or(true, |s| s == f.file_subject);
+            if sub_ok && !f.school_name.is_empty() {
+                sch_set.insert(f.school_name.clone());
+            }
+        }
+        self.schools = sch_set.into_iter().collect();
+
+        self.filtered.clear();
+        for &i in &self.approved_idx {
+            let f = &all[i];
+            let sub_ok = cur_sub.as_deref().map_or(true, |s| s == f.file_subject);
+            let sch_ok = cur_sch.as_deref().map_or(true, |s| s == f.school_name);
+            let q_ok = query_lower.is_empty()
+                || self.name_lower[i].contains(&query_lower)
+                || self.subject_lower[i].contains(&query_lower);
+            if sub_ok && sch_ok && q_ok {
+                self.filtered.push(f.clone());
+            }
+        }
+
+        self.key_query.clear();
+        self.key_query.push_str(query);
+        self.key_subject = cur_sub.clone();
+        self.key_school = cur_sch.clone();
+    }
+}
 
 /// 资源管理：筛选器（从数据派生，三级级联）+ 文件纵向列表
 pub fn render_resource_manager(app: &mut PezMaxApp, ui: &mut egui::Ui) {
@@ -48,58 +160,22 @@ pub fn render_resource_manager(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     }
 
     // ── 从文件列表派生级联标签 ───────────────────────────────
-    // Phase 1: 读取当前筛选状态（clone 避免后续借用冲突）
-    let active_sub   = app.filters.subject.clone();
+    // Phase 1: 刷新派生缓存（key 未变时 O(1) 短路，避免每帧克隆整表）
+    app.browse_derived.refresh(
+        &app.file_list_data,
+        &app.search_query_debounced,
+        &app.filters.subject,
+        &app.filters.school,
+    );
+
+    // 借出派生结果：mem::take 是 O(1) 交换，末尾归还。
+    // 目的是避免"持有 &app.browse_derived 又要 &mut app"的借用冲突。
+    let subjects = std::mem::take(&mut app.browse_derived.subjects);
+    let schools = std::mem::take(&mut app.browse_derived.schools);
+    let filtered_files = std::mem::take(&mut app.browse_derived.filtered);
+
+    let active_sub = app.filters.subject.clone();
     let active_school = app.filters.school.clone();
-    let search_q     = app.search_query_debounced.to_lowercase();
-
-    // 从数据中提取已审核文件，并派生筛选选项
-    let (subjects, schools, filtered_files) = {
-        let all = app.file_list_data.data.as_deref().unwrap_or(&[]);
-        let approved: Vec<&PaperFile> = all
-            .iter()
-            .filter(|f| !matches!(f.file_status, Some(0) | Some(2)))
-            .collect();
-
-        // 学科：全量
-        let subjects: Vec<String> = {
-            let mut set = std::collections::BTreeSet::new();
-            for f in &approved {
-                if !f.file_subject.is_empty() {
-                    set.insert(f.file_subject.clone());
-                }
-            }
-            set.into_iter().collect()
-        };
-
-        // 学校：随学科过滤
-        let schools: Vec<String> = {
-            let mut set = std::collections::BTreeSet::new();
-            for f in &approved {
-                let ok = active_sub.as_deref().map_or(true, |s| s == f.file_subject);
-                if ok && !f.school_name.is_empty() {
-                    set.insert(f.school_name.clone());
-                }
-            }
-            set.into_iter().collect()
-        };
-
-        // 最终过滤结果
-        let filtered: Vec<PaperFile> = approved
-            .into_iter()
-            .filter(|f| {
-                let sub_ok = active_sub.as_deref().map_or(true, |s| s == f.file_subject);
-                let sch_ok = active_school.as_deref().map_or(true, |s| s == f.school_name);
-                let q_ok   = search_q.is_empty()
-                    || f.file_name.to_lowercase().contains(&search_q)
-                    || f.file_subject.to_lowercase().contains(&search_q);
-                sub_ok && sch_ok && q_ok
-            })
-            .cloned()
-            .collect();
-
-        (subjects, schools, filtered)
-    };
 
     // Phase 2: 级联重置（上级变化时清空下级选项）
     if let Some(ref sch) = active_school {
@@ -374,6 +450,11 @@ pub fn render_resource_manager(app: &mut PezMaxApp, ui: &mut egui::Ui) {
             app.trigger_load_pdf_bytes(fid);
         }
     }
+
+    // 归还借出的派生数据（对应上方的 mem::take）
+    app.browse_derived.subjects = subjects;
+    app.browse_derived.schools = schools;
+    app.browse_derived.filtered = filtered_files;
 }
 
 /// 判断文件名/格式是否属于内建图片预览支持的类型

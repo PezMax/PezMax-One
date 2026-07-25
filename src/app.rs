@@ -200,6 +200,8 @@ pub struct AsyncData<T> {
     pub error: Option<String>,
     pub loading: bool,
     loaded: bool,
+    // 每次 data 被写入 / 重置时递增；下游派生缓存据此判失效。
+    version: u64,
 }
 
 impl<T: Send + 'static> AsyncData<T> {
@@ -210,7 +212,12 @@ impl<T: Send + 'static> AsyncData<T> {
             error: None,
             loading: false,
             loaded: false,
+            version: 0,
         }
+    }
+
+    pub fn version(&self) -> u64 {
+        self.version
     }
 
     /// 启动异步加载（重复调用不会重复启动）
@@ -241,6 +248,7 @@ impl<T: Send + 'static> AsyncData<T> {
                     Ok(data) => {
                         self.data = Some(data);
                         self.loaded = true;
+                        self.version = self.version.wrapping_add(1);
                     }
                     Err(e) => {
                         self.error = Some(e.to_string());
@@ -269,6 +277,7 @@ impl<T: Send + 'static> AsyncData<T> {
         self.error = None;
         self.loading = false;
         self.loaded = false;
+        self.version = self.version.wrapping_add(1);
     }
 }
 
@@ -417,6 +426,9 @@ pub struct PezMaxApp {
     pub bookmark_favorites_search: String,
     pub external_bookmarks_search: String,
     pub filters: FilterState,
+    /// 浏览页派生数据缓存：只在 file_list_data 版本或筛选/搜索 key 变化时重算。
+    /// 避免每帧 O(N) 克隆整个文件表。
+    pub browse_derived: crate::pages::browse::BrowseDerived,
     pub file_list: Vec<PaperFile>,
     pub file_total: i64,
     pub file_page: PageParams,
@@ -745,6 +757,7 @@ impl PezMaxApp {
             bookmark_favorites_search: String::new(),
             external_bookmarks_search: String::new(),
             filters: FilterState::default(),
+            browse_derived: crate::pages::browse::BrowseDerived::default(),
             file_list: vec![],
             file_total: 0,
             file_page: PageParams::default(),
