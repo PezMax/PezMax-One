@@ -567,6 +567,9 @@ pub struct PezMaxApp {
     // ── 本地下载记录（SQLite） ─────────────────────────────────
     /// None 表示数据库打开失败，功能降级为不写本地。
     pub download_db: Option<crate::db::DownloadDb>,
+    /// 本地下载记录缓存：file_id → 最新一次成功下载的本地记录。
+    /// 用于下载记录列表 "本地打开" 按钮和 "已删除" 标记。
+    pub local_downloads_by_file_id: std::collections::HashMap<i64, crate::db::LocalDownload>,
     /// 下载完成通知通道（成功写盘后由后台任务发信号，update() 消费后
     /// 刷新计数/列表；失败不会发信号，避免把失败也算成一次下载）
     pub download_complete_tx: tokio::sync::mpsc::UnboundedSender<()>,
@@ -838,10 +841,12 @@ impl PezMaxApp {
             },
             download_complete_tx,
             download_complete_rx,
+            local_downloads_by_file_id: std::collections::HashMap::new(),
             cache_manager,
             settings,
             pdf_file_id: None,
         };
+        app.reload_local_downloads();
 
         // 从缓存加载用户统计（如果有），让首页个人页能立即显示
         app.load_user_stats_cache();
@@ -1954,6 +1959,50 @@ impl PezMaxApp {
         });
     }
 
+    /// 从 SQLite 重新加载本地下载记录，重建 file_id → 最新记录 映射。
+    /// 同一 file_id 可能被下载多次，取 downloaded_at 最大的一条。
+    pub fn reload_local_downloads(&mut self) {
+        self.local_downloads_by_file_id.clear();
+        let Some(db) = self.download_db.as_ref() else {
+            return;
+        };
+        let list = match db.list_visible() {
+            Ok(l) => l,
+            Err(e) => {
+                log::error!("读取本地下载记录失败: {}", e);
+                return;
+            }
+        };
+        for rec in list {
+            match self.local_downloads_by_file_id.get(&rec.file_id) {
+                Some(existing) if existing.downloaded_at >= rec.downloaded_at => {}
+                _ => {
+                    self.local_downloads_by_file_id.insert(rec.file_id, rec);
+                }
+            }
+        }
+    }
+
+    /// 用系统默认程序打开一个本地文件。
+    /// 不使用第三方 open 依赖，直接 spawn 对应平台的命令。
+    pub fn open_path_with_system(path: &std::path::Path) -> anyhow::Result<()> {
+        #[cfg(target_os = "windows")]
+        {
+            std::process::Command::new("cmd")
+                .args(["/C", "start", "", &path.to_string_lossy()])
+                .spawn()?;
+        }
+        #[cfg(target_os = "macos")]
+        {
+            std::process::Command::new("open").arg(path).spawn()?;
+        }
+        #[cfg(all(unix, not(target_os = "macos")))]
+        {
+            std::process::Command::new("xdg-open").arg(path).spawn()?;
+        }
+        Ok(())
+    }
+
     /// 清空所有预览状态（Back / 切换文件时调用）
     pub fn clear_preview_state(&mut self) {
         self.pdf_viewer.clear_textures();
@@ -2432,6 +2481,7 @@ impl eframe::App for PezMaxApp {
         if got_complete {
             self.trigger_load_user_stats();
             self.download_records.reset();
+            self.reload_local_downloads();
             self.add_toast("下载完成", ToastLevel::Success);
         }
 
