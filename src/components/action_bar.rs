@@ -66,7 +66,7 @@ pub fn render_bar(ctx: &egui::Context, file_name: &str, mode: PreviewMode, is_fa
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.add_space(0.0);
-                    if bar_btn(ui, "ℹ️ 信息", 14.0) { action = Action::ToggleInfo; }
+                    if bar_btn(ui, "信息", 14.0) { action = Action::ToggleInfo; }
                     ui.add_space(8.0);
                     if bar_btn(ui, "🚩 举报", 14.0) { action = Action::Report; }
                     ui.add_space(8.0);

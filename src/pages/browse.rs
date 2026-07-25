@@ -390,7 +390,7 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
             "-".to_string()
         };
 
-        egui::Window::new("文件信息")
+        let info_win_resp = egui::Window::new("文件信息")
             .collapsible(false)
             .resizable(false)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
@@ -401,16 +401,6 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                 .corner_radius(egui::CornerRadius::ZERO)
                 .stroke(egui::Stroke::new(1.0, colors::border())))
             .show(ui.ctx(), |ui| {
-                // 左侧强调色条
-                ui.painter().rect_filled(
-                    egui::Rect::from_min_size(
-                        ui.max_rect().left_top(),
-                        egui::vec2(3.0, ui.max_rect().height()),
-                    ),
-                    egui::CornerRadius::ZERO,
-                    colors::primary(),
-                );
-
                 ui.add_space(16.0);
                 ui.horizontal(|ui| {
                     ui.add_space(8.0);
@@ -483,6 +473,16 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                     }
                 });
             });
+
+        if let Some(inner) = info_win_resp {
+            let win_rect = inner.response.rect;
+            let painter = ui.ctx().layer_painter(inner.response.layer_id);
+            painter.rect_filled(
+                egui::Rect::from_min_size(win_rect.left_top(), egui::vec2(3.0, win_rect.height())),
+                egui::CornerRadius::ZERO,
+                colors::primary(),
+            );
+        }
     }
 
     // ── 举报对话框 ────────────────────────────────────────

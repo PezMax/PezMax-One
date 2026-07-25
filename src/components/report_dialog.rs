@@ -14,25 +14,17 @@ pub fn render(ctx: &egui::Context, app: &mut PezMaxApp) -> (bool, bool) {
     let mut submit = false;
     let mut close = false;
 
-    egui::Window::new("举报")
+    let win_resp = egui::Window::new("举报")
         .collapsible(false)
         .resizable(false)
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-        .fixed_size(egui::vec2(500.0, 460.0))
+        .fixed_size(egui::vec2(500.0, 520.0))
         .title_bar(false)
         .frame(egui::Frame::new()
             .fill(colors::bg_card())
             .corner_radius(CornerRadius::ZERO)
             .stroke(Stroke::new(1.0, colors::border())))
         .show(ctx, |ui| {
-            ui.painter().rect_filled(
-                egui::Rect::from_min_size(
-                    ui.max_rect().left_top(),
-                    egui::vec2(3.0, ui.max_rect().height()),
-                ),
-                CornerRadius::ZERO,
-                colors::primary(),
-            );
 
             ui.add_space(20.0);
             ui.horizontal(|ui| {
@@ -151,7 +143,19 @@ pub fn render(ctx: &egui::Context, app: &mut PezMaxApp) -> (bool, bool) {
                     }
                 });
             });
+
+            ui.add_space(20.0);
         });
+
+    if let Some(inner) = win_resp {
+        let win_rect = inner.response.rect;
+        let painter = ctx.layer_painter(inner.response.layer_id);
+        painter.rect_filled(
+            egui::Rect::from_min_size(win_rect.left_top(), egui::vec2(3.0, win_rect.height())),
+            CornerRadius::ZERO,
+            colors::primary(),
+        );
+    }
 
     (submit, close)
 }

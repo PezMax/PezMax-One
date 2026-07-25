@@ -1659,7 +1659,7 @@ SOFTWARE.";
     const LEFT_PAD: f32 = 24.0;
     const RIGHT_PAD: f32 = 20.0;
 
-    egui::Window::new("关于")
+    let win_resp = egui::Window::new("关于")
         .collapsible(false)
         .resizable(false)
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
@@ -1670,16 +1670,6 @@ SOFTWARE.";
             .corner_radius(egui::CornerRadius::ZERO)
             .stroke(egui::Stroke::new(1.0, colors::border())))
         .show(ui.ctx(), |ui| {
-            // 左边缘 3px 强调色条
-            ui.painter().rect_filled(
-                egui::Rect::from_min_size(
-                    ui.max_rect().left_top(),
-                    egui::vec2(3.0, ui.max_rect().height()),
-                ),
-                egui::CornerRadius::ZERO,
-                colors::primary(),
-            );
-
             let content_left = ui.max_rect().left() + LEFT_PAD;
             let content_right = ui.max_rect().right() - RIGHT_PAD;
 
@@ -1860,4 +1850,14 @@ SOFTWARE.";
                 }
             });
         });
+
+    if let Some(inner) = win_resp {
+        let win_rect = inner.response.rect;
+        let painter = ui.ctx().layer_painter(inner.response.layer_id);
+        painter.rect_filled(
+            egui::Rect::from_min_size(win_rect.left_top(), egui::vec2(3.0, win_rect.height())),
+            egui::CornerRadius::ZERO,
+            colors::primary(),
+        );
+    }
 }
