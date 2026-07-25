@@ -1896,6 +1896,62 @@ impl PezMaxApp {
         });
     }
 
+    /// 统一的试卷下载入口。
+    /// - `setting_silent_download == true` → 直接落到 `setting_download_dir/{file_name}`
+    /// - 否则弹保存对话框，初始目录预置为 `setting_download_dir`
+    ///
+    /// 之前 browse/favorites 各自在 tokio::spawn 里手写 rfd::save_file，
+    /// 完全绕过了设置里的默认路径。集中到这里之后，两个入口一致。
+    pub fn trigger_download_paper(&mut self, file_id: i64, file_name: String) {
+        let api = self.api.clone();
+        let silent = self.setting_silent_download;
+        let default_dir = self.setting_download_dir.clone();
+        tokio::spawn(async move {
+            let target_path: Option<std::path::PathBuf> = if silent {
+                let dir = std::path::PathBuf::from(&default_dir);
+                if !dir.exists() {
+                    if let Err(e) = std::fs::create_dir_all(&dir) {
+                        log::error!("创建下载目录失败 {}: {}", dir.display(), e);
+                        return;
+                    }
+                }
+                Some(dir.join(&file_name))
+            } else {
+                let mut dlg = rfd::AsyncFileDialog::new().set_file_name(&file_name);
+                let start_dir = std::path::PathBuf::from(&default_dir);
+                if start_dir.exists() {
+                    dlg = dlg.set_directory(&start_dir);
+                }
+                // 尽量按文件扩展名过滤
+                let ext = std::path::Path::new(&file_name)
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .map(|e| e.to_ascii_lowercase());
+                let dlg = match ext.as_deref() {
+                    Some("pdf") => dlg.add_filter("PDF", &["pdf"]),
+                    Some(e) if !e.is_empty() => dlg.add_filter(e.to_uppercase(), &[e]),
+                    _ => dlg,
+                };
+                dlg.save_file().await.map(|f| f.path().to_path_buf())
+            };
+            let Some(path) = target_path else {
+                return;
+            };
+            match api.download_paper(file_id).await {
+                Ok(bytes) => {
+                    if let Err(e) = std::fs::write(&path, &bytes) {
+                        log::error!("下载写盘失败 {}: {}", path.display(), e);
+                    } else {
+                        log::info!("下载完成 file_id={} → {}", file_id, path.display());
+                    }
+                }
+                Err(e) => {
+                    log::error!("下载失败 file_id={}: {}", file_id, e);
+                }
+            }
+        });
+    }
+
     /// 4s 后触发离场动画，4.7s 后移除
     pub fn cleanup_toasts(&mut self) {
         let now = std::time::Instant::now();

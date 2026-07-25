@@ -288,31 +288,13 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
             return;
         }
         Action::Download => {
-            let api = app.api.clone();
             let fid = file_id;
             let fname = file_name.clone();
             // 乐观更新下载统计
             if let Some(ref mut stats) = app.user_stats {
                 stats.download_count += 1;
             }
-            tokio::spawn(async move {
-                // 选择保存路径
-                let file = rfd::AsyncFileDialog::new()
-                    .set_file_name(&fname)
-                    .add_filter("PDF", &["pdf"])
-                    .save_file()
-                    .await;
-                if let Some(file) = file {
-                    match api.download_paper(fid).await {
-                        Ok(bytes) => {
-                            let _ = std::fs::write(file.path(), &bytes);
-                        }
-                        Err(e) => {
-                            log::error!("下载失败: {}", e);
-                        }
-                    }
-                }
-            });
+            app.trigger_download_paper(fid, fname);
             // 后台刷新统计（确保下次打开时数据一致）
             app.trigger_load_user_stats();
         }
@@ -1732,26 +1714,9 @@ fn render_paper_favorites(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                                     }
                                     ui.add_space(4.0);
                                     if favorite_row_button(ui, "📥 下载").clicked() {
-                                        let api = app.api.clone();
                                         let fid = fav.file_id;
                                         let fname = fav.file_name.clone();
-                                        tokio::spawn(async move {
-                                            let file = rfd::AsyncFileDialog::new()
-                                                .set_file_name(&fname)
-                                                .add_filter("PDF", &["pdf"])
-                                                .save_file()
-                                                .await;
-                                            if let Some(file) = file {
-                                                match api.download_paper(fid).await {
-                                                    Ok(bytes) => {
-                                                        let _ = std::fs::write(file.path(), &bytes);
-                                                    }
-                                                    Err(e) => {
-                                                        log::error!("下载失败: {}", e);
-                                                    }
-                                                }
-                                            }
-                                        });
+                                        app.trigger_download_paper(fid, fname);
                                     }
                                     ui.add_space(4.0);
                                     // 访问文件按钮
