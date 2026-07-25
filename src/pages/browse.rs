@@ -398,11 +398,14 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
     };
 
     let file_id = file.file_id;
+    let user_id = file.user_id;
     let file_name = file.file_name.clone();
     let file_subject = file.file_subject.clone();
     let school_name = file.school_name.clone();
     let file_size = file.file_size;
+    let file_format = file.file_format.clone();
     let create_by = file.create_by.clone();
+    let create_time = file.create_time.clone();
 
     let v = app.preview_anim.value();
     let y_offset = map_range(v, 16.0, 0.0) as f32;
@@ -502,11 +505,22 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
             "-".to_string()
         };
 
+        // 上传者兜底：create_by 非空 → 用户 #id → 匿名
+        let uploader_str = if !create_by.is_empty() {
+            create_by.clone()
+        } else if user_id > 0 {
+            format!("用户 #{}", user_id)
+        } else {
+            "匿名".to_string()
+        };
+        let format_str = if file_format.is_empty() { "-".to_string() } else { file_format.to_uppercase() };
+        let time_str = if create_time.is_empty() { "-".to_string() } else { create_time.clone() };
+
         let info_win_resp = egui::Window::new("文件信息")
             .collapsible(false)
             .resizable(false)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-            .fixed_size(egui::vec2(380.0, 280.0))
+            .fixed_size(egui::vec2(400.0, 340.0))
             .title_bar(false)
             .frame(egui::Frame::new()
                 .fill(colors::bg_card())
@@ -515,13 +529,14 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
             .show(ui.ctx(), |ui| {
                 ui.add_space(16.0);
                 ui.horizontal(|ui| {
-                    ui.add_space(8.0);
+                    ui.add_space(20.0);
                     ui.label(
                         egui::RichText::new("📄 文件信息")
                             .font(FontId::new(16.0, egui::FontFamily::Proportional))
                             .color(colors::text_primary()),
                     );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.add_space(8.0);
                         let close_clicked = ui.scope(|ui| {
                             ui.visuals_mut().widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
                             ui.add(
@@ -539,38 +554,58 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                         }
                     });
                 });
-                ui.add_space(12.0);
+                ui.add_space(8.0);
+                ui.separator();
+                ui.add_space(8.0);
 
                 let info_rows: &[(&str, &str)] = &[
                     ("文件名", &file_name),
                     ("学科", &file_subject),
                     ("学校", &school_name),
+                    ("格式", &format_str),
                     ("大小", &size_str),
-                    ("上传者", &create_by),
-                    ("文件ID", &file_id.to_string()),
+                    ("上传者", &uploader_str),
+                    ("上传时间", &time_str),
                 ];
 
-                for (key, val) in info_rows {
-                    ui.horizontal(|ui| {
-                        ui.add_space(24.0);
-                        ui.label(
-                            egui::RichText::new(format!("{}:", key))
-                                .font(FontId::new(12.0, egui::FontFamily::Proportional))
-                                .color(colors::text_secondary()),
-                        );
-                        ui.add_space(8.0);
-                        ui.label(
-                            egui::RichText::new(*val)
-                                .font(FontId::new(13.0, egui::FontFamily::Proportional))
-                                .color(colors::text_primary()),
-                        );
+                egui::Grid::new("file_info_grid")
+                    .num_columns(2)
+                    .spacing([16.0, 10.0])
+                    .min_col_width(60.0)
+                    .show(ui, |ui| {
+                        for (key, val) in info_rows {
+                            ui.horizontal(|ui| {
+                                ui.add_space(20.0);
+                                ui.label(
+                                    egui::RichText::new(*key)
+                                        .font(FontId::new(12.0, egui::FontFamily::Proportional))
+                                        .color(colors::text_secondary()),
+                                );
+                            });
+                            ui.label(
+                                egui::RichText::new(*val)
+                                    .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                                    .color(colors::text_primary()),
+                            );
+                            ui.end_row();
+                        }
                     });
-                    ui.add_space(6.0);
-                }
 
-                ui.add_space(16.0);
-                ui.horizontal_centered(|ui| {
-                    ui.add_space(ui.available_width() * 0.25);
+                ui.add_space(8.0);
+                // 文件 ID 移到底部作为辅助信息，右对齐小字
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.add_space(20.0);
+                    ui.label(
+                        egui::RichText::new(format!("ID #{}", file_id))
+                            .font(FontId::new(10.0, egui::FontFamily::Proportional))
+                            .color(colors::text_secondary()),
+                    );
+                });
+
+                ui.add_space(12.0);
+                ui.separator();
+                ui.add_space(10.0);
+                ui.vertical_centered(|ui| {
                     let close_btn = egui::Button::new(
                         egui::RichText::new("  关闭  ")
                             .font(FontId::new(14.0, egui::FontFamily::Proportional))
@@ -579,7 +614,7 @@ fn render_file_preview(app: &mut PezMaxApp, ui: &mut egui::Ui) {
                     .fill(colors::primary())
                     .stroke(egui::Stroke::NONE)
                     .corner_radius(egui::CornerRadius::ZERO)
-                    .min_size(egui::vec2(80.0, 32.0));
+                    .min_size(egui::vec2(96.0, 32.0));
                     if ui.add(close_btn).clicked() {
                         app.show_info_dialog = false;
                     }

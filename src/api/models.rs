@@ -174,6 +174,9 @@ pub struct SecurityQuestion {
 pub struct PaperFile {
     #[serde(default, deserialize_with = "null_to_default")]
     pub file_id: i64,
+    /// 上传用户 ID（后端 PtmjFile.userId）。当 create_by 为空时用于兜底显示。
+    #[serde(default, deserialize_with = "null_to_default")]
+    pub user_id: i64,
     #[serde(default, deserialize_with = "null_to_default")]
     pub file_name: String,
     #[serde(default, deserialize_with = "null_to_default")]
