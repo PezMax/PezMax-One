@@ -85,6 +85,12 @@ wayland-backend = { version = "0.3", features = ["client_system"] }
 wayland-scanner = "0.31"
 raw-window-handle = "0.6"
 
+# ── macOS 系统菜单 ─────────────────────────────────────────
+# muda：Tauri 出品的原生菜单 crate，macOS 走 NSMenu
+# 关闭默认的 gtk/libxdo（那两个只在 Linux 有用）
+[target.'cfg(target_os = "macos")'.dependencies]
+muda = { version = "0.19", default-features = false }
+
 [build-dependencies]
 # Windows resource compilation (icon embedding)
 embed-resource = "3"

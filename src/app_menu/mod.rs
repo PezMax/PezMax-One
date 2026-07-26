@@ -47,7 +47,10 @@ pub enum MenuCommand {
 ///
 /// 例如用户在设置页把主题从 Light 换成 Dark，应用调 `set_theme_mode(Dark)`，
 /// 后端负责把 File→View→主题 子菜单里的勾选切到 Dark 那一项。
-pub trait MenuBackend: Send + Sync {
+///
+/// 不要求 Send + Sync——macOS muda 的菜单对象内部用 Rc，只能在主线程持有。
+/// PezMaxApp 只在 eframe 主循环（主线程）调用后端方法，因此没有跨线程问题。
+pub trait MenuBackend {
     fn set_theme_mode(&self, mode: ThemeMode);
     fn set_accent(&self, idx: usize);
 }

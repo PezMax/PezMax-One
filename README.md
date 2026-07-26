@@ -112,13 +112,27 @@ sudo pacman -S aarch64-linux-gnu-gcc   # Arch
 ```
 另外需要 libwayland / libdbus 的 arm64 sysroot；否则请只跑 host 架构。
 
-### macOS
+### macOS（.app bundle）
 
 ```bash
-build/build-macos.sh
-# 产出：build/dist/pezmax-one-macos-{x64,arm64}.tar.gz
-# 目前仍是裸二进制 + 启动器；完整 .app bundle 待补
+build/build-macos.sh            # 只打宿主架构
+build/build-macos.sh x64        # x86_64 Intel
+build/build-macos.sh arm64      # Apple Silicon
+build/build-macos.sh all        # 两个分开打
+build/build-macos.sh universal  # 单个 universal binary（x64 + arm64 fat, lipo 合并）
 ```
+
+产出：`build/dist/pezmax-one-macos-{x64,arm64,universal}.tar.gz`，解压得到 `PezMax One-<arch>.app`。
+
+**.app bundle 内含**：
+- `Contents/MacOS/{pezmax-one, libpdfium.dylib}` — pdfium 与二进制同目录，PdfEngine 自动通过 `current_exe()` 定位
+- `Contents/Resources/AppIcon.icns` — 由 `iconutil` 从 `resources/icon.png` 生成
+- `Contents/Info.plist` — `CFBundleIdentifier=io.github.pezmax.one`、`LSMinimumSystemVersion=11.0`、`NSHighResolutionCapable`
+- `Contents/PkgInfo`
+
+**menu bar 集成**：走 `muda` crate 挂 NSMenu，含 App menu / File / Edit（Undo/Redo/Cut/Copy/Paste/SelectAll 全用系统预定义项）/ View（Theme + Accent 子菜单，勾选跟应用状态同步）/ Go / Help。
+
+**依赖**：`iconutil` + `sips`（Xcode Command Line Tools 自带）；`lipo`（同上，universal 模式用）。
 
 ### Windows
 

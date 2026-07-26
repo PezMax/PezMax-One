@@ -95,13 +95,30 @@ impl PdfEngine {
     /// 初始化 Pdfium 引擎。
     ///
     /// 查找顺序：
-    /// 1. 可执行文件同目录下的 pdfium.dll / libpdfium.so / libpdfium.dylib
-    /// 2. 系统已安装的 pdfium 库
+    /// 1. 可执行文件所在目录（.app bundle 内 Contents/MacOS/、.deb 安装到 /usr/lib/pezmax-one/ 都靠这条）
+    /// 2. 当前工作目录（老版兼容：portable tar.gz + wrapper 脚本）
+    /// 3. 系统已安装的 pdfium 库
     pub fn new() -> Self {
+        // 1. 可执行文件同目录 —— 关键：.app 从 Finder 启动时 CWD=/，只能靠 exe_dir 定位
+        let exe_dir = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|p| p.to_path_buf()));
+        if let Some(dir) = &exe_dir {
+            let library_path = Pdfium::pdfium_platform_library_name_at_path(dir);
+            if let Ok(bindings) = Pdfium::bind_to_library(&library_path) {
+                log::info!("PDF engine: bound to library at exe dir {:?}", library_path);
+                return Self {
+                    inner: Some(Arc::new(Pdfium::new(bindings))),
+                    error: None,
+                };
+            }
+        }
+
+        // 2. CWD（老 portable 分发方式）
         let library_path = Pdfium::pdfium_platform_library_name_at_path("./");
         match Pdfium::bind_to_library(&library_path) {
             Ok(bindings) => {
-                log::info!("PDF engine: bound to library at {:?}", library_path);
+                log::info!("PDF engine: bound to library at CWD {:?}", library_path);
                 Self {
                     inner: Some(Arc::new(Pdfium::new(bindings))),
                     error: None,
