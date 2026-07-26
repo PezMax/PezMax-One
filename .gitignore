@@ -9,6 +9,7 @@ Cargo.lock
 # build 产物（不提交编译结果和 pdfium 二进制，但提交构建脚本）
 build/dist/
 build/rust-target/
+build/stage-*/
 
 # PDFium 预编译库（各平台自动下载，不提交）
 build/pdfium/**/*.so

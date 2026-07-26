@@ -5,6 +5,7 @@
 
 mod api;
 mod app;
+mod app_menu;
 mod cache;
 mod components;
 mod db;
@@ -42,6 +43,9 @@ fn main() -> Result<(), eframe::Error> {
             .with_inner_size([1400.0, 900.0])
             .with_min_inner_size([800.0, 600.0])
             .with_icon(Arc::new(icon))
+            // Wayland compositor 用 app_id 匹配 .desktop 文件；不设置则任务栏无图标。
+            // 该值同时会被 .desktop 里的 StartupWMClass 引用。
+            .with_app_id("io.github.pezmax.one")
             .with_title("PezMax One · 拼图满绩·绫"),
         ..Default::default()
     };
@@ -49,6 +53,10 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "PezMax One · 拼图满绩·绫",
         options,
-        Box::new(|cc| Ok(Box::new(PezMaxApp::new(cc, pdf_engine)))),
+        Box::new(|cc| {
+            // 安装平台菜单（macOS NSMenu / Linux Plasma Global Menu）
+            let (menu_rx, menu_backend) = app_menu::install(cc);
+            Ok(Box::new(PezMaxApp::new(cc, pdf_engine, menu_rx, menu_backend)))
+        }),
     )
 }

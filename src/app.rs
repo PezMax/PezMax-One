@@ -621,10 +621,22 @@ pub struct PezMaxApp {
     /// 刷新计数/列表；失败不会发信号，避免把失败也算成一次下载）
     pub download_complete_tx: tokio::sync::mpsc::UnboundedSender<()>,
     pub download_complete_rx: tokio::sync::mpsc::UnboundedReceiver<()>,
+
+    // ── 应用菜单（macOS NSMenu / Linux Plasma Global Menu） ─────
+    /// 后端菜单点击 → MenuCommand 通道接收端；update() 每帧 try_recv 派发。
+    pub menu_rx: std::sync::mpsc::Receiver<crate::app_menu::MenuCommand>,
+    /// 平台菜单后端句柄。主题/强调色变化时用它同步菜单勾选状态。
+    /// Windows 或初始化失败时为 None。
+    pub menu_backend: Option<Box<dyn crate::app_menu::MenuBackend>>,
 }
 
 impl PezMaxApp {
-    pub fn new(cc: &eframe::CreationContext<'_>, pdf_engine: Arc<PdfEngine>) -> Self {
+    pub fn new(
+        cc: &eframe::CreationContext<'_>,
+        pdf_engine: Arc<PdfEngine>,
+        menu_rx: std::sync::mpsc::Receiver<crate::app_menu::MenuCommand>,
+        menu_backend: Option<Box<dyn crate::app_menu::MenuBackend>>,
+    ) -> Self {
         theme::setup_fonts(&cc.egui_ctx);
         theme::apply_metro_theme(&cc.egui_ctx);
 
@@ -905,6 +917,8 @@ impl PezMaxApp {
             cache_manager,
             settings,
             pdf_file_id: None,
+            menu_rx,
+            menu_backend,
         };
         app.reload_local_downloads();
 
@@ -2281,6 +2295,49 @@ impl PezMaxApp {
             .retain(|t| now.duration_since(t.created_at).as_secs_f32() < 4.7);
     }
 
+    /// 派发从系统菜单（macOS NSMenu / Linux DBusMenu）收到的命令。
+    /// 在 update() 里每帧 try_recv 消费。
+    pub fn handle_menu_command(&mut self, cmd: crate::app_menu::MenuCommand, ctx: &egui::Context) {
+        use crate::app_menu::MenuCommand as C;
+        match cmd {
+            C::OpenDownloadDir => {
+                let dir = std::path::PathBuf::from(&self.setting_download_dir);
+                if !dir.exists() {
+                    let _ = std::fs::create_dir_all(&dir);
+                }
+                crate::app_menu::open_in_file_manager(&dir);
+            }
+            C::ClearCache => self.clear_cache(),
+            C::Quit => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+            C::ToggleSidebar => {
+                self.sidebar_open = !self.sidebar_open;
+                self.sidebar_anim
+                    .set_target(if self.sidebar_open { 1.0 } else { 0.0 });
+            }
+            C::SetThemeMode(mode) => {
+                self.theme_mode = mode;
+            }
+            C::SetAccent(idx) => {
+                self.accent_idx = idx.min(theme::ACCENT_PRESETS.len().saturating_sub(1));
+            }
+            C::NavigateTo(section) => {
+                self.navigate_to(section, section.default_subsection());
+            }
+            C::About => {
+                self.add_toast(
+                    format!("PezMax One v{}", env!("CARGO_PKG_VERSION")),
+                    ToastLevel::Info,
+                );
+            }
+            C::OpenLogDir => {
+                crate::app_menu::open_in_file_manager(self.cache_manager.data_dir());
+            }
+            C::OpenHomepage => {
+                let _ = webbrowser::open("https://github.com/PezMax/PezMax-One");
+            }
+        }
+    }
+
     /// 清除所有缓存（磁盘 + 内存纹理）
     pub fn clear_cache(&mut self) {
         // 清空磁盘缓存
@@ -2348,6 +2405,16 @@ impl PezMaxApp {
 
 impl eframe::App for PezMaxApp {
     fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
+        // 消费系统菜单命令（macOS NSMenu / Linux Plasma Global Menu）
+        // 后端在别的线程把点击事件塞进通道，这里非阻塞排干。
+        let mut menu_cmds: Vec<crate::app_menu::MenuCommand> = Vec::new();
+        while let Ok(cmd) = self.menu_rx.try_recv() {
+            menu_cmds.push(cmd);
+        }
+        for cmd in menu_cmds {
+            self.handle_menu_command(cmd, ctx);
+        }
+
         // 首次帧：记录 DPI/缩放信息以帮助诊断跨平台文字清晰度
         use std::sync::atomic::{AtomicBool, Ordering};
         static LOGGED_DPI: AtomicBool = AtomicBool::new(false);
@@ -2404,6 +2471,12 @@ impl eframe::App for PezMaxApp {
             // 仅在开机自启开关实际变化时同步注册表（注册表 I/O 在后台线程执行，避免阻塞 UI）
             if auto_launch_changed {
                 self.sync_auto_launch();
+            }
+
+            // 同步系统菜单勾选（主题 / 强调色）
+            if let Some(be) = &self.menu_backend {
+                be.set_theme_mode(self.theme_mode);
+                be.set_accent(self.accent_idx);
             }
         }
 

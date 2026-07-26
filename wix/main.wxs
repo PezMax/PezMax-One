@@ -106,9 +106,9 @@
                         <Component Id='binary0' Guid='*'>
                             <File
                                 Id='exe0'
-                                Name='pezmax-egui.exe'
+                                Name='pezmax-one.exe'
                                 DiskId='1'
-                                Source='$(var.CargoTargetBinDir)\pezmax-egui.exe'
+                                Source='$(var.CargoTargetBinDir)\pezmax-one.exe'
                                 KeyPath='yes'/>
                         </Component>
 
@@ -129,7 +129,7 @@
                                 <Shortcut Id='ApplicationStartMenuShortcut'
                                     Name='PezMax One'
                                     Description='PezMax One - High-performance exam paper resource manager'
-                                    Target='[Bin]pezmax-egui.exe'
+                                    Target='[Bin]pezmax-one.exe'
                                     WorkingDirectory='Bin'
                                     IconIndex='0'/>
                                 <RemoveFolder Id='RemoveApplicationProgramsFolder'
@@ -151,7 +151,7 @@
                             <Shortcut Id='ApplicationDesktopShortcut'
                                 Name='PezMax One'
                                 Description='PezMax One - High-performance exam paper resource manager'
-                                Target='[Bin]pezmax-egui.exe'
+                                Target='[Bin]pezmax-one.exe'
                                 WorkingDirectory='Bin'
                                 IconIndex='0'/>
                             <RemoveFolder Id='RemoveDesktopFolder'

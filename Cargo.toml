@@ -1,5 +1,5 @@
 [package]
-name = "pezmax-egui"
+name = "pezmax-one"
 version = "1.0.0"
 description = "PezMax - 高性能试卷资源管理桌面客户端 (egui + Metro Design)"
 authors = ["Takahashi Rinta <mc1586182829@outlook.com>"]
@@ -72,6 +72,18 @@ confy = "0.6"
 # 本地凭证混淆用的 machine-uid
 machine-uid = "0.5"
 hostname = "0.4"
+
+
+# ── Linux 系统菜单（Plasma Global Menu 集成） ───────────────
+# zbus：纯 Rust D-Bus 客户端，实现 com.canonical.dbusmenu 服务
+# wayland-client / wayland-backend：绑定 KWin 私有协议 org_kde_kwin_appmenu
+# raw-window-handle：从 eframe CreationContext 拿 wl_display / wl_surface 原始指针
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus = { version = "5", default-features = false, features = ["tokio"] }
+wayland-client = "0.31"
+wayland-backend = { version = "0.3", features = ["client_system"] }
+wayland-scanner = "0.31"
+raw-window-handle = "0.6"
 
 [build-dependencies]
 # Windows resource compilation (icon embedding)

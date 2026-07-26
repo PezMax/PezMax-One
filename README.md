@@ -59,52 +59,79 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 rustup update stable
 ```
 
-### 获取 PDFium 引擎
-
-PezMax 使用 [pdfium-render](https://github.com/ajrcarey/pdfium-render) 作为 PDF 渲染后端，需要 PDFium 原生库支持。
-
-> **Windows 用户**：运行构建脚本会自动下载 PDFium
-> **macOS/Linux 用户**：需手动下载或使用对应平台的构建脚本
+### 快速开发（调试运行）
 
 ```bash
-# Windows（会自动下载 pdfium.dll）
-build\build-windows.bat
-
-# 或手动下载
-build\fetch-pdfium.bat        # 下载所有平台
-build\fetch-pdfium.bat windows-x64  # 仅下载 Windows x64
+cargo run                # 调试运行（首次约 2-3 分钟）
+cargo check              # 只做类型检查（秒级）
+cargo build --release    # 发布构建（首次冷编译约 5-10 分钟）
+./target/release/pezmax-one     # Linux/macOS 直接运行
+./target/release/pezmax-one.exe # Windows
 ```
 
-更多平台支持见 `build/fetch-pdfium.sh` / `build/fetch-pdfium.bat`。
-
-### 编译运行
-
-```bash
-# 调试模式
-cargo run
-
-# 发布模式（推荐日常使用）
-cargo build --release
-./target/release/pezmax-egui.exe   # Windows
-./target/release/pezmax-egui       # macOS/Linux
-```
-
-### 快速检查
-
-```bash
-cargo check      # 仅类型检查（秒级）
-cargo build      # 调试构建
-cargo fix        # 自动修复警告
-```
+PDFium 会由**首次运行 build 脚本**时自动下载到 `build/pdfium/`；调试模式下需要手动跑一次对应平台的 build 脚本先把 pdfium 拉下来（或把 `libpdfium.so` / `.dylib` / `pdfium.dll` 放到 `target/{debug,release}/` 里）。
 
 ---
 
-## 📦 安装包
+## 📦 生产构建与打包
 
-生产构建使用 `build/build-windows.bat` 生成：
+三个平台各一个入口脚本，pdfium 已内置到脚本里（存在则跳过，`FORCE_PDFIUM=1` 强制重下）。
 
-- **MSI 安装包** — `build/dist/PezMax-x64.msi`（需要 WiX Toolset v3）
-- **便携版 ZIP** — `build/dist/pezmax-windows-x64.zip`
+### Linux（.deb + Arch pkg，多架构）
+
+```bash
+build/build-linux.sh            # 只打 host 架构
+build/build-linux.sh x64        # x86_64
+build/build-linux.sh arm64      # aarch64
+build/build-linux.sh all        # x64 + arm64 全打（需 arm64 交叉工具链）
+```
+
+每个架构产出 **两种包**：
+- `build/dist/pezmax-one-1.0.0-x64.deb`
+- `build/dist/pezmax-one-1.0.0-1-x86_64.pkg.tar.zst`
+
+安装：
+```bash
+sudo pacman -U build/dist/pezmax-one-*.pkg.tar.zst     # Arch / Manjaro
+sudo dpkg -i  build/dist/pezmax-one-*.deb              # Debian / Ubuntu
+```
+
+安装后系统内路径：
+- 二进制：`/usr/bin/pezmax-one`（wrapper，自动设 `LD_LIBRARY_PATH`）
+- 库：`/usr/lib/pezmax-one/{pezmax-one, libpdfium.so}`
+- Desktop 入口：`/usr/share/applications/io.github.pezmax.one.desktop`
+- 图标：`/usr/share/icons/hicolor/{256x256,scalable}/apps/io.github.pezmax.one.*`
+
+**KDE Plasma Global Menu 集成**：应用启动时通过 D-Bus 暴露 `com.canonical.dbusmenu`，并绑定 KWin 私有协议 `org_kde_kwin_appmenu_manager`。面板需**手动添加 "Global Menu" widget** 才能显示。
+
+**交叉编译要求**（`all` 或 `arm64`）：
+```bash
+rustup target add aarch64-unknown-linux-gnu
+sudo pacman -S aarch64-linux-gnu-gcc   # Arch
+# Debian/Ubuntu: apt install gcc-aarch64-linux-gnu
+```
+另外需要 libwayland / libdbus 的 arm64 sysroot；否则请只跑 host 架构。
+
+### macOS
+
+```bash
+build/build-macos.sh
+# 产出：build/dist/pezmax-one-macos-{x64,arm64}.tar.gz
+# 目前仍是裸二进制 + 启动器；完整 .app bundle 待补
+```
+
+### Windows
+
+```cmd
+build\build-windows.bat
+```
+产出：
+- `build/dist/PezMaxOne-x64.msi`（需 WiX Toolset v3）
+- `build/dist/pezmax-one-windows-x64.zip`（便携版）
+
+---
+
+## 🧰 常用命令
 
 ---
 
@@ -114,12 +141,10 @@ cargo fix        # 自动修复警告
 PezMax-One/
 ├── Cargo.toml              # Rust 模块定义与依赖管理
 ├── build.rs                # Windows 资源编译（应用图标嵌入）
-├── build/                  # 构建脚本与 PDFium 下载
-│   ├── build-windows.bat   # Windows 完整构建（msi + zip）
-│   ├── build-linux.sh      # Linux 构建脚本
-│   ├── build-macos.sh      # macOS 构建脚本
-│   ├── fetch-pdfium.bat    # PDFium 下载脚本（Windows）
-│   └── fetch-pdfium.sh     # PDFium 下载脚本（Unix）
+├── build/                  # 构建脚本（pdfium 已内置到各脚本，无需单独 fetch）
+│   ├── build-windows.bat   # Windows：MSI + ZIP
+│   ├── build-linux.sh      # Linux：.deb + .pkg.tar.zst（支持 x64/arm64/all）
+│   └── build-macos.sh      # macOS：tar.gz（.app bundle 待补）
 ├── resources/              # 应用图标（ico / png / svg）
 ├── wix/                    # WiX 安装包配置
 ├── repowiki/               # 项目文档（架构设计、API 接口、部署运维）
@@ -225,17 +250,17 @@ let width = map_range(self.sidebar_anim.value(), 54.0, 200.0);
 ```bash
 # 调试
 cargo build
-target/debug/pezmax-egui.exe
+target/debug/pezmax-one       # 或 .exe（Windows）
 
 # 发布
 cargo build --release
-target/release/pezmax-egui.exe
+target/release/pezmax-one
 ```
 
 ### 常见问题
 
 **Q: PDFium 未找到？**
-A: 运行 `build/fetch-pdfium.bat`（Windows）或 `build/fetch-pdfium.sh`（Unix）下载对应平台的 PDFium 库。
+A: 跑一次对应平台的 build 脚本（`build/build-{linux,macos}.sh` / `build\build-windows.bat`），它会自动下载 pdfium 到 `build/pdfium/`。若要在 `cargo run` 调试模式下用，把 pdfium 库（`libpdfium.so` / `.dylib` / `pdfium.dll`）拷到 `target/debug/` 或 `target/release/`。
 
 **Q: 如何切换强调色？**
 A: 在个人中心 → 设置中选择，当前支持 5 种预设，切换时有平滑过渡动画。

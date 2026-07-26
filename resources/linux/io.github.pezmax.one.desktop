@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=PezMax One
+GenericName=PezMax Client
+GenericName[zh_CN]=试卷资源管理客户端
+Comment=High-performance exam paper resource manager
+Comment[zh_CN]=高性能试卷资源管理桌面客户端
+Exec=pezmax-one %U
+Icon=io.github.pezmax.one
+Terminal=false
+Categories=Office;Education;Viewer;
+Keywords=PezMax;exam;paper;pdf;
+StartupNotify=true
+StartupWMClass=io.github.pezmax.one
