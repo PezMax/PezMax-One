@@ -9,9 +9,9 @@
 #   ./build-macos.sh universal  # 单个 universal binary（x64 + arm64 fat）
 #
 # 产物（放在 build/dist/，命名与客户端 auto-update pick_asset() 对齐）：
-#   pezmax-one-VERSION-x86_64.dmg
-#   pezmax-one-VERSION-aarch64.dmg
-#   pezmax-one-VERSION-universal.dmg
+#   pezmax-one-VERSION-macos-x86_64.dmg
+#   pezmax-one-VERSION-macos-aarch64.dmg
+#   pezmax-one-VERSION-macos-universal.dmg
 #     └─ PezMax One.app/Contents/{MacOS/*, Resources/*.icns, Info.plist, PkgInfo}
 #
 # 交叉编译说明：macOS 上 Xcode SDK 覆盖两种架构，只需 rustup target 到位。
@@ -215,7 +215,7 @@ EOF
   # ── 打包成 .dmg ────────────────────────────────
   # hdiutil create -srcfolder <stage_dir> 会把整个目录做成只读镜像。
   # 用 UDZO 压缩，兼容所有现代 macOS。
-  local dmg="$DIST_DIR/${PKG_NAME}-${VERSION}-${canon}.dmg"
+  local dmg="$DIST_DIR/${PKG_NAME}-${VERSION}-macos-${canon}.dmg"
   rm -f "$dmg"
   log "打包 .dmg → $(basename "$dmg")"
   hdiutil create -quiet \

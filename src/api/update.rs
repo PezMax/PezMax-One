@@ -148,10 +148,13 @@ pub fn detect_linux_distro() -> &'static str {
 // ── 资产匹配 ─────────────────────────────────────────────────────────────
 
 /// 命名约定（与 build/*.sh 保持一致）：
-///   Windows : pezmax-one-{ver}-x86_64.msi
-///   macOS   : pezmax-one-{ver}-universal.dmg（首选，退到 x86_64/aarch64）
-///   Linux   : pezmax-one-{ver}-{amd64|aarch64}.deb  (Debian)
-///           / pezmax-one-{ver}-{x86_64|aarch64}.pkg.tar.zst  (Arch)
+///   Windows : pezmax-one-{ver}-windows-{x86_64|aarch64}.msi
+///   macOS   : pezmax-one-{ver}-macos-universal.dmg（首选，退到 x86_64/aarch64）
+///   Linux   : pezmax-one-{ver}-linux-{amd64|arm64}.deb          (Debian)
+///           / pezmax-one-{ver}-linux-{x86_64|aarch64}.pkg.tar.zst (Arch)
+///
+/// 匹配优先级：先要求名字里带上 OS 段（windows/macos/linux），
+/// 找不到再退化成"只按扩展名 + arch"（兼容误命名或旧包）。
 ///
 /// 返回选中的 GhAsset。找不到时返回错误，UI 提示"当前平台无可用更新包"。
 pub fn pick_asset(release: &GhRelease) -> Result<&GhAsset> {
@@ -160,7 +163,16 @@ pub fn pick_asset(release: &GhRelease) -> Result<&GhAsset> {
     #[cfg(target_os = "windows")]
     {
         let want_ext = ".msi";
-        // 精准命名：包含 arch + msi
+        let os_key = "windows";
+        // 首选：包含 OS + arch + msi
+        if let Some(a) = release.assets.iter().find(|a| {
+            a.name.ends_with(want_ext)
+                && name_contains_os(&a.name, os_key)
+                && name_matches_arch(&a.name, arch)
+        }) {
+            return Ok(a);
+        }
+        // 退化：只按扩展名 + arch
         if let Some(a) = release
             .assets
             .iter()
@@ -177,7 +189,24 @@ pub fn pick_asset(release: &GhRelease) -> Result<&GhAsset> {
 
     #[cfg(target_os = "macos")]
     {
-        // 优先 universal.dmg
+        let os_key = "macos";
+        // 首选：带 macos 段的 universal.dmg
+        if let Some(a) = release.assets.iter().find(|a| {
+            a.name.ends_with(".dmg")
+                && name_contains_os(&a.name, os_key)
+                && a.name.contains("universal")
+        }) {
+            return Ok(a);
+        }
+        // 次选：带 macos 段 + arch 匹配的 dmg
+        if let Some(a) = release.assets.iter().find(|a| {
+            a.name.ends_with(".dmg")
+                && name_contains_os(&a.name, os_key)
+                && name_matches_arch(&a.name, arch)
+        }) {
+            return Ok(a);
+        }
+        // 退化：不管 OS 段，universal.dmg
         if let Some(a) = release
             .assets
             .iter()
@@ -185,7 +214,7 @@ pub fn pick_asset(release: &GhRelease) -> Result<&GhAsset> {
         {
             return Ok(a);
         }
-        // 退化到 arch 匹配的 dmg
+        // 退化：不管 OS 段，arch 匹配的 dmg
         if let Some(a) = release
             .assets
             .iter()
@@ -203,6 +232,7 @@ pub fn pick_asset(release: &GhRelease) -> Result<&GhAsset> {
     #[cfg(target_os = "linux")]
     {
         let distro = detect_linux_distro();
+        let os_key = "linux";
         // Debian 系 → .deb
         if distro == "debian" || distro == "unknown" {
             let deb_arch = match arch {
@@ -210,6 +240,15 @@ pub fn pick_asset(release: &GhRelease) -> Result<&GhAsset> {
                 "aarch64" => "arm64",
                 _ => arch,
             };
+            // 首选：带 linux 段的 .deb
+            if let Some(a) = release.assets.iter().find(|a| {
+                a.name.ends_with(".deb")
+                    && name_contains_os(&a.name, os_key)
+                    && a.name.contains(deb_arch)
+            }) {
+                return Ok(a);
+            }
+            // 退化：任意 .deb + deb_arch
             if let Some(a) = release
                 .assets
                 .iter()
@@ -220,6 +259,15 @@ pub fn pick_asset(release: &GhRelease) -> Result<&GhAsset> {
         }
         // Arch 系 → .pkg.tar.zst
         if distro == "arch" || distro == "unknown" {
+            // 首选：带 linux 段的 .pkg.tar.zst
+            if let Some(a) = release.assets.iter().find(|a| {
+                a.name.ends_with(".pkg.tar.zst")
+                    && name_contains_os(&a.name, os_key)
+                    && name_matches_arch(&a.name, arch)
+            }) {
+                return Ok(a);
+            }
+            // 退化：任意 .pkg.tar.zst + arch
             if let Some(a) = release
                 .assets
                 .iter()
@@ -244,6 +292,16 @@ fn name_matches_arch(name: &str, arch: &str) -> bool {
         "aarch64" => n.contains("aarch64") || n.contains("arm64"),
         _ => n.contains(arch),
     }
+}
+
+/// 判断资产名是否携带指定 OS 段（大小写不敏感）。
+/// `os_key` ∈ {"windows", "macos", "linux"}；macOS 兼容 "darwin" 别名。
+fn name_contains_os(name: &str, os_key: &str) -> bool {
+    let n = name.to_ascii_lowercase();
+    if n.contains(os_key) {
+        return true;
+    }
+    matches!(os_key, "macos") && n.contains("darwin")
 }
 
 // ── 下载 ────────────────────────────────────────────────────────────────

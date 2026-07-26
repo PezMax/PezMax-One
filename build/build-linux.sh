@@ -9,8 +9,8 @@
 #   ./build-linux.sh all            # 同 "x64 arm64"
 #
 # 产物（放在 build/dist/，命名与客户端 auto-update 的 pick_asset() 严格对齐）：
-#   pezmax-one-VERSION-amd64.deb        pezmax-one-VERSION-x86_64.pkg.tar.zst
-#   pezmax-one-VERSION-aarch64.deb      pezmax-one-VERSION-aarch64.pkg.tar.zst
+#   pezmax-one-VERSION-linux-amd64.deb        pezmax-one-VERSION-linux-x86_64.pkg.tar.zst
+#   pezmax-one-VERSION-linux-arm64.deb        pezmax-one-VERSION-linux-aarch64.pkg.tar.zst
 #
 # 安装后系统内路径：
 #   /usr/bin/pezmax-one                            # wrapper（设 LD_LIBRARY_PATH）
@@ -218,8 +218,8 @@ exit 0'
 # ── 打 .deb（手工构造 ar 归档） ───────────────────────
 build_deb() {
   local stage="$1" arch_tag="$2" deb_arch="$3"
-  # 客户端 auto-update pick_asset() 按 amd64/arm64 匹配 .deb 名
-  local out="$DIST_DIR/${PKG_NAME}-${VERSION}-${deb_arch}.deb"
+  # 客户端 auto-update pick_asset() 按 amd64/arm64 匹配 .deb 名，且优先带 linux 段
+  local out="$DIST_DIR/${PKG_NAME}-${VERSION}-linux-${deb_arch}.deb"
   local workdir; workdir=$(mktemp -d)
 
   log "打包 .deb → $(basename "$out")"
@@ -263,9 +263,9 @@ EOF
 # ── 打 .pkg.tar.zst（手工构造，无需 makepkg） ─────────
 build_arch_pkg() {
   local stage="$1" arch_tag="$2" pacman_arch="$3"
-  # 客户端 auto-update pick_asset() 按 x86_64/aarch64 匹配 .pkg.tar.zst 名
-  # 注意去掉了 pkgrel "-1"，保持与 .deb / .msi / .dmg 命名一致（<pkg>-<version>-<arch>.<ext>）
-  local out="$DIST_DIR/${PKG_NAME}-${VERSION}-${pacman_arch}.pkg.tar.zst"
+  # 客户端 auto-update pick_asset() 按 x86_64/aarch64 匹配 .pkg.tar.zst 名，且优先带 linux 段
+  # 注意去掉了 pkgrel "-1"，保持与 .deb / .msi / .dmg 命名一致（<pkg>-<version>-<os>-<arch>.<ext>）
+  local out="$DIST_DIR/${PKG_NAME}-${VERSION}-linux-${pacman_arch}.pkg.tar.zst"
   local workdir; workdir=$(mktemp -d)
 
   log "打包 .pkg.tar.zst → $(basename "$out")"

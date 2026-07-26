@@ -7,8 +7,8 @@ REM  build-windows.bat -- Build PezMax One for Windows
 REM  Output: MSI installer + ZIP portable, per architecture
 REM
 REM  Naming (aligned with auto-update pick_asset()):
-REM    pezmax-one-VERSION-x86_64.msi   pezmax-one-VERSION-aarch64.msi
-REM    pezmax-one-VERSION-x86_64.zip   pezmax-one-VERSION-aarch64.zip
+REM    pezmax-one-VERSION-windows-x86_64.msi   pezmax-one-VERSION-windows-aarch64.msi
+REM    pezmax-one-VERSION-windows-x86_64.zip   pezmax-one-VERSION-windows-aarch64.zip
 REM
 REM  Usage:
 REM    build-windows.bat              Build for host arch
@@ -407,9 +407,9 @@ if exist "!WIX_BIN!\candle.exe" (
 )
 cd /d "!ROOT_DIR!"
 if "!CANON_ARCH!"=="aarch64" (
-  cargo wix --no-build --target-bin-dir "!TARGET_RELEASE!" --bin-path "!WIX_BIN!" --output "!DIST_DIR!\!PKG_NAME!-!VERSION!-!CANON_ARCH!.msi" --nocapture -C "-arch" -C "arm64"
+  cargo wix --no-build --target-bin-dir "!TARGET_RELEASE!" --bin-path "!WIX_BIN!" --output "!DIST_DIR!\!PKG_NAME!-!VERSION!-windows-!CANON_ARCH!.msi" --nocapture -C "-arch" -C "arm64"
 ) else (
-  cargo wix --no-build --target-bin-dir "!TARGET_RELEASE!" --bin-path "!WIX_BIN!" --output "!DIST_DIR!\!PKG_NAME!-!VERSION!-!CANON_ARCH!.msi" --nocapture
+  cargo wix --no-build --target-bin-dir "!TARGET_RELEASE!" --bin-path "!WIX_BIN!" --output "!DIST_DIR!\!PKG_NAME!-!VERSION!-windows-!CANON_ARCH!.msi" --nocapture
 )
 if errorlevel 1 (
   echo [ERROR] MSI build failed for !ARCH!
@@ -418,18 +418,18 @@ if errorlevel 1 (
 :skip_msi
 
 REM ---- ZIP portable ----
-set "OUT_DIR=!DIST_DIR!\!PKG_NAME!-!VERSION!-!CANON_ARCH!"
+set "OUT_DIR=!DIST_DIR!\!PKG_NAME!-!VERSION!-windows-!CANON_ARCH!"
 if exist "!OUT_DIR!" rmdir /s /q "!OUT_DIR!"
 mkdir "!OUT_DIR!"
 
 copy /Y "!TARGET_RELEASE!\!BIN_NAME!.exe" "!OUT_DIR!\!BIN_NAME!.exe" >nul
 copy /Y "!PDFIUM_DLL!" "!OUT_DIR!\pdfium.dll" >nul
 
-set "ARCHIVE=!DIST_DIR!\!PKG_NAME!-!VERSION!-!CANON_ARCH!.zip"
+set "ARCHIVE=!DIST_DIR!\!PKG_NAME!-!VERSION!-windows-!CANON_ARCH!.zip"
 if exist "!ARCHIVE!" del "!ARCHIVE!"
 powershell -NoProfile -Command "Compress-Archive -Path '!OUT_DIR!\*' -DestinationPath '!ARCHIVE!'" >nul
 
-echo [done]  MSI:  !DIST_DIR!\!PKG_NAME!-!VERSION!-!CANON_ARCH!.msi
+echo [done]  MSI:  !DIST_DIR!\!PKG_NAME!-!VERSION!-windows-!CANON_ARCH!.msi
 echo [done]  ZIP:  !ARCHIVE!
 
 endlocal
