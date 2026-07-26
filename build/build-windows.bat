@@ -13,9 +13,12 @@ REM    pezmax-one-VERSION-x86_64.zip   pezmax-one-VERSION-aarch64.zip
 REM
 REM  Usage:
 REM    build-windows.bat            Build for host arch only
-REM    build-windows.bat x64        Build for x86_64
-REM    build-windows.bat arm64      Build for ARM64
-REM    build-windows.bat all        Build for both (needs both MSVC target toolchains)
+REM    build-windows.bat x64        Build for x86_64 (64-bit AMD/Intel)
+REM    build-windows.bat arm64      Build for aarch64 (64-bit ARM)
+REM    build-windows.bat all        Build for both x64 + arm64
+REM
+REM  Note: 32-bit x86 (i686) is not supported — pdfium-binaries doesn't
+REM        ship a 32-bit Windows prebuilt, and modern Windows apps target 64-bit.
 REM
 REM  Requirements:
 REM    - Rust + cargo
@@ -40,12 +43,19 @@ set "PKG_NAME=pezmax-one"
 set "PKG_REPO=bblanchon/pdfium-binaries"
 
 REM ── 读取 Cargo.toml 版本号 ─────────────────────
-for /f "tokens=2 delims== " %%v in ('findstr /r "^version[ ]*=" "!ROOT_DIR!\Cargo.toml"') do (
-  set "VERSION=%%~v"
-  goto :ver_done
+REM 注意：不要在 for /f 块内用 goto :label，cmd 解析器会因 ) 未闭合报
+REM   ") was unexpected at this time"。改用 "第一次匹配后不再赋值" 的模式。
+REM   `findstr /b /c:"version = "` 精确匹配以 'version = ' 起首的行（Cargo.toml
+REM   里只有 [package] 节的 version 行如此），tokens=3 拆出 `"1.0.0"`，%%~V 去引号。
+set "VERSION="
+for /f "tokens=3 delims= " %%V in ('findstr /b /c:"version = " "!ROOT_DIR!\Cargo.toml"') do (
+  if not defined VERSION set "VERSION=%%~V"
 )
-:ver_done
-set "VERSION=!VERSION:"=!"
+if not defined VERSION (
+  echo [ERROR] Failed to extract VERSION from Cargo.toml
+  exit /b 1
+)
+echo [info]  Package version: !VERSION!
 
 REM ── Detect host architecture ──────────────────
 if /i "%PROCESSOR_ARCHITECTURE%"=="AMD64" (
@@ -58,19 +68,23 @@ if /i "%PROCESSOR_ARCHITECTURE%"=="AMD64" (
 )
 
 REM ── Parse arguments ───────────────────────────
+REM 关键：cmd.exe 不允许在括号块 () 内放 :label / goto。上一版本把
+REM parse_loop 放进 else (...) 里就是 ") was unexpected at this time" 报错源之二。
+REM 现在把循环放在顶层，无参再走默认赋值。
 set "ARCHES="
-if "%~1"=="" (
-  set "ARCHES=!HOST_ARCH!"
-) else (
-  :parse_loop
-  if "%~1"=="" goto :parse_done
-  if /i "%~1"=="x64"   set "ARCHES=!ARCHES! x64"   & shift & goto :parse_loop
-  if /i "%~1"=="arm64" set "ARCHES=!ARCHES! arm64" & shift & goto :parse_loop
-  if /i "%~1"=="all"   set "ARCHES=x64 arm64"      & shift & goto :parse_loop
-  echo [ERROR] Unknown argument: %~1 ^(supported: x64 / arm64 / all^)
-  exit /b 1
-  :parse_done
-)
+
+:parse_loop
+if "%~1"=="" goto :parse_done
+if /i "%~1"=="x64"   set "ARCHES=!ARCHES! x64"   & shift & goto :parse_loop
+if /i "%~1"=="arm64" set "ARCHES=!ARCHES! arm64" & shift & goto :parse_loop
+if /i "%~1"=="all"   set "ARCHES=x64 arm64"      & shift & goto :parse_loop
+echo [ERROR] Unknown argument: %~1 ^(supported: x64 / arm64 / all^)
+echo         Note: 32-bit x86 not supported (no pdfium prebuilt);
+echo               use "x64" for 64-bit AMD, "arm64" for 64-bit ARM.
+exit /b 1
+
+:parse_done
+if not defined ARCHES set "ARCHES=!HOST_ARCH!"
 
 if not exist "!DIST_DIR!" mkdir "!DIST_DIR!"
 
@@ -176,11 +190,15 @@ if "!SKIP_FETCH!"=="1" (
   mkdir "!TMP_EXTRACT!"
   tar -xzf "!TMP_TGZ!" -C "!TMP_EXTRACT!"
   if not exist "!PDFIUM_LIB_DIR!" mkdir "!PDFIUM_LIB_DIR!"
+  REM 找到 pdfium.dll 并复制（不能在括号块内用 :label + goto）
+  REM 用旗标模式：找到第一个后设 COPIED=1，之后跳过
+  set "COPIED=0"
   for /r "!TMP_EXTRACT!" %%f in (pdfium.dll) do (
-    copy /Y "%%f" "!PDFIUM_DLL!" >nul
-    goto :fetch_done
+    if "!COPIED!"=="0" (
+      copy /Y "%%f" "!PDFIUM_DLL!" >nul
+      set "COPIED=1"
+    )
   )
-  :fetch_done
   del /q "!TMP_TGZ!" 2>nul
   rmdir /s /q "!TMP_EXTRACT!" 2>nul
 
