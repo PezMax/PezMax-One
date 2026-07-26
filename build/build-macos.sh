@@ -8,15 +8,17 @@
 #   ./build-macos.sh all        # 两者都打
 #   ./build-macos.sh universal  # 单个 universal binary（x64 + arm64 fat）
 #
-# 产物（放在 build/dist/）：
-#   PezMax One-1.0.0-{x64,arm64,universal}.dmg-like tarball（tar.gz 包住 .app bundle）
+# 产物（放在 build/dist/，命名与客户端 auto-update pick_asset() 对齐）：
+#   pezmax-one-VERSION-x86_64.dmg
+#   pezmax-one-VERSION-aarch64.dmg
+#   pezmax-one-VERSION-universal.dmg
 #     └─ PezMax One.app/Contents/{MacOS/*, Resources/*.icns, Info.plist, PkgInfo}
 #
 # 交叉编译说明：macOS 上 Xcode SDK 覆盖两种架构，只需 rustup target 到位。
 # universal binary 用 `lipo` 合并两个架构的产物。
 #
-# 依赖：cargo、curl、tar、iconutil（macOS 内置）、sips（macOS 内置）、lipo（universal 时）
-# 只能在 macOS 上运行（iconutil / sips / lipo 是 macOS 独有）。
+# 依赖：cargo、curl、iconutil / sips / lipo（macOS 内置）、hdiutil（macOS 内置，做 dmg）
+# 只能在 macOS 上运行。
 
 set -euo pipefail
 
@@ -27,6 +29,7 @@ DIST_DIR="$SCRIPT_DIR/dist"
 RUST_TARGET="$SCRIPT_DIR/rust-target"
 
 BIN_NAME="pezmax-one"
+PKG_NAME="pezmax-one"
 APP_NAME="PezMax One"
 APP_ID="io.github.pezmax.one"
 VERSION=$(grep -m1 '^version' "$ROOT_DIR/Cargo.toml" | sed -E 's/.*"(.*)".*/\1/')
@@ -71,13 +74,22 @@ arch_meta() {
 }
 
 need() { command -v "$1" &>/dev/null || { err "缺少工具: $1"; exit 1; }; }
-need cargo; need curl; need tar
+need cargo; need curl
 if [ "$(uname -s)" != "Darwin" ]; then
-  err "此脚本只能在 macOS 上运行（依赖 iconutil / sips / lipo）"
+  err "此脚本只能在 macOS 上运行（依赖 iconutil / sips / lipo / hdiutil）"
   exit 1
 fi
-need iconutil; need sips
+need iconutil; need sips; need hdiutil
 if [ "$BUILD_UNIVERSAL" = "1" ]; then need lipo; fi
+
+# arch_tag → 客户端 pick_asset 匹配用的 canonical arch
+canon_arch() {
+  case "$1" in
+    x64)   echo "x86_64" ;;
+    arm64) echo "aarch64" ;;
+    universal) echo "universal" ;;
+  esac
+}
 
 mkdir -p "$DIST_DIR"
 
@@ -144,9 +156,14 @@ build_icns() {
 # $4: 已存在的 icon.icns 路径
 build_app_bundle() {
   local bin_src="$1" pdf_src="$2" arch_tag="$3" icns_src="$4"
-  local app_dir="$DIST_DIR/${APP_NAME}-${arch_tag}.app"
+  local canon; canon=$(canon_arch "$arch_tag")
+  # 中间产物：临时 .app（构 dmg 用完就删）
+  local stage_dir="$DIST_DIR/stage-${arch_tag}"
+  local app_dir="$stage_dir/${APP_NAME}.app"
 
   log "组装 .app bundle → $app_dir"
+  rm -rf "$stage_dir"
+  mkdir -p "$stage_dir"
   rm -rf "$app_dir"
   mkdir -p "$app_dir/Contents/MacOS" "$app_dir/Contents/Resources"
 
@@ -195,10 +212,21 @@ EOF
   # PkgInfo（可选，某些 Finder 版本要）
   printf 'APPL????' > "$app_dir/Contents/PkgInfo"
 
-  # 打成 tar.gz 便于下载分发（macOS Finder 双击 .tar.gz 也能解出 .app）
-  local archive="$DIST_DIR/pezmax-one-macos-${arch_tag}.tar.gz"
-  ( cd "$DIST_DIR" && tar -czf "$archive" "$(basename "$app_dir")" )
-  log "  → $archive"
+  # ── 打包成 .dmg ────────────────────────────────
+  # hdiutil create -srcfolder <stage_dir> 会把整个目录做成只读镜像。
+  # 用 UDZO 压缩，兼容所有现代 macOS。
+  local dmg="$DIST_DIR/${PKG_NAME}-${VERSION}-${canon}.dmg"
+  rm -f "$dmg"
+  log "打包 .dmg → $(basename "$dmg")"
+  hdiutil create -quiet \
+    -srcfolder "$stage_dir" \
+    -volname "${APP_NAME}" \
+    -fs HFS+ \
+    -format UDZO \
+    -imagekey zlib-level=6 \
+    "$dmg"
+  rm -rf "$stage_dir"
+  log "  → $dmg"
 }
 
 # ── 计划打印 ────────────────────────────────────────────
@@ -280,4 +308,4 @@ if [ ${#FAILED_ARCHES[@]} -gt 0 ]; then
   warn "以下架构构建失败: ${FAILED_ARCHES[*]}"
 fi
 log "产物列表："
-ls -lh "$DIST_DIR"/pezmax-one-macos-*.tar.gz 2>/dev/null || true
+ls -lh "$DIST_DIR"/pezmax-one-*.dmg 2>/dev/null || true

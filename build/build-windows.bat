@@ -7,6 +7,10 @@ REM ============================================
 REM  build-windows.bat - Build PezMax One for Windows
 REM  Output: MSI installer + ZIP portable, per architecture
 REM
+REM  产物命名（与客户端 auto-update pick_asset() 对齐）：
+REM    pezmax-one-VERSION-x86_64.msi   pezmax-one-VERSION-aarch64.msi
+REM    pezmax-one-VERSION-x86_64.zip   pezmax-one-VERSION-aarch64.zip
+REM
 REM  Usage:
 REM    build-windows.bat            Build for host arch only
 REM    build-windows.bat x64        Build for x86_64
@@ -32,7 +36,16 @@ set "DIST_DIR=!SCRIPT_DIR!\dist"
 set "RUST_TARGET=!SCRIPT_DIR!\rust-target"
 
 set "BIN_NAME=pezmax-one"
+set "PKG_NAME=pezmax-one"
 set "PKG_REPO=bblanchon/pdfium-binaries"
+
+REM ── 读取 Cargo.toml 版本号 ─────────────────────
+for /f "tokens=2 delims== " %%v in ('findstr /r "^version[ ]*=" "!ROOT_DIR!\Cargo.toml"') do (
+  set "VERSION=%%~v"
+  goto :ver_done
+)
+:ver_done
+set "VERSION=!VERSION:"=!"
 
 REM ── Detect host architecture ──────────────────
 if /i "%PROCESSOR_ARCHITECTURE%"=="AMD64" (
@@ -88,7 +101,7 @@ if not "!FAILED_ARCHES!"=="" (
   echo [warn]  Failed architectures:!FAILED_ARCHES!
 )
 echo [info]  Artifacts:
-dir /b "!DIST_DIR!\PezMaxOne-*.msi" "!DIST_DIR!\pezmax-one-windows-*.zip" 2>nul
+dir /b "!DIST_DIR!\pezmax-one-*.msi" "!DIST_DIR!\pezmax-one-*.zip" 2>nul
 
 endlocal
 pause
@@ -105,9 +118,11 @@ set "ARCH=%~1"
 if /i "!ARCH!"=="x64" (
   set "RUST_TRIPLE=x86_64-pc-windows-msvc"
   set "PDF_PLATFORM=windows-x64"
+  set "CANON_ARCH=x86_64"
 ) else if /i "!ARCH!"=="arm64" (
   set "RUST_TRIPLE=aarch64-pc-windows-msvc"
   set "PDF_PLATFORM=windows-arm64"
+  set "CANON_ARCH=aarch64"
 ) else (
   echo [ERROR] Invalid arch: !ARCH!
   exit /b 1
@@ -213,25 +228,25 @@ if exist "!WIX_BIN!\candle.exe" (
   echo         or winget install WiXToolset.WiXToolset --accept-source-agreements
 )
 cd /d "!ROOT_DIR!"
-cargo wix --no-build --target-bin-dir "!TARGET_RELEASE!" --bin-path "!WIX_BIN!" --output "!DIST_DIR!\PezMaxOne-!ARCH!.msi" --nocapture
+cargo wix --no-build --target-bin-dir "!TARGET_RELEASE!" --bin-path "!WIX_BIN!" --output "!DIST_DIR!\!PKG_NAME!-!VERSION!-!CANON_ARCH!.msi" --nocapture
 if errorlevel 1 (
   echo [ERROR] MSI build failed for !ARCH!
   exit /b 1
 )
 
 REM ── ZIP portable ──────────────────────────────
-set "OUT_DIR=!DIST_DIR!\pezmax-one-windows-!ARCH!"
+set "OUT_DIR=!DIST_DIR!\!PKG_NAME!-!VERSION!-!CANON_ARCH!"
 if exist "!OUT_DIR!" rmdir /s /q "!OUT_DIR!"
 mkdir "!OUT_DIR!"
 
 copy /Y "!TARGET_RELEASE!\!BIN_NAME!.exe" "!OUT_DIR!\!BIN_NAME!.exe" >nul
 copy /Y "!PDFIUM_DLL!" "!OUT_DIR!\pdfium.dll" >nul
 
-set "ARCHIVE=!DIST_DIR!\pezmax-one-windows-!ARCH!.zip"
+set "ARCHIVE=!DIST_DIR!\!PKG_NAME!-!VERSION!-!CANON_ARCH!.zip"
 if exist "!ARCHIVE!" del "!ARCHIVE!"
 powershell -NoProfile -Command "Compress-Archive -Path '!OUT_DIR!\*' -DestinationPath '!ARCHIVE!'" >nul
 
-echo [done]  MSI:  !DIST_DIR!\PezMaxOne-!ARCH!.msi
+echo [done]  MSI:  !DIST_DIR!\!PKG_NAME!-!VERSION!-!CANON_ARCH!.msi
 echo [done]  ZIP:  !ARCHIVE!
 
 endlocal

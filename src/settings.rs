@@ -24,7 +24,12 @@ pub struct AppSettings {
     pub window_size: Option<(f32, f32)>,
     /// 窗口位置 (x, y)
     pub window_pos: Option<(f32, f32)>,
+    /// 启动时自动检查更新
+    #[serde(default = "default_auto_update_check")]
+    pub setting_auto_update_check: bool,
 }
+
+fn default_auto_update_check() -> bool { true }
 
 impl Default for AppSettings {
     fn default() -> Self {
@@ -37,6 +42,7 @@ impl Default for AppSettings {
             download_dir: None,
             window_size: None,
             window_pos: None,
+            setting_auto_update_check: true,
         }
     }
 }

@@ -155,6 +155,36 @@ pub enum ToastLevel {
     Error,
 }
 
+/// 软件更新状态机（设置页"软件更新"卡片右侧多态显示，就靠它）
+#[derive(Debug, Clone)]
+pub enum UpdateState {
+    /// 未做过任何动作，显示"检查更新"按钮
+    Idle,
+    /// 正在查 GitHub API
+    Checking,
+    /// 检查完成，是最新版
+    UpToDate,
+    /// 发现新版本，等待用户点"下载"
+    UpdateAvailable {
+        version: String,
+        release: crate::api::update::GhRelease,
+    },
+    /// 下载中：downloaded / total（total=0 表示未知）
+    Downloading {
+        version: String,
+        downloaded: u64,
+        total: u64,
+    },
+    /// 下载完成，立刻要执行 install_and_restart 然后 exit（UI 上只显示提示文字）
+    ReadyToInstall { version: String },
+    /// 出错，红字 + 重试
+    Error(String),
+}
+
+impl Default for UpdateState {
+    fn default() -> Self { Self::Idle }
+}
+
 /// 带入场/离场动画的 Toast
 pub struct AnimatedToast {
     pub message: String,
@@ -510,6 +540,20 @@ pub struct PezMaxApp {
     // 设置开关
     pub setting_auto_launch: bool,
     pub setting_silent_download: bool,
+    pub setting_auto_update_check: bool,
+
+    // ── 软件更新 ───────────────────────────────────────────────
+    pub update_state: UpdateState,
+    /// 检查更新的异步接收器（Ok(None) = 仓库暂无正式 release）
+    pub update_check_rx:
+        Option<oneshot::Receiver<anyhow::Result<Option<crate::api::update::GhRelease>>>>,
+    /// 下载完成的异步接收器（Ok = 安装包路径）
+    pub update_download_rx: Option<oneshot::Receiver<anyhow::Result<std::path::PathBuf>>>,
+    /// 下载中的进度通道
+    pub update_progress_rx:
+        Option<tokio::sync::mpsc::UnboundedReceiver<(u64, u64)>>,
+    /// true = 启动时静默检查（有新版本才 toast）
+    pub update_check_silent: bool,
 
     // 默认下载路径
     pub setting_download_dir: String,
@@ -838,6 +882,12 @@ impl PezMaxApp {
             show_about_dialog: false,
             setting_auto_launch: settings.setting_auto_launch,
             setting_silent_download: settings.setting_silent_download,
+            setting_auto_update_check: settings.setting_auto_update_check,
+            update_state: UpdateState::Idle,
+            update_check_rx: None,
+            update_download_rx: None,
+            update_progress_rx: None,
+            update_check_silent: false,
             setting_download_dir: settings
                 .download_dir
                 .clone()
@@ -927,6 +977,11 @@ impl PezMaxApp {
 
         // 尝试从本地加载凭证并自动登录
         app.try_auto_login();
+
+        // 启动时静默检查更新（有新版才 Toast）
+        if app.setting_auto_update_check {
+            app.trigger_check_update(true);
+        }
 
         app
     }
@@ -2401,6 +2456,196 @@ impl PezMaxApp {
             }
         }
     }
+
+    // ── 软件更新 ─────────────────────────────────────────────────
+
+    /// 触发检查更新。silent=true 时不进入 Checking 中间态 UI，
+    /// 只在检测到新版本时 toast，找不到新版本静默处理；
+    /// silent=false 时按正常状态机切换。
+    pub fn trigger_check_update(&mut self, silent: bool) {
+        if self.update_check_rx.is_some() {
+            return; // 已在检查中
+        }
+        // 若已在下载 / 准备安装状态，不允许再检查
+        if matches!(
+            self.update_state,
+            UpdateState::Downloading { .. } | UpdateState::ReadyToInstall { .. }
+        ) {
+            return;
+        }
+        self.update_check_silent = silent;
+        if !silent {
+            self.update_state = UpdateState::Checking;
+        }
+        let (tx, rx) = oneshot::channel();
+        self.update_check_rx = Some(rx);
+        tokio::spawn(async move {
+            let res = crate::api::update::check_latest_release().await;
+            let _ = tx.send(res);
+        });
+    }
+
+    /// 用户在 UpdateAvailable 状态下点了"下载"。
+    /// 内部拿当前状态的 release，pick_asset 后启动下载。
+    pub fn trigger_download_update(&mut self) {
+        let release = match &self.update_state {
+            UpdateState::UpdateAvailable { release, .. } => release.clone(),
+            _ => return,
+        };
+        // 弹系统级确认框（rfd，跨平台）
+        let latest_ver = release.version().to_string();
+        let confirm = rfd::MessageDialog::new()
+            .set_title("确认更新")
+            .set_description(format!(
+                "确认更新到 v{}？\n\
+                 下载完成后将自动关闭程序并安装更新，安装成功后程序会自动重启。",
+                latest_ver
+            ))
+            .set_buttons(rfd::MessageButtons::OkCancel)
+            .show();
+        if confirm != rfd::MessageDialogResult::Ok {
+            return;
+        }
+
+        let asset = match crate::api::update::pick_asset(&release) {
+            Ok(a) => a.clone(),
+            Err(e) => {
+                self.update_state =
+                    UpdateState::Error(format!("找不到匹配的安装包: {}", e));
+                return;
+            }
+        };
+
+        self.update_state = UpdateState::Downloading {
+            version: latest_ver,
+            downloaded: 0,
+            total: asset.size,
+        };
+
+        let (done_tx, done_rx) = oneshot::channel();
+        let (prog_tx, prog_rx) = tokio::sync::mpsc::unbounded_channel();
+        self.update_download_rx = Some(done_rx);
+        self.update_progress_rx = Some(prog_rx);
+
+        tokio::spawn(async move {
+            let res = crate::api::update::download_asset(&asset, prog_tx).await;
+            let _ = done_tx.send(res);
+        });
+    }
+
+    /// 每帧调用：轮询检查/下载结果，推进 UpdateState。
+    /// 返回 true = 需要立刻退出进程（安装脚本已启动）。
+    pub fn poll_update(&mut self) -> bool {
+        // 1. 检查更新结果
+        if let Some(rx) = &mut self.update_check_rx {
+            if let Ok(result) = rx.try_recv() {
+                self.update_check_rx = None;
+                let silent = self.update_check_silent;
+                self.update_check_silent = false;
+                match result {
+                    Ok(Some(release)) => {
+                        let current = env!("CARGO_PKG_VERSION");
+                        if crate::api::update::is_newer(current, &release.tag_name) {
+                            let ver = release.version().to_string();
+                            if silent {
+                                self.add_toast(
+                                    format!("发现新版本 v{}，前往【个人 → 设置】更新", ver),
+                                    ToastLevel::Info,
+                                );
+                            }
+                            self.update_state = UpdateState::UpdateAvailable {
+                                version: ver,
+                                release,
+                            };
+                        } else if silent {
+                            // 静默检查且已是最新：保持 Idle，卡片仍显示"检查更新"
+                            self.update_state = UpdateState::Idle;
+                        } else {
+                            self.update_state = UpdateState::UpToDate;
+                        }
+                    }
+                    Ok(None) => {
+                        // 仓库还没有正式 release → 视同"已是最新"，不当错误处理
+                        log::info!("GitHub 仓库暂无正式 release");
+                        if !silent {
+                            self.update_state = UpdateState::UpToDate;
+                        } else {
+                            self.update_state = UpdateState::Idle;
+                        }
+                    }
+                    Err(e) => {
+                        log::warn!("检查更新失败: {}", e);
+                        if !silent {
+                            self.update_state =
+                                UpdateState::Error(short_err(&e, 80));
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. 下载进度
+        if let Some(rx) = &mut self.update_progress_rx {
+            while let Ok((done, total)) = rx.try_recv() {
+                if let UpdateState::Downloading { version, .. } = &self.update_state {
+                    let ver = version.clone();
+                    self.update_state = UpdateState::Downloading {
+                        version: ver,
+                        downloaded: done,
+                        total,
+                    };
+                }
+            }
+        }
+
+        // 3. 下载完成
+        if let Some(rx) = &mut self.update_download_rx {
+            if let Ok(result) = rx.try_recv() {
+                self.update_download_rx = None;
+                self.update_progress_rx = None;
+                match result {
+                    Ok(path) => {
+                        let version = match &self.update_state {
+                            UpdateState::Downloading { version, .. } => version.clone(),
+                            _ => "".to_string(),
+                        };
+                        self.update_state = UpdateState::ReadyToInstall { version };
+                        // 立刻触发安装 helper 并请求退出
+                        match crate::updater::install_and_restart(&path) {
+                            Ok(_) => {
+                                log::info!("已启动更新 helper，准备退出");
+                                return true;
+                            }
+                            Err(e) => {
+                                log::error!("启动更新 helper 失败: {}", e);
+                                self.update_state =
+                                    UpdateState::Error(format!("启动更新失败: {}", e));
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        self.update_state =
+                            UpdateState::Error(short_err(&e, 80));
+                    }
+                }
+            }
+        }
+        false
+    }
+}
+
+/// 把 anyhow 错误压成一行短消息，超过 max_chars 用省略号截断。
+/// 只取顶层 Display 文本，不展开完整 chain（避免设置页里蹦出好几行）。
+fn short_err(e: &anyhow::Error, max_chars: usize) -> String {
+    let s = format!("{}", e);
+    // 去除换行、多余空白
+    let s: String = s.split_whitespace().collect::<Vec<_>>().join(" ");
+    if s.chars().count() <= max_chars {
+        return s;
+    }
+    let mut out: String = s.chars().take(max_chars.saturating_sub(1)).collect();
+    out.push('…');
+    out
 }
 
 impl eframe::App for PezMaxApp {
@@ -2457,6 +2702,7 @@ impl eframe::App for PezMaxApp {
             || self.settings.accent_idx != self.accent_idx
             || auto_launch_changed
             || self.settings.setting_silent_download != self.setting_silent_download
+            || self.settings.setting_auto_update_check != self.setting_auto_update_check
             || self.settings.pdf_scale != self.setting_pdf_scale
             || dir_changed
         {
@@ -2464,6 +2710,7 @@ impl eframe::App for PezMaxApp {
             self.settings.accent_idx = self.accent_idx;
             self.settings.setting_auto_launch = self.setting_auto_launch;
             self.settings.setting_silent_download = self.setting_silent_download;
+            self.settings.setting_auto_update_check = self.setting_auto_update_check;
             self.settings.pdf_scale = self.setting_pdf_scale;
             self.settings.download_dir = Some(self.setting_download_dir.clone());
             self.settings.save(&self.cache_manager);
@@ -2797,6 +3044,18 @@ impl eframe::App for PezMaxApp {
             self.download_records.reset();
             self.reload_local_downloads();
             self.add_toast("下载完成", ToastLevel::Success);
+        }
+
+        // 软件更新轮询：返回 true 表示 helper 已启动，立刻退出进程
+        if self.poll_update() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+        // 更新过程中动画持续（Checking / Downloading spinner）
+        if matches!(
+            self.update_state,
+            UpdateState::Checking | UpdateState::Downloading { .. }
+        ) {
+            ctx.request_repaint();
         }
 
         // 轮询图片字节下载结果并解码

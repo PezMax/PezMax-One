@@ -1635,6 +1635,16 @@ pub fn render_app_settings(app: &mut PezMaxApp, ui: &mut egui::Ui) {
 
             ui.add_space(16.0);
 
+            // ── 软件更新 ──────────────────────────────────────────
+            setting_section_title(ui, "软件更新");
+            setting_card(ui, "自动更新", "启动时自动检查新版本", 60.0, |ui| {
+                render_toggle_switch(ui, "auto_update_check", &mut app.setting_auto_update_check);
+            });
+            ui.add_space(6.0);
+            render_update_check_card(app, ui);
+
+            ui.add_space(16.0);
+
             // ── 隐私 ──────────────────────────────────────────────
             setting_section_title(ui, "隐私");
             // 每帧递归 walk 整个 .cache/ 会把单核吃满 (#10)。
@@ -1784,6 +1794,105 @@ fn compute_cache_size(cm: &crate::cache::CacheManager) -> u64 {
         total
     }
     walk_dir(cache_dir)
+}
+
+/// 软件更新 · 检查/下载卡片 — 多态右侧（Idle / Checking / UpToDate / Available / Downloading / Error）
+fn render_update_check_card(app: &mut PezMaxApp, ui: &mut egui::Ui) {
+    use crate::app::UpdateState;
+    use crate::components::spinner;
+
+    let cur_ver = env!("CARGO_PKG_VERSION");
+
+    // 描述文字随状态变化
+    let desc = match &app.update_state {
+        UpdateState::Idle => format!("当前版本 v{}", cur_ver),
+        UpdateState::Checking => "正在检查最新版本…".to_string(),
+        UpdateState::UpToDate => format!("已是最新版本 v{}", cur_ver),
+        UpdateState::UpdateAvailable { version, .. } => {
+            format!("发现新版本 v{}（当前 v{}）", version, cur_ver)
+        }
+        UpdateState::Downloading { version, downloaded, total } => {
+            if *total > 0 {
+                let pct = (*downloaded as f64 / *total as f64 * 100.0).clamp(0.0, 100.0);
+                format!(
+                    "正在下载 v{} · {:.0}% ({:.1} / {:.1} MB)",
+                    version,
+                    pct,
+                    *downloaded as f64 / (1024.0 * 1024.0),
+                    *total as f64 / (1024.0 * 1024.0),
+                )
+            } else {
+                format!(
+                    "正在下载 v{} · {:.1} MB",
+                    version,
+                    *downloaded as f64 / (1024.0 * 1024.0)
+                )
+            }
+        }
+        UpdateState::ReadyToInstall { version, .. } => {
+            format!("v{} 下载完成，即将重启安装…", version)
+        }
+        UpdateState::Error(msg) => msg.clone(),
+    };
+
+    // 右侧宽度：不同状态需要不同的容纳空间
+    let right_w = match &app.update_state {
+        UpdateState::UpdateAvailable { .. } => 130.0,
+        UpdateState::Downloading { .. } => 40.0, // 只有 spinner
+        _ => 100.0,
+    };
+
+    let card_resp = setting_card(ui, "检查更新", &desc, right_w, |ui| {
+        match &app.update_state {
+            UpdateState::Idle | UpdateState::UpToDate | UpdateState::Error(_) => {
+                ui.label(
+                    egui::RichText::new("检查更新 ›")
+                        .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                        .color(colors::primary()),
+                );
+            }
+            UpdateState::Checking => {
+                spinner::render(ui, "update_check_spinner", 20.0);
+            }
+            UpdateState::UpdateAvailable { version, .. } => {
+                let btn = egui::Button::new(
+                    egui::RichText::new(format!("下载 v{}", version))
+                        .font(FontId::new(13.0, egui::FontFamily::Proportional))
+                        .color(colors::text_on_primary()),
+                )
+                .fill(colors::primary())
+                .corner_radius(CornerRadius::ZERO)
+                .stroke(Stroke::NONE)
+                .min_size(Vec2::new(120.0, 28.0));
+                if ui.add(btn).clicked() {
+                    app.trigger_download_update();
+                }
+            }
+            UpdateState::Downloading { .. } => {
+                spinner::render(ui, "update_dl_spinner", 20.0);
+            }
+            UpdateState::ReadyToInstall { .. } => {
+                spinner::render(ui, "update_ready_spinner", 20.0);
+            }
+        }
+    });
+
+    // 错误态：额外把描述字体着色（覆盖 setting_card 内的默认色）
+    if let UpdateState::Error(_) = app.update_state {
+        // setting_card 里的 desc 已经绘制，这里在卡片右下角贴一个可点重试提示
+        // 更简单：直接把整卡片当"点击重试"，让用户不用瞄准小按钮
+        if card_resp.clicked() {
+            app.trigger_check_update(false);
+        }
+    } else if matches!(
+        app.update_state,
+        UpdateState::Idle | UpdateState::UpToDate
+    ) {
+        // Idle / UpToDate：整卡片可点触发新一次检查
+        if card_resp.clicked() {
+            app.trigger_check_update(false);
+        }
+    }
 }
 
 /// 格式化缓存大小（B/KB/MB）

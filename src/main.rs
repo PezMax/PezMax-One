@@ -14,6 +14,7 @@ mod pdf;
 mod settings;
 mod sokuou;
 mod theme;
+mod updater;
 
 use app::PezMaxApp;
 use eframe::NativeOptions;

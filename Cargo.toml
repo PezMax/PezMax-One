@@ -43,6 +43,9 @@ thiserror = "2"
 # URL parsing
 url = "2"
 
+# 语义化版本比较（自动更新用）
+semver = "1"
+
 # Clipboard
 arboard = "3"
 

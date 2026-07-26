@@ -13,5 +13,6 @@ pub mod user;
 pub mod report;
 pub mod download;
 pub mod favorite;
+pub mod update;
 
 pub use models::*;

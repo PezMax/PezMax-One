@@ -3,6 +3,7 @@ pub mod animated_counter;
 pub mod disclaimer_dialog;
 pub mod report_dialog;
 pub mod sidebar;
+pub mod spinner;
 pub mod step_indicator;
 pub mod timeline_panel;
 pub mod toast;
