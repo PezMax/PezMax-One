@@ -1,0 +1,110 @@
+name: Build macOS Universal & Upload to Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to upload to (e.g. v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+jobs:
+  build-macos-universal:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Build aarch64
+        run: cargo build --release --target aarch64-apple-darwin
+
+      - name: Build x86_64
+        run: cargo build --release --target x86_64-apple-darwin
+
+      - name: Create universal binary with lipo
+        run: |
+          lipo -create \
+            target/aarch64-apple-darwin/release/pezmax-one \
+            target/x86_64-apple-darwin/release/pezmax-one \
+            -output target/pezmax-one-universal
+          chmod +x target/pezmax-one-universal
+
+      - name: Convert icon.png to .icns
+        run: |
+          mkdir -p iconset.iconset
+          sips -z 16 16   resources/icon.png --out iconset.iconset/icon_16x16.png
+          sips -z 32 32   resources/icon.png --out iconset.iconset/icon_16x16@2x.png
+          sips -z 32 32   resources/icon.png --out iconset.iconset/icon_32x32.png
+          sips -z 64 64   resources/icon.png --out iconset.iconset/icon_32x32@2x.png
+          sips -z 128 128 resources/icon.png --out iconset.iconset/icon_128x128.png
+          sips -z 256 256 resources/icon.png --out iconset.iconset/icon_128x128@2x.png
+          sips -z 256 256 resources/icon.png --out iconset.iconset/icon_256x256.png
+          sips -z 512 512 resources/icon.png --out iconset.iconset/icon_256x256@2x.png
+          sips -z 512 512 resources/icon.png --out iconset.iconset/icon_512x512.png
+          cp resources/icon.png             iconset.iconset/icon_512x512@2x.png
+          iconutil -c icns iconset.iconset -o PezMax.icns
+
+      - name: Create .app bundle
+        run: |
+          mkdir -p "PezMax.app/Contents/MacOS"
+          mkdir -p "PezMax.app/Contents/Resources"
+          cp target/pezmax-one-universal "PezMax.app/Contents/MacOS/pezmax-one"
+          cp PezMax.icns "PezMax.app/Contents/Resources/PezMax.icns"
+          cat > "PezMax.app/Contents/Info.plist" << 'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleExecutable</key>
+            <string>pezmax-one</string>
+            <key>CFBundleIdentifier</key>
+            <string>com.pezmax.one</string>
+            <key>CFBundleName</key>
+            <string>PezMax</string>
+            <key>CFBundleDisplayName</key>
+            <string>PezMax</string>
+            <key>CFBundleVersion</key>
+            <string>1.0.0</string>
+            <key>CFBundleShortVersionString</key>
+            <string>1.0.0</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+            <key>CFBundleIconFile</key>
+            <string>PezMax</string>
+            <key>NSHighResolutionCapable</key>
+            <true/>
+            <key>NSSupportsAutomaticGraphicsSwitching</key>
+            <true/>
+          </dict>
+          </plist>
+          PLIST
+
+      - name: Package as DMG
+        run: |
+          hdiutil create \
+            -volname "PezMax" \
+            -srcfolder "PezMax.app" \
+            -ov -format UDZO \
+            "pezmax-one-1.0.0-macos-universal.dmg"
+
+      - name: Upload to release
+        run: |
+          gh release upload "${{ github.event.inputs.tag }}" \
+            pezmax-one-1.0.0-macos-universal.dmg \
+            --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
