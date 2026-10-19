@@ -1,216 +1,71 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+本文件是 **`AGENTS.md` 的镜像**，供 Claude Code 自动加载。`AGENTS.md` 是唯一权威——
+**两者不一致时以 `AGENTS.md` 为准**，改动先改它，再整份同步到这里。
 
-## Build & Run
+## 这是什么
 
-```bash
-cargo build              # debug build
-cargo build --release    # release build
-cargo check              # fast type-check only
-cargo run                # run the desktop app
-cargo fix                # auto-fix warnings
-```
+PezMax One：PezMax（拼图满绩，学习资料分享与整理）的原生客户端家族，Windows / Linux / Android 三端，
+消费上游 PezMax-Go 后端的 `/datum/*` 契约，与上游的 Electron 官方客户端并存。
 
-The app is a native Windows desktop binary (egui/eframe). No external build tooling needed.
+**状态（2026-10-19）**：技术栈转向刚立项，仓库已重组，**三端都还没有代码**。旧版 egui 1.x 客户端已从主干移除，
+在分支 `legacy/egui-1.x`；不要把它的代码搬回主干，需要它的经验时去那个分支查。
 
-The app connects to the remote backend API at `http://154.8.139.48:8080`.
-Java backend source is maintained separately at PezMax/PezMax-Java.
+## 先读什么
 
-## Architecture
+| 要做的事 | 读 |
+|---|---|
+| 任何工作 | `docs/ARCHITECTURE.md`（架构与立项决策 D0–D14，均已定） |
+| 排期 / 下一步做什么 | `docs/PLAN.md`（「下一轮」一节） |
+| 在某个平台目录里工作 | 该目录的 `AGENTS.md`——**它是该目录的权威指南** |
+| 改后端契约、协议、业务规则 | `spec/README.md`，然后 `spec/api/` |
+| 发布 | `docs/RELEASES.md` |
+| 工具链 | `docs/ENVIRONMENT.md` |
 
-### Monorepo Layout
-
-```
-PezMax-One/                  ← product root, Rust crate root
-├── src/
-│   ├── main.rs              ← eframe entry, window config, PDF engine init
-│   ├── cache.rs             ← CacheManager（统一缓存管理，所有缓存文件强制在 `.cache/` 下）
-│   ├── settings.rs          ← AppSettings（本地设置持久化，theme/accent/preferences 保存到 settings.json）
-│   ├── app.rs               ← PezMaxApp state, routing, eframe::App impl
-│   ├── api/                 ← typed HTTP client (reqwest)
-│   │   ├── client.rs        ← ApiClient core: GET/POST/PUT/DELETE/upload/download
-│   │   ├── models.rs        ← 28 serde models matching backend JSON
-│   │   ├── auth.rs          ← login, register, captcha, password reset
-│   │   ├── file.rs          ← paper file CRUD, tree, search
-│   │   ├── bookmark.rs      ← bookmark CRUD
-│   │   ├── user.rs          ← profile, avatar, password, security
-│   │   ├── download.rs      ← download records, favorites
-│   │   ├── notification.rs  ← popup/scroll notifications
-│   │   ├── report.rs        ← report creation & timeline
-│   │   └── favorite.rs      ← file favorite CRUD (desktop-only)
-│   ├── theme/
-│   │   └── mod.rs           ← Metro Design colors, fonts, spacing, transitions
-│   ├── components/
-│   │   ├── action_bar.rs    ← preview mode bottom toolbar (Back/Download/Favorite/Report)
-│   │   ├── sidebar.rs       ← collapsible hamburger sidebar (SpringAnim 48↔200px)
-│   │   ├── topbar.rs        ← title, search, avatar, back button
-│   │   └── toast.rs         ← animated corner notifications (Progress-driven)
-│   ├── pages/
-│   │   ├── login.rs         ← Metro login card
-│   │   ├── register.rs      ← 3-step registration flow
-│   │   ├── forget_password.rs
-│   │   ├── home.rs          ← Metro tile dashboard
-│   │   ├── browse.rs        ← resource manager, bookmarks, favorites (3 subsections)
-│   │   ├── community.rs     ← user ranking, contribute file, report record
-│   │   ├── profile.rs       ← personal center, notifications, download history, settings
-│   │   └── mod.rs           ← 7 page modules
-│   ├── pdf/
-│   │   └── mod.rs           ← PdfEngine (pdfium-render) + PdfViewer (Grid/Line modes)
-│   └── sokuou/              ← Sokuou Engine（动画系统）+ 设计文档
-│       ├── mod.rs           ← 公共 API re-exports + map_range 工具函数
-│       ├── progress.rs      ← Progress：时长驱动线性插值（可中断）
-│       ├── spring.rs        ← SpringAnim：阻尼振荡器解析解
-│       ├── easing.rs        ← 缓动函数（Linear/EaseOutCubic 等）
-│       ├── uwp.rs           ← MetroAnim: UWP-style easing + EasingMode
-│       ├── animator.rs      ← Animation trait + Animator（预留存根）
-│       ├── SOKUOU_ENGINE.md ← Sokuou Engine 完整设计书
-│       └── SOKUOU_USAGE.md  ← Sokuou Engine 调用手册（开发者必读）
-```
-
-### Key Design Decisions
-
-- **egui immediate mode**: UI is rebuilt every frame. No hidden/shown state — conditional rendering via `match` on `current_page`.
-- **Single state struct**: `PezMaxApp` holds all app state. Pages are pure functions `fn render(&mut PezMaxApp, &mut Ui)`. No per-page state.
-- **API via trait extension**: `ApiClient` methods are defined across multiple files via `impl ApiClient { ... }` blocks, one per domain.
-- **Metro Design**: Flat colors, large typography, generous whitespace, content-first cards. Theme defined in `theme/mod.rs` with runtime interpolation for dark/light mode transitions.
-- **Async HTTP via tokio::spawn + oneshot**: The eframe frame loop is synchronous. Every async API call spawns a tokio task, sends the result back through a `oneshot::Receiver`, and the frame loop polls it each frame (`try_recv`).
-
-### Async Data Loading Pattern
-
-The `AsyncData<T>` struct in `app.rs` wraps the oneshot pattern into a reusable loader:
-
-```rust
-// 1. Declare in PezMaxApp
-pub file_list_data: AsyncData<Vec<PaperFile>>,
-
-// 2. Trigger load (idempotent — won't re-trigger if already loading or loaded)
-app.trigger_load_file_list();  // ← internally calls file_list_data.load(|| async move { ... })
-
-// 3. Poll each frame in update()
-self.file_list_data.poll();
-
-// 4. Read result
-if let Some(ref files) = self.file_list_data.data { ... }
-```
-
-Each `AsyncData` has `.loading`, `.error`, `.loaded` states — use these for skeleton UI and error display.
-
-### Navigation System
-
-Pages are split into two groups in `app.rs`:
-- **Auth pages** (Login, Register, ForgetPassword) — rendered full-screen when `is_logged_in == false`
-- **App pages** — rendered inside sidebar + topbar + subtab bar + central panel when logged in
-
-Navigation is 2-tier: `Section` (Home / Browse / Community / Profile) → `Subsection` (per-section tabs). The sidebar indicator and subtab underline both use `SpringAnim` for smooth transitions. Page enter/exit uses `SpringAnim` with opacity + vertical offset.
-
-### Theme System
-
-The theme system supports **smooth transitions** between light/dark mode and accent colors:
-
-- `theme::is_dark()`, `set_dark()` — thread-local global state
-- `theme::ACCENT_PRESETS[5]` — cobalt blue, spruce, crimson, amber, violet
-- `theme::start_accent_transition(idx)` / `start_dark_transition(dark)` — begin a 0.3s MetroAnim-driven interpolation
-- `theme::is_transitioning()` / `is_dark_transitioning()` — check if transition is in progress
-- `colors::primary()`, `text_primary()`, `bg_white()`, etc. — all read from interpolated state, so colors shift smoothly each frame
-- `apply_metro_theme(ctx)` — set egui Visuals to match current theme state; call every frame during transitions
-- `setup_fonts(ctx)` — loads CJK fonts from Windows/macOS/Linux paths
-
-### PDF Engine — PdfEngine + PdfViewer
-
-- **PdfEngine**: global singleton holding `Arc<Pdfium>`. Renders pages in background tokio tasks (oneshot channel).
-- **PdfViewer**: document state per opened PDF. Two view modes:
-  - `Grid`: thumbnail grid, click to switch to Line mode at that page
-  - `Line`: continuous vertical scroll + left overview panel
-- Rendering pipeline: load bytes → sync metadata → spawn background renders (max 3 concurrent) → poll results each frame → cache textures
-- Zoom: `display_scale_anim` (SpringAnim) for smooth zoom transitions
-
-### Animation System — Sokuou Engine
-
-**All animations and visual transitions MUST use Sokuou Engine** (`src/sokuou/`). Do not implement ad-hoc animations with raw timers or egui's built-in animation helpers.
-
-Three animation primitives:
-
-| Type | Class | When to use | Properties |
-|------|-------|-------------|------------|
-| Spring | `SpringAnim` | Position, size, panel slides, page transitions | `response` (0.3-0.5s), `damping_ratio` (0.8-0.85), interrupt-safe |
-| Linear | `Progress` | Opacity, color fades, timed sequences | `duration` (0.2-0.3s), `Easing::EaseOutCubic` default |
-| UWP | `MetroAnim` | Theme transitions (accent/dark mode) | `UwpEasing::Quadratic` + `EasingMode::EaseOut`, 0.3s |
-
-Pattern:
-```rust
-// Animation instances live as fields on PezMaxApp
-pub sidebar_anim: SpringAnim,  // 0.0=folded(48px) / 1.0=expanded(200px)
-
-// Per-frame update (in eframe::App::update)
-let dt = ctx.input(|i| i.stable_dt) as f64;
-self.sidebar_anim.update(dt);
-if !self.sidebar_anim.is_steady() { ctx.request_repaint(); }
-
-// Render: read value(), never modify animation state in render
-let width = map_range_clamped(anim_val, 54.0, 200.0) as f32;
-```
-
-Rules:
-- **Never call `.set_target()` inside a render function** — only in event handlers
-- Always call `ctx.request_repaint()` while any animation `!is_steady()`
-- `Animator` in `animator.rs` is a **reserved stub** — do not use until validated
-- After adding/modifying Sokuou animations, update `src/sokuou/NOTE.md`
-
-### Cache System — `CacheManager` + `AppSettings`
-
-**所有磁盘缓存文件必须放在 `.cache/` 目录下。** 非缓存用户数据（凭证、设置）放在根目录。
-
-目录结构：
+## 仓库布局
 
 ```
-{data_dir}/                 ← 平台数据目录，由 `dirs::data_dir()` 决定
-│                             Windows: %APPDATA%/PezMax/
-│                             macOS:   ~/Library/Application Support/com.pezmax/
-│                             Linux:   ~/.local/share/pezmax/
-  credentials.json          ← 用户凭证（根目录，非缓存）
-  settings.json             ← AppSettings（根目录，非缓存，serde_json 持久化）
-  .cache/
-    user_stats.json         ← 用户统计缓存
-    avatar/{user_id}.cache  ← 排行头像缓存（原始字节）
-    bookmark_cover/bm_cover_{id}.cache ← 书签封面缓存
-    pdf/{file_id}/p{idx}_s{scale}.rgba ← PDF 页面渲染磁盘缓存
+windows/   C# + UWP + WinUI 2（MSBuild，仅 Release|x64）
+linux/     Rust + Kanesumi（独立 Cargo workspace，只在 Linux / Wayland 上构建）
+android/   Kotlin + Compose + Kanesumi-sec-a（Gradle，composite build 引用 ../../Kanesumi-sec-a）
+spec/      三端共享的规格与 JSON 夹具
+docs/      跨端文档
+assets/    品牌资产
 ```
 
-**`CacheManager`** (`src/cache.rs`) — 统一缓存管理器：
-- `CacheManager::new()` — 创建目录结构，迁移旧缓存
-- `save_credentials()` / `load_credentials()` / `clear_credentials()`
-- `save_user_stats()` / `load_user_stats()`
-- `read_avatar_cache()` / `write_avatar_cache()`
-- `read_bookmark_cover_cache()` / `write_bookmark_cover_cache()`
-- `read_rgba_cache()` / `write_rgba_cache()` — PDF 页面缓存（4B width + 4B height + raw RGBA）
-- `clear_all_cache()` — 删除并重建 `.cache/` 目录
-- `clear_pdf_cache()` — 删除 PDF 渲染缓存
+三个平台目录各自是独立的构建系统，互不感知；仓根没有 `Cargo.toml`、`build.gradle.kts` 或 `.sln`。
 
-**`AppSettings`** (`src/settings.rs`) — 本地设置持久化：
-- 保存到 `{data_dir}/settings.json`（路径由 `dirs::data_dir()` 跨平台解析）
-- 字段：`theme_mode`, `accent_idx`, `setting_auto_launch`, `setting_silent_download`, `pdf_view_mode`, `pdf_scale`, `window_size`, `window_pos`
-- 启动时在 `PezMaxApp::new()` 加载，`on_exit()` 保存
-- 主题/强调色变化时自动保存
+## 铁律
 
-**PDF 磁盘缓存：** 渲染完成后写入 `.cache/pdf/{file_id}/p{idx}_s{scale}.rgba`。下次打开同文件同缩放级别时，直接从磁盘读取缓存纹理，无需重新渲染。缩放变化会产生新的缓存文件（`scale_encoded = (RENDER_SCALE * scale * 100.0) as u32`）。
+1. **不共享实现，共享答案。** 三端之间不共享代码；共享的是 `spec/`。**先改 spec，再改实现**；
+   各端测试按相对路径读 `spec/`，不复制夹具；不为让测试变绿去改夹具。
+2. **后端契约是外部输入。** PezMax-Go 由他人维护，本仓只读消费。`spec/api/` 标注上游基线 commit（当前 `f79a4e0`）；
+   上游变了先改 spec。上游的问题去上游提，客户端只做写明撤除条件的兼容层。
+3. **业务逻辑进各端的无 UI 核心**（`PezMax.Core` / `pezmax-core` / `core/`），页面里不写协议与状态机。
+4. **Kanesumi Design。** 新文档写「Kanesumi Design」，不写「Metro Design」；`Metro*` 代码标识符保持原名。
+   动画曲线只来自 Sokuou 及其扇区分支。
+5. **WinUI 3 / Windows App SDK 不在考虑范围内**，不要引入，不要提议迁移。
+6. **不要写死版本号**，各平台版本只有一个来源（见 `docs/RELEASES.md`）。
+7. 文档与提交信息用中文。
 
-### API Layer
+## 提交规范
 
-| Module | Backend base path | Key endpoints |
-|--------|------------------|---------------|
-| `auth` | `/datum/user` | login, register, captcha, securityQuestions, resetPasswordBySecurity |
-| `file` | `/datum/file` | list, tree, subjects, schools, search, CRUD, /datum/download/file |
-| `bookmark` | `/datum/bookmark` | CRUD, uploadCover |
-| `user` | `/datum/desktop/user/profile` | stats, username, avatar, password, security |
-| `download` | `/datum/desktop/download` | list, hide; favorites via /datum/desktop/favorite |
-| `notification` | `/system/notification/user` | popup, scroll |
-| `report` | `/datum/report` | create, timeline |
+Conventional Commits，小写类型前缀，中文主题；正文（空一行后）写**为什么**，一年后不开 PR 也能读懂。
 
-### Current State
+| 前缀 | 用途 |
+|---|---|
+| `feat:` | 用户可见的新能力 |
+| `fix:` | 修复缺陷 |
+| `refactor:` | 不改行为的结构调整 |
+| `perf:` | 纯性能优化 |
+| `docs:` | 只改文档 |
+| `build:` | 构建系统、依赖、版本号 |
+| `chore:` | 杂务（删文件、改目录、gitignore） |
+| `style:` | 格式与空白 |
 
-Version 1.0.0 — production-ready release. Sokuou Engine documentation moved to `src/sokuou/`. Build scripts and obsolete design docs removed. The project is a skeleton with all page/routing/API scaffolding in place, but most pages use mock data. High-priority next steps:
-1. Replace mock login with real API calls in `login.rs`
-2. Wire up `file_explorer.rs` to `get_file_list()` / `get_file_tree()`
-3. Implement actual API calls in download, favorite, bookmark, notification pages
-4. Add file download via `rfd` (save dialog) + `reqwest` streaming
+- **一个逻辑单元一个 commit。** 必须一起编译通过的改动是一个单元；能独立回滚的分开提交。
+- Scope：`windows/` → `(windows)`，`linux/` → `(linux)`，`android/` → `(android)`，`spec/` → `docs(spec): …`；
+  跨端文档与仓库杂务不带 scope。同时改 spec 与一端实现时，scope 写那一端，正文说明另两端的跟进状态。
+- 发布用 CrateStack 班次 tag `CrateStack-YYYYMMDD<A..Z>`；旧 tag `v1.0.0` 保留。
+- 历史只在 `git log` 里，**不要另建 `*_log.md`**。
+- 推送到 `origin` 前先问负责人。
