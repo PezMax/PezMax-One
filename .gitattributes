@@ -1,0 +1,11 @@
+# 文本统一 LF 入库；Windows 脚本与 VS 解决方案保持 CRLF
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.sln text eol=crlf
+
+*.png binary
+*.ico binary
+*.jpg binary
+*.pdf binary

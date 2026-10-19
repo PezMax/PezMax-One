@@ -1,22 +1,42 @@
-PezMax-Desktop/
-target/
-dist/
-node_modules/
-.qoder/
-**/*.rs.bk
-Cargo.lock
+# ── 通用 ───────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.log
 
-# build 产物（不提交编译结果和 pdfium 二进制，但提交构建脚本）
-build/dist/
-build/rust-target/
-build/stage-*/
-
-# PDFium 预编译库（各平台自动下载，不提交）
-build/pdfium/**/*.so
-build/pdfium/**/*.dylib
-build/pdfium/**/*.dll
-build/pdfium/**/*.lib
-
-# 敏感凭证（本地登录 token/加密密码等）
+# 敏感凭证（本地登录 token、测试账号）
 credentials.json
-**/credentials.json
+**/credentials.json*
+*.secret
+
+# ── Windows（windows/）─────────────────────────────
+windows/**/bin/
+windows/**/obj/
+windows/**/AppPackages/
+windows/**/BundleArtifacts/
+windows/**/*.user
+windows/.vs/
+windows/dist/
+# 代码签名私钥 / 口令严禁入库；.cer 公钥随 Release 附件分发
+*.pfx
+*.pvk
+
+# ── Linux（linux/）─────────────────────────────────
+linux/target/
+**/*.rs.bk
+# pdfium 预编译库由构建脚本下载，不入库
+linux/packaging/pdfium/
+
+# ── Android（android/）─────────────────────────────
+android/.gradle/
+android/**/build/
+android/.idea/
+android/local.properties
+android/keystore.properties
+*.iml
+*.jks
+*.keystore
+.externalNativeBuild
+.cxx
+
+# ── 旧 egui 构建产物（legacy/egui-1.x 遗留在本地的目录）──
+/target/
