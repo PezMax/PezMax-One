@@ -1,0 +1,145 @@
+[
+  {
+    "id": "pagination.defaults.missing",
+    "description": "不带分页参数：pageNum=1、pageSize=20",
+    "source": "PezMax-Go@f79a4e0 k_admin/internal/kadmin/datum_file.go:268-295",
+    "input": { "query": {} },
+    "expect": { "page": 1, "pageSize": 20 }
+  },
+  {
+    "id": "pagination.aliases.page-size",
+    "description": "page/size 是 pageNum/pageSize 的别名，取值生效",
+    "source": "PezMax-Go@f79a4e0 k_admin/internal/kadmin/datum_file.go:268-295",
+    "input": { "query": { "page": "3", "size": "50" } },
+    "expect": { "page": 3, "pageSize": 50 }
+  },
+  {
+    "id": "pagination.precedence.page-num",
+    "description": "两套参数同时出现时 pageNum/pageSize 优先，且不再看别名",
+    "source": "PezMax-Go@f79a4e0 k_admin/internal/kadmin/datum_file.go:268-295",
+    "input": {
+      "query": { "pageNum": "2", "page": "9", "pageSize": "10", "size": "90" }
+    },
+    "expect": { "page": 2, "pageSize": 10 }
+  },
+  {
+    "id": "pagination.invalid.falls-back",
+    "description": "非正整数的分页参数按缺省处理；不报错",
+    "source": "PezMax-Go@f79a4e0 k_admin/internal/kadmin/datum_file.go:268-295",
+    "input": { "query": { "pageNum": "0", "pageSize": "-1" } },
+    "expect": { "page": 1, "pageSize": 20 }
+  },
+  {
+    "id": "pagination.cap.100",
+    "description": "pageSize 超过 100 时按 100 截断，不是报错",
+    "source": "PezMax-Go@f79a4e0 k_admin/internal/kadmin/datum_file.go:279-295",
+    "input": { "query": { "pageNum": "1", "pageSize": "1000" } },
+    "expect": { "page": 1, "pageSize": 100 }
+  },
+  {
+    "id": "pagination.cap.alias",
+    "description": "用 size 别名时同样截断到 100",
+    "source": "PezMax-Go@f79a4e0 k_admin/internal/kadmin/datum_file.go:279-295",
+    "input": { "query": { "page": "1", "size": "101" } },
+    "expect": { "page": 1, "pageSize": 100 }
+  },
+  {
+    "id": "pagination.page-beyond-total",
+    "description": "页码超过总页数：返回空 rows、total 仍是总数；客户端不得当成错误或清空 total",
+    "source": "PezMax-Go@f79a4e0 k_admin/internal/kadmin/datum_file.go:314-345",
+    "input": {
+      "query": { "pageNum": "5", "pageSize": "20" },
+      "response": {
+        "status": 200,
+        "contentType": "application/json",
+        "body": "{\"code\":0,\"message\":\"ok\",\"msg\":\"ok\",\"rows\":[],\"total\":42}"
+      }
+    },
+    "expect": {
+      "kind": "list",
+      "rows": [],
+      "total": 42,
+      "error": false
+    }
+  },
+  {
+    "id": "pagination.total-missing",
+    "description": "列表缺 total 时按本页 rows 长度兜底；不要因缺字段报错",
+    "source": "PezMax-Go@PezMax-Desktop@f79a4e0 src/renderer/utils/pagination.js（fetchAllPages 的 total 兜底）",
+    "input": {
+      "query": { "pageNum": "1", "pageSize": "20" },
+      "response": {
+        "status": 200,
+        "contentType": "application/json",
+        "body": "{\"code\":0,\"message\":\"ok\",\"msg\":\"ok\",\"rows\":[{\"id\":1},{\"id\":2}]}"
+      }
+    },
+    "expect": {
+      "kind": "list",
+      "rows": [{ "id": 1 }, { "id": 2 }],
+      "total": 2,
+      "error": false
+    }
+  },
+  {
+    "id": "pagination.fetch-all.by-total",
+    "description": "全量拉取：pageSize=100，按 total 拉到 230 条即停，共请求 3 页",
+    "source": "PezMax-Go@PezMax-Desktop@f79a4e0 src/renderer/utils/pagination.js:8-17",
+    "input": {
+      "baseQuery": {},
+      "pageSize": 100,
+      "maxPages": 100,
+      "pages": [
+        { "pageNum": 1, "rows": 100, "total": 230 },
+        { "pageNum": 2, "rows": 100, "total": 230 },
+        { "pageNum": 3, "rows": 30, "total": 230 }
+      ]
+    },
+    "expect": {
+      "requestedPages": [1, 2, 3],
+      "rowCount": 230,
+      "total": 230,
+      "stopReason": "reached-total"
+    }
+  },
+  {
+    "id": "pagination.fetch-all.early-empty",
+    "description": "中途某页返回空 rows 时立即停止，避免 total 失真导致死循环",
+    "source": "PezMax-Go@PezMax-Desktop@f79a4e0 src/renderer/utils/pagination.js:8-17",
+    "input": {
+      "baseQuery": { "keyword": "数学" },
+      "pageSize": 100,
+      "maxPages": 100,
+      "pages": [
+        { "pageNum": 1, "rows": 100, "total": 250 },
+        { "pageNum": 2, "rows": 0, "total": 250 }
+      ]
+    },
+    "expect": {
+      "requestedPages": [1, 2],
+      "rowCount": 100,
+      "total": 250,
+      "stopReason": "empty-page"
+    }
+  },
+  {
+    "id": "pagination.fetch-all.max-pages",
+    "description": "达到 maxPages 上限必须停止；不能无限翻页",
+    "source": "PezMax-Go@PezMax-Desktop@f79a4e0 src/renderer/utils/pagination.js:8-17",
+    "input": {
+      "baseQuery": {},
+      "pageSize": 100,
+      "maxPages": 2,
+      "pages": [
+        { "pageNum": 1, "rows": 100, "total": 1000 },
+        { "pageNum": 2, "rows": 100, "total": 1000 }
+      ]
+    },
+    "expect": {
+      "requestedPages": [1, 2],
+      "rowCount": 200,
+      "total": 1000,
+      "stopReason": "max-pages"
+    }
+  }
+]

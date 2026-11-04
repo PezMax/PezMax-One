@@ -15,7 +15,7 @@ PezMax-One 的三个端（Windows `windows/`、Linux `linux/`、Android `android
    `source`（依据：上游 commit + 文件:行、实测记录或决策出处）。
 4. **spec 与实现冲突时**：以实测正确的一方为准修正另一方（可能是 spec 本身），commit 里说明判断依据。
    不要为了让测试变绿去改夹具。
-5. **后端契约以上游源码为准**。`api/` 下每份文档开头写明上游基线（当前 `PezMax-Go@f79a4e0`）；
+5. **后端契约以上游源码为准**。`api/` 下每份文档开头写明上游基线（当前 `PezMax-Go@061a888`）；
    上游变化时先改这里，`source` 写新 commit。上游文档与上游源码矛盾时，以源码为准并在此记录。
 6. `design/tokens.json` 只收录**已在某端代码中落地**的取值并注明来源；某端独有的取值写在该端自己的文档里。
 
@@ -39,11 +39,11 @@ PezMax-One 的三个端（Windows `windows/`、Linux `linux/`、Android `android
 
 | 路径 | 内容 | 状态 |
 |---|---|---|
-| `api/endpoints.md` | 客户端用到的端点目录：方法、路径、门禁、参数、响应形状 | 📝 初稿（取自上游 Swagger） |
-| `api/envelope.md` | 信封、错误、HTTP 状态码与会话失效 | 待写 |
-| `api/auth.md` | 登录 / 注册 / 找回密码 / 密保三问三答流程与校验规则 | 待写（校验规则需对照上游源码） |
-| `fixtures/envelope/` | 成功、业务错误、401、非 JSON 响应的解析结果 | 待写 |
-| `fixtures/pagination/` | `TableDataInfo` 与其它分页形状的归一；`pageSize ≤ 100`；按 `total` 拉全量的终止条件 | 待写 |
+| `api/endpoints.md` | 客户端用到的端点目录：方法、路径、门禁、参数、响应形状 | 📝 M1 读接口与账户 / 个人中心已补齐；写接口随实现补 |
+| `api/envelope.md` | 信封、错误、HTTP 状态码与会话失效 | ✅ 已按源码写定 |
+| `api/auth.md` | 登录 / 注册 / 找回密码 / 密保三问三答流程与校验规则 | ✅ 已按源码写定 |
+| `fixtures/envelope/` | 成功、业务错误、401、非 JSON 响应的解析结果 | ✅ 初版 13 例 |
+| `fixtures/pagination/` | `TableDataInfo` 与其它分页形状的归一；`pageSize ≤ 100`；按 `total` 拉全量的终止条件 | ✅ 初版 11 例 |
 | `fixtures/state-cache/` | 文件树 / 排行的哈希缓存协议：首次、未变化、已变化、本地缓存损坏 | 待写 |
 | `fixtures/file-tree/` | 树响应 → 导航模型（学科 / 学校 / 类型 / 年份层级、节点 id、排序） | 待写 |
 | `fixtures/url/` | 文件 URL 归一：相对路径、内网 host 改写、`data:` / `blob:` 原样。**过渡规则**，上游修库后按条撤除 | 待写 |
