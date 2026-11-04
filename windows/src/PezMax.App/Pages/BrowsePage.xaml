@@ -1,0 +1,34 @@
+<Page
+    x:Class="PezMax.Pages.BrowsePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:browse="using:PezMax.Pages.Browse"
+    Background="{ThemeResource PezBackgroundBrush}">
+
+    <Grid Margin="32,28,32,24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,16">
+            <TextBlock Style="{StaticResource PezPageTitleStyle}" Text="资料库" />
+            <TextBlock Style="{StaticResource PezCaptionStyle}" Text="试卷、电子书、书签与收藏" />
+        </StackPanel>
+
+        <Pivot x:Name="Tabs" Grid.Row="1">
+            <PivotItem Header="试卷">
+                <browse:PapersView x:Name="Papers" Margin="0,12,0,0" />
+            </PivotItem>
+            <PivotItem Header="电子书">
+                <browse:EbooksView x:Name="Ebooks" Margin="0,12,0,0" />
+            </PivotItem>
+            <PivotItem Header="书签">
+                <browse:BookmarksView x:Name="Bookmarks" Margin="0,12,0,0" />
+            </PivotItem>
+            <PivotItem Header="收藏">
+                <browse:FavoritesView x:Name="Favorites" Margin="0,12,0,0" />
+            </PivotItem>
+        </Pivot>
+    </Grid>
+</Page>

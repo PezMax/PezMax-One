@@ -1,0 +1,106 @@
+<Page
+    x:Class="PezMax.Shell.ShellPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    Background="{ThemeResource PezBackgroundBrush}">
+
+    <Grid>
+        <muxc:NavigationView
+            x:Name="Nav"
+            AlwaysShowHeader="False"
+            CompactModeThresholdWidth="600"
+            ExpandedModeThresholdWidth="1008"
+            IsBackButtonVisible="Collapsed"
+            IsSettingsVisible="True"
+            IsTitleBarAutoPaddingEnabled="True"
+            ItemInvoked="NavItemInvoked"
+            OpenPaneLength="240"
+            PaneDisplayMode="Auto">
+
+            <muxc:NavigationView.MenuItems>
+                <muxc:NavigationViewItem Content="首页" Tag="home">
+                    <muxc:NavigationViewItem.Icon>
+                        <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE80F;" />
+                    </muxc:NavigationViewItem.Icon>
+                </muxc:NavigationViewItem>
+                <muxc:NavigationViewItemHeader Content="资料库" />
+                <muxc:NavigationViewItem Content="资料" Tag="browse">
+                    <muxc:NavigationViewItem.Icon>
+                        <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE8F1;" />
+                    </muxc:NavigationViewItem.Icon>
+                </muxc:NavigationViewItem>
+                <muxc:NavigationViewItem Content="社区" Tag="community">
+                    <muxc:NavigationViewItem.Icon>
+                        <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE716;" />
+                    </muxc:NavigationViewItem.Icon>
+                </muxc:NavigationViewItem>
+            </muxc:NavigationView.MenuItems>
+
+            <muxc:NavigationView.FooterMenuItems>
+                <muxc:NavigationViewItem
+                    x:Name="AccountItem"
+                    Content="登录"
+                    SelectsOnInvoked="False"
+                    Tag="account">
+                    <muxc:NavigationViewItem.Icon>
+                        <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE77B;" />
+                    </muxc:NavigationViewItem.Icon>
+                </muxc:NavigationViewItem>
+            </muxc:NavigationView.FooterMenuItems>
+
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Grid Grid.Row="0" Margin="12,8,12,4" ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox
+                        x:Name="SearchBox"
+                        Grid.Column="0"
+                        KeyDown="SearchKeyDown"
+                        PlaceholderText="搜索资料"
+                        CornerRadius="0" />
+                    <Button Grid.Column="1" Click="SearchClick" Content="搜索" />
+                </Grid>
+                <muxc:InfoBar
+                    x:Name="SessionBar"
+                    Grid.Row="1"
+                    IsClosable="False"
+                    IsOpen="False"
+                    Severity="Warning">
+                    <muxc:InfoBar.ActionButton>
+                        <Button Click="SessionLoginClick" Content="重新登录" />
+                    </muxc:InfoBar.ActionButton>
+                </muxc:InfoBar>
+                <Frame x:Name="ContentFrame" Grid.Row="2" />
+            </Grid>
+        </muxc:NavigationView>
+
+        <Grid
+            x:Name="AppTitleBar"
+            Height="32"
+            VerticalAlignment="Top"
+            Background="Transparent"
+            Canvas.ZIndex="1">
+            <StackPanel
+                Margin="12,0,0,0"
+                VerticalAlignment="Center"
+                Orientation="Horizontal"
+                Spacing="10">
+                <Image Width="16" Height="16" Source="ms-appx:///Assets/Square44x44Logo.png" />
+                <TextBlock
+                    x:Name="AppTitle"
+                    VerticalAlignment="Center"
+                    FontSize="12"
+                    Foreground="{ThemeResource PezTextSecondaryBrush}"
+                    Text="PezMax One" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Page>

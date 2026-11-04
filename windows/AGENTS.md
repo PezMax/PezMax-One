@@ -2,7 +2,11 @@
 
 本文件是 `windows/` 目录的权威指南。仓库级约定见仓根 `AGENTS.md`，跨端架构见 `docs/ARCHITECTURE.md`。
 
-**状态**（2026-10-19）：规划稿，尚无代码。下一步见 `docs/PLAN.md`「下一轮」。
+**状态**（2026-11-04）：已建立 `PezMax.Windows.sln` / `PezMax.Core` / `PezMax.Core.Tests` / `PezMax.App`，
+Release|x64 用 .NET Native 构建通过。已接入登录、外壳、首页、资料（树 / 列表 / 搜索 / 详情 / PDF / 图片 / 文本预览）、
+电子书、书签、收藏、社区排行 / 上传 / 举报、个人中心 / 通知 / 下载记录 / 设置。视觉使用 WinUI 2 平台控件 +
+`Themes/PezMax.xaml`（`ControlsResourcesVersion="Version1"`）；Kanesumi.Xaml 尚未抽仓，暂未引用。
+下一步：注册 / 找回密码、本地通知已读、下载记录与续传、PDF 网格 / 连续、EPUB、更新检查与发布工具。
 
 > 样板是兄弟仓库 Ncrust 的 Windows 端（`../../Ncrust/windows/AGENTS.md`）：**凡本文没写的工程细节，按 Ncrust 的做法办**，
 > 尤其是它的「已知的坑」一节——那 40 条大多来自 arc-deck 与 Ncrust 的本机实测，在这里同样成立，不再复抄。

@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Default">
+            <SolidColorBrush x:Key="PezBackgroundBrush" Color="#101418" />
+            <SolidColorBrush x:Key="PezSurfaceBrush" Color="#181D23" />
+            <SolidColorBrush x:Key="PezSurfaceAltBrush" Color="#20262E" />
+            <SolidColorBrush x:Key="PezBorderBrush" Color="#2A313A" />
+            <SolidColorBrush x:Key="PezTextPrimaryBrush" Color="#F5F7FA" />
+            <SolidColorBrush x:Key="PezTextSecondaryBrush" Color="#A7B0BC" />
+            <SolidColorBrush x:Key="PezTextTertiaryBrush" Color="#737E8C" />
+            <CornerRadius x:Key="ControlCornerRadius">0</CornerRadius>
+            <CornerRadius x:Key="OverlayCornerRadius">0</CornerRadius>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Light">
+            <SolidColorBrush x:Key="PezBackgroundBrush" Color="#F3F5F8" />
+            <SolidColorBrush x:Key="PezSurfaceBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="PezSurfaceAltBrush" Color="#E9EDF2" />
+            <SolidColorBrush x:Key="PezBorderBrush" Color="#D8DEE7" />
+            <SolidColorBrush x:Key="PezTextPrimaryBrush" Color="#121820" />
+            <SolidColorBrush x:Key="PezTextSecondaryBrush" Color="#4F5A67" />
+            <SolidColorBrush x:Key="PezTextTertiaryBrush" Color="#7A8593" />
+            <CornerRadius x:Key="ControlCornerRadius">0</CornerRadius>
+            <CornerRadius x:Key="OverlayCornerRadius">0</CornerRadius>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="HighContrast">
+            <SolidColorBrush x:Key="PezBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="PezSurfaceBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="PezSurfaceAltBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
+            <SolidColorBrush x:Key="PezBorderBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="PezTextPrimaryBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="PezTextSecondaryBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="PezTextTertiaryBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <CornerRadius x:Key="ControlCornerRadius">0</CornerRadius>
+            <CornerRadius x:Key="OverlayCornerRadius">0</CornerRadius>
+        </ResourceDictionary>
+    </ResourceDictionary.ThemeDictionaries>
+
+    <!-- Kanesumi / WinUI 2 Version1：所有控件与浮层直角，禁止圆角矩形。 -->
+    <CornerRadius x:Key="ControlCornerRadius">0</CornerRadius>
+    <CornerRadius x:Key="OverlayCornerRadius">0</CornerRadius>
+    <CornerRadius x:Key="NavigationViewContentGridCornerRadius">0</CornerRadius>
+    <CornerRadius x:Key="NavigationViewMinimalContentGridCornerRadius">0</CornerRadius>
+    <CornerRadius x:Key="ButtonCornerRadius">0</CornerRadius>
+    <CornerRadius x:Key="TextBoxCornerRadius">0</CornerRadius>
+    <CornerRadius x:Key="ComboBoxCornerRadius">0</CornerRadius>
+    <CornerRadius x:Key="ListViewItemCornerRadius">0</CornerRadius>
+    <CornerRadius x:Key="GridViewItemCornerRadius">0</CornerRadius>
+    <CornerRadius x:Key="NavigationViewItemCornerRadius">0</CornerRadius>
+    <CornerRadius x:Key="TreeViewItemCornerRadius">0</CornerRadius>
+    <CornerRadius x:Key="InfoBarCornerRadius">0</CornerRadius>
+    <CornerRadius x:Key="ContentDialogCornerRadius">0</CornerRadius>
+    <CornerRadius x:Key="FlyoutCornerRadius">0</CornerRadius>
+
+    <SolidColorBrush x:Key="PezAccentBrush" Color="{ThemeResource SystemAccentColor}" />
+
+    <Style x:Key="PezPageTitleStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="28" />
+        <Setter Property="FontWeight" Value="SemiLight" />
+        <Setter Property="Foreground" Value="{ThemeResource PezTextPrimaryBrush}" />
+    </Style>
+
+    <Style x:Key="PezSectionTitleStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="20" />
+        <Setter Property="FontWeight" Value="SemiLight" />
+        <Setter Property="Foreground" Value="{ThemeResource PezTextPrimaryBrush}" />
+    </Style>
+
+    <Style x:Key="PezBodyStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Foreground" Value="{ThemeResource PezTextPrimaryBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style x:Key="PezCaptionStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="{ThemeResource PezTextSecondaryBrush}" />
+    </Style>
+
+    <Style x:Key="PezCardStyle" TargetType="Border">
+        <Setter Property="Background" Value="{ThemeResource PezSurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource PezBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="0" />
+        <Setter Property="Padding" Value="20" />
+    </Style>
+
+    <Style x:Key="PezMetricStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="32" />
+        <Setter Property="FontWeight" Value="Light" />
+        <Setter Property="Foreground" Value="{ThemeResource PezTextPrimaryBrush}" />
+    </Style>
+
+</ResourceDictionary>

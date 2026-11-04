@@ -1,0 +1,185 @@
+<Page
+    x:Class="PezMax.Pages.ProfilePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    xmlns:models="using:PezMax.Core.Models"
+    Background="{ThemeResource PezBackgroundBrush}">
+
+    <Grid Margin="32,28,32,24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,12">
+            <TextBlock Style="{StaticResource PezPageTitleStyle}" Text="我的" />
+            <TextBlock Style="{StaticResource PezCaptionStyle}" Text="个人中心、通知、下载与设置" />
+        </StackPanel>
+
+        <Pivot x:Name="Tabs" Grid.Row="1">
+            <PivotItem Header="个人中心">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="0,12,0,0" Spacing="18">
+                        <Border Style="{StaticResource PezCardStyle}">
+                            <Grid ColumnSpacing="18">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Image
+                                    x:Name="AvatarImage"
+                                    Grid.Column="0"
+                                    Width="88"
+                                    Height="88"
+                                    Stretch="UniformToFill" />
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                                    <TextBlock x:Name="ProfileName" Style="{StaticResource PezSectionTitleStyle}" />
+                                    <TextBlock x:Name="ProfileMeta" Style="{StaticResource PezCaptionStyle}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                    <Button Click="ChangeAvatarClick" Content="换头像" />
+                                    <Button Click="ChangeNameClick" Content="改用户名" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <StackPanel Orientation="Horizontal" Spacing="16">
+                            <Border Width="220" Style="{StaticResource PezCardStyle}">
+                                <StackPanel Spacing="6">
+                                    <TextBlock x:Name="StatUpload" Style="{StaticResource PezMetricStyle}" Text="0" />
+                                    <TextBlock Style="{StaticResource PezCaptionStyle}" Text="上传" />
+                                </StackPanel>
+                            </Border>
+                            <Border Width="220" Style="{StaticResource PezCardStyle}">
+                                <StackPanel Spacing="6">
+                                    <TextBlock x:Name="StatDownload" Style="{StaticResource PezMetricStyle}" Text="0" />
+                                    <TextBlock Style="{StaticResource PezCaptionStyle}" Text="下载" />
+                                </StackPanel>
+                            </Border>
+                            <Border Width="220" Style="{StaticResource PezCardStyle}">
+                                <StackPanel Spacing="6">
+                                    <TextBlock x:Name="StatFavorite" Style="{StaticResource PezMetricStyle}" Text="0" />
+                                    <TextBlock Style="{StaticResource PezCaptionStyle}" Text="收藏" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Click="ChangePasswordClick" Content="修改密码" />
+                            <Button Click="ChangeSecurityClick" Content="密保设置" />
+                            <Button Click="SignOutClick" Content="退出登录" />
+                        </StackPanel>
+
+                        <muxc:InfoBar x:Name="ProfileBar" IsClosable="True" IsOpen="False" Severity="Error" />
+                    </StackPanel>
+                </ScrollViewer>
+            </PivotItem>
+
+            <PivotItem Header="通知">
+                <Grid Margin="0,12,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
+                        <Button Click="RefreshNotificationsClick" Content="刷新" />
+                        <ProgressRing
+                            x:Name="NoticeProgress"
+                            Width="20"
+                            Height="20"
+                            IsActive="False"
+                            Visibility="Collapsed" />
+                    </StackPanel>
+                    <ListView x:Name="NoticeList" Grid.Row="1" IsItemClickEnabled="True" ItemClick="NoticeClick" SelectionMode="None">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="models:NotificationItem">
+                                <StackPanel Padding="2,8" Spacing="3">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Style="{StaticResource PezBodyStyle}" Text="{x:Bind Title}" />
+                                        <TextBlock Style="{StaticResource PezCaptionStyle}" Text="{x:Bind TypeName}" />
+                                    </StackPanel>
+                                    <TextBlock Style="{StaticResource PezCaptionStyle}" Text="{x:Bind Preview}" TextWrapping="Wrap" />
+                                    <TextBlock Style="{StaticResource PezCaptionStyle}" Text="{x:Bind CreateTime}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </Grid>
+            </PivotItem>
+
+            <PivotItem Header="下载记录">
+                <Grid Margin="0,12,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
+                        <Button Click="RefreshDownloadsClick" Content="刷新" />
+                        <Button Click="RemoveDownloadClick" Content="删除记录" />
+                        <Button Click="RedownloadClick" Content="重新下载" />
+                        <ProgressRing
+                            x:Name="DownloadProgress"
+                            Width="20"
+                            Height="20"
+                            IsActive="False"
+                            Visibility="Collapsed" />
+                    </StackPanel>
+                    <ListView x:Name="DownloadList" Grid.Row="1" SelectionMode="Single">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="models:DownloadEntry">
+                                <StackPanel Padding="2,8" Spacing="3">
+                                    <TextBlock Style="{StaticResource PezBodyStyle}" Text="{x:Bind DisplayName}" />
+                                    <TextBlock Style="{StaticResource PezCaptionStyle}" Text="{x:Bind MetaText}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </Grid>
+            </PivotItem>
+
+            <PivotItem Header="设置">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="0,12,0,0" Spacing="14" MaxWidth="720" HorizontalAlignment="Left">
+                        <TextBlock Style="{StaticResource PezSectionTitleStyle}" Text="外观" />
+                        <ComboBox x:Name="ThemeBox" Header="主题" Width="240" CornerRadius="0">
+                            <ComboBoxItem Content="跟随系统" />
+                            <ComboBoxItem Content="浅色" />
+                            <ComboBoxItem Content="深色" />
+                        </ComboBox>
+                        <TextBlock
+                            Style="{StaticResource PezCaptionStyle}"
+                            Text="强调色跟随 Windows 系统设置（设置 → 个性化 → 颜色）。" />
+
+                        <TextBlock Style="{StaticResource PezSectionTitleStyle}" Text="下载" Margin="0,8,0,0" />
+                        <TextBox x:Name="DownloadDirBox" Header="下载目录（留空使用「下载\PezMax」）" Width="480" CornerRadius="0" />
+                        <ToggleSwitch x:Name="SilentDownloadSwitch" Header="静默下载（完成时不弹系统通知）" />
+
+                        <TextBlock Style="{StaticResource PezSectionTitleStyle}" Text="启动与更新" Margin="0,8,0,0" />
+                        <ToggleSwitch x:Name="AutoUpdateSwitch" Header="启动时检查更新" />
+
+                        <TextBlock Style="{StaticResource PezSectionTitleStyle}" Text="高级" Margin="0,8,0,0" />
+                        <TextBox x:Name="ServerBox" Header="服务器地址" Width="480" CornerRadius="0" />
+                        <TextBlock
+                            Style="{StaticResource PezCaptionStyle}"
+                            Text="修改服务器地址会清空当前登录态。" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Click="SaveSettingsClick" Content="保存设置" Style="{StaticResource AccentButtonStyle}" />
+                            <Button Click="ClearCacheClick" Content="清除缓存" />
+                        </StackPanel>
+
+                        <TextBlock Style="{StaticResource PezSectionTitleStyle}" Text="关于" Margin="0,8,0,0" />
+                        <TextBlock x:Name="AboutText" Style="{StaticResource PezCaptionStyle}" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <HyperlinkButton Click="GitHubClick" Content="GitHub 仓库" />
+                            <HyperlinkButton Click="OpenThemeSettingsClick" Content="打开 Windows 颜色设置" />
+                        </StackPanel>
+
+                        <muxc:InfoBar x:Name="SettingsBar" IsClosable="True" IsOpen="False" Severity="Success" />
+                    </StackPanel>
+                </ScrollViewer>
+            </PivotItem>
+        </Pivot>
+    </Grid>
+</Page>

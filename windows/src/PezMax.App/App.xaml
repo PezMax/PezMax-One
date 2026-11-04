@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Application
+    x:Class="PezMax.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" ControlsResourcesVersion="Version1" />
+                <ResourceDictionary Source="ms-appx:///Themes/PezMax.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- 平台 ContentDialog / Flyout 直接读应用根的 OverlayCornerRadius；放在合并字典后覆盖。 -->
+            <CornerRadius x:Key="ControlCornerRadius">0</CornerRadius>
+            <CornerRadius x:Key="OverlayCornerRadius">0</CornerRadius>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
