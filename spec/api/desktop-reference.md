@@ -273,6 +273,7 @@
 - 下发时后端只做一件改写：把 `minio://` 重建为当前 publicBase，其它（含内部 http host）**原样返回**，脏行交给一次性 ETL（`k_admin/internal/kadmin/datum_file.go:462-484`）。
 - 下载侧若 URL 解析不出 bucket/key → **404「文件内容不可用」**（`k_admin/internal/kadmin/datum_activity.go:536-541`、`k_admin/internal/kadmin/datum_activity.go:608-612`）。
 - 新客户端：`normalizeFileUrl` 里的 host 替换是历史兼容（等 ETL 完可删）；`minio://` 分支已由后端兜住；**相对路径一律当成不可用**，不要自行拼 base。协议不做 http→https 改写。
+- 本仓的落地规则与 21 例：`fixtures/url/`（内网改写换整个 origin，不剥 `/dev-api`）。
 
 ### 8.5 电子书模块
 - 旧端：`PezMax-Desktop/src/renderer/api/datum/` 下**确有** `ebook.js`，覆盖 list/subjects/content/favorite(\*)/report(\*)/upload/desktop favorite/delete（`PezMax-Desktop/src/renderer/api/datum/ebook.js:1-121`）。
@@ -285,6 +286,7 @@
 - **没有 302**：字节从后端代理出去（`k_admin/internal/kadmin/datum_activity.go:542-578`），nginx 也是 `proxy_pass` 到上游（`deploy/nginx.conf.template:86-90`）。
 - 每次流式下载都会追加一条下载记录，续传的每个 Range 请求各记一条（`k_admin/internal/kadmin/datum_activity.go:549-552,568-570`）。
 - 新客户端：ETag 直接按不透明字符串存取即可（不要解析格式）；`If-Range` 用完整强标签；本地 `.part` 命名与并发上限自定（后端不做去重/限流，限速在 nginx）。
+- 本仓的决策表与 20 例：`fixtures/download/`（`before` / `response` / `after` 三个决策点）。
 
 ### 8.7 旧端调用但现行口径已变 / 不存在的端点
 1. **`GET /datum/favorite/{fileId}` 语义变了**：旧端当「收藏详情」（`PezMax-Desktop/src/renderer/api/datum/favorite.js:16-22`），现行返回 `{favorited: bool}`（`k_admin/internal/kadmin/datum_activity.go:279-293`）。
