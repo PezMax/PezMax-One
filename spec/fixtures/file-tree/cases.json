@@ -1,0 +1,223 @@
+[
+  {
+    "id": "file-tree.rows.root-subjects",
+    "description": "根层：path 为空时列出顶层科目文件夹",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:394-420",
+    "input": {
+      "kind": "rows",
+      "path": [],
+      "tree": [
+        { "id": "folder-math", "label": "数学", "type": "folder", "children": [] },
+        { "id": "folder-cn", "label": "语文", "type": "folder", "children": [] }
+      ]
+    },
+    "expect": { "order": ["folder:数学", "folder:语文"] }
+  },
+  {
+    "id": "file-tree.rows.folders-before-files",
+    "description": "同一父节点下叶子与子目录交错时，渲染成「文件夹在前、文件在后」，各自保持服务端顺序",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/modules/datum/file_repository.go（ORDER BY 不含 remark）",
+    "input": {
+      "kind": "rows",
+      "path": ["数学", "实验中学"],
+      "tree": [
+        {
+          "id": "folder-math", "label": "数学", "type": "folder",
+          "children": [
+            {
+              "id": "folder-school", "label": "实验中学", "type": "folder",
+              "children": [
+                { "id": "file-1", "fileId": 1, "label": "期中.pdf", "type": "file", "children": [] },
+                { "id": "folder-2025", "label": "期末", "type": "folder", "children": [] },
+                { "id": "file-2", "fileId": 2, "label": "真题.pdf", "type": "file", "children": [] }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "expect": { "order": ["folder:期末", "file:期中.pdf", "file:真题.pdf"] }
+  },
+  {
+    "id": "file-tree.rows.year-desc-preserved",
+    "description": "年份目录保持服务端的 DESC 顺序：2025 在 2019 前，客户端不得按字符串重排",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/modules/datum/file_repository.go（file_year DESC）",
+    "input": {
+      "kind": "rows",
+      "path": ["数学", "实验中学", "期末"],
+      "tree": [
+        {
+          "id": "folder-math", "label": "数学", "type": "folder",
+          "children": [
+            {
+              "id": "folder-school", "label": "实验中学", "type": "folder",
+              "children": [
+                {
+                  "id": "folder-type", "label": "期末", "type": "folder",
+                  "children": [
+                    { "id": "folder-2025", "label": "2025", "type": "folder", "children": [] },
+                    { "id": "folder-2019", "label": "2019", "type": "folder", "children": [] }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "expect": { "order": ["folder:2025", "folder:2019"] }
+  },
+  {
+    "id": "file-tree.rows.empty-folder",
+    "description": "空文件夹：行列表为空，界面出空态而不是崩",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:401-420",
+    "input": {
+      "kind": "rows",
+      "path": ["数学"],
+      "tree": [
+        { "id": "folder-math", "label": "数学", "type": "folder", "children": [] }
+      ]
+    },
+    "expect": { "order": [] }
+  },
+  {
+    "id": "file-tree.rows.path-missing",
+    "description": "路径找不到（树刷新后旧路径失效）：返回空列表并标记 notFound，界面回根层",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:401-420（树是整体替换的快照）",
+    "input": {
+      "kind": "rows",
+      "path": ["不存在的科目"],
+      "tree": [
+        { "id": "folder-math", "label": "数学", "type": "folder", "children": [] }
+      ]
+    },
+    "expect": { "order": [], "notFound": true }
+  },
+  {
+    "id": "file-tree.rows.deep-remark-path",
+    "description": "remark 里的自定义目录会成为更深一层：按标签路径能一路钻下去",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:395-399",
+    "input": {
+      "kind": "rows",
+      "path": ["数学", "实验中学", "期末", "2025", "复习", "第一章"],
+      "tree": [
+        {
+          "id": "folder-0", "label": "数学", "type": "folder",
+          "children": [
+            {
+              "id": "folder-1", "label": "实验中学", "type": "folder",
+              "children": [
+                {
+                  "id": "folder-2", "label": "期末", "type": "folder",
+                  "children": [
+                    {
+                      "id": "folder-3", "label": "2025", "type": "folder",
+                      "children": [
+                        {
+                          "id": "folder-4", "label": "复习", "type": "folder",
+                          "children": [
+                            {
+                              "id": "folder-5", "label": "第一章", "type": "folder",
+                              "children": [
+                                { "id": "file-9", "fileId": 9, "label": "集合.pdf", "type": "file", "children": [] }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "expect": { "order": ["file:集合.pdf"] }
+  },
+  {
+    "id": "file-tree.leaf.fileid-is-source-of-truth",
+    "description": "叶子的 id 是 \"file-12\"，fileId 才是数字 12：行模型取 fileId，不从 id 解析",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:421-424",
+    "input": {
+      "kind": "leaf",
+      "node": {
+        "id": "file-12", "fileId": 12, "label": "期中试卷.pdf", "fileName": "期中试卷.pdf",
+        "type": "file", "children": [], "fileFormat": "pdf", "fileSize": 4096,
+        "fileYear": 2025, "fileType": 1, "fileSubject": "数学", "fileSchool": "实验中学"
+      }
+    },
+    "expect": { "fileId": 12, "title": "期中试卷.pdf", "kindOfRow": "file" }
+  },
+  {
+    "id": "file-tree.leaf.payload-passthrough",
+    "description": "叶子携带完整 file payload：详情面板直接用它，不必为了一行再打一次 /datum/file/{id}",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:436-460",
+    "input": {
+      "kind": "leaf",
+      "node": {
+        "id": "file-7", "fileId": 7, "label": "笔记.md", "type": "file", "children": [],
+        "fileFormat": "md", "fileSize": 1024, "fileYear": 2024, "fileType": 4,
+        "fileSubject": "线性代数", "fileSchool": "", "fileStatus": 1, "userId": 3, "remark": ""
+      }
+    },
+    "expect": {
+      "fileId": 7,
+      "title": "笔记.md",
+      "kindOfRow": "file",
+      "fileFormat": "md",
+      "fileYear": 2024,
+      "fileSubject": "线性代数"
+    }
+  },
+  {
+    "id": "file-tree.breadcrumb.root",
+    "description": "在根层：面包屑只有「全部」",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:378-380",
+    "input": { "kind": "breadcrumb", "path": [] },
+    "expect": { "labels": ["全部"] }
+  },
+  {
+    "id": "file-tree.breadcrumb.standard-depth",
+    "description": "标准四层：全部 / 科目 / 学校 / 类型 / 年份",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:394",
+    "input": { "kind": "breadcrumb", "path": ["数学", "实验中学", "期末", "2025"] },
+    "expect": { "labels": ["全部", "数学", "实验中学", "期末", "2025"] }
+  },
+  {
+    "id": "file-tree.breadcrumb.remark-depth",
+    "description": "自定义目录层也要出现在面包屑里，且顺序与标签路径一致",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:395-399",
+    "input": { "kind": "breadcrumb", "path": ["数学", "未知学校", "资料", "2023", "课件", "第三章"] },
+    "expect": { "labels": ["全部", "数学", "未知学校", "资料", "2023", "课件", "第三章"] }
+  },
+  {
+    "id": "file-tree.fallback.unknown-subject",
+    "description": "空科目在服务端就是「未知科目」：原样显示，客户端不再改写",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:383-386",
+    "input": { "kind": "fallback", "node": { "id": "folder-x", "label": "未知科目", "type": "folder", "children": [] } },
+    "expect": { "label": "未知科目" }
+  },
+  {
+    "id": "file-tree.fallback.unknown-school",
+    "description": "空学校同理：显示「未知学校」，不要拼成空字符串或「（空）」",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:387-389",
+    "input": { "kind": "fallback", "node": { "id": "folder-y", "label": "未知学校", "type": "folder", "children": [] } },
+    "expect": { "label": "未知学校" }
+  },
+  {
+    "id": "file-tree.fallback.unknown-type",
+    "description": "类型字典外的值在服务端落「其他」：客户端照抄，不要显示成数字",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:429-434",
+    "input": { "kind": "fallback", "node": { "id": "folder-z", "label": "其他", "type": "folder", "children": [] } },
+    "expect": { "label": "其他" }
+  },
+  {
+    "id": "file-tree.fallback.year-from-server",
+    "description": "fileYear ≤ 0 时服务端已经填了「它那一年的年份」：客户端直接显示标签本身",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:390-394",
+    "input": { "kind": "fallback", "node": { "id": "folder-2026", "label": "2026", "type": "folder", "children": [] } },
+    "expect": { "label": "2026" }
+  }
+]
