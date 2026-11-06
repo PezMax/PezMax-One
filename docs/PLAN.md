@@ -31,21 +31,27 @@ Linux 与 Android 随后照 spec 实现，少走弯路。（D14 已定为 Window
 
 ### 下一轮（新 session 从这里开始）
 
-1. **Kanesumi.Xaml 抽仓（D3）**：从 `../Ncrust/windows/src/Kanesumi.Xaml` 抽出到 `../Kanesumi-xaml`（保留历史可用
+1. **下载链路**：`DownloadService` 接 `BackgroundDownloader`（Bearer + `Range` 续传），本地记录 `downloads.json`，
+   与服务端「我的下载」按 `fileId` 合并；同时跑 W1。依据：`spec/api/endpoints.md` 的 `GET /datum/download/file`。
+2. **通知本地已读**：`spec/fixtures/notification/` 尚未写，先补夹具（5 类通知的可见窗口、`popup` / `scroll` 的
+   `hash` + `unchanged` 协议、已读集合按 `userId` 隔离），再做外壳铃铛与滚动条。
+3. **PDF 网格 / 连续两种视图 + W2**；随后 EPUB（W3）。
+4. **Kanesumi.Xaml 抽仓（D3）**：从 `../Ncrust/windows/src/Kanesumi.Xaml` 抽出到 `../Kanesumi-xaml`（保留历史可用
    `git filter-repo --subdirectory-filter`），Ncrust 改为相对路径引用并验证 MSBuild Release 构建通过；Ncrust 侧单独提交。
-2. **spec 首批**（下表）。
-3. **Windows 解决方案骨架**：`PezMax.Windows.sln`、`PezMax.Core`、`PezMax.Core.Tests`、空的 `PezMax.App`（能注册、能启动）。
-4. M0 spike W1–W5，随后 Linux / Android spike。
+5. **发布工具 `windows/tools/release/`**：签名证书、`.appinstaller`、`.cer`、`manifest.json`。
+   没有它连「装包冒烟」都做不了——.NET Native 的 IL 布局注册上去会在激活期崩溃（见 `windows/AGENTS.md`）。
+6. Linux / Android spike（L1–L5、A1–A3）。
 
 ### spec 首批
 
-| 项 | 内容 |
-|---|---|
-| `spec/api/endpoints.md` | 补齐 M1 范围端点的参数与响应形状（账户、资料、下载、收藏、通知、个人资料） |
-| `spec/api/envelope.md` | 信封、错误、401 |
-| `spec/fixtures/update/` | 自 Ncrust 规则移植，前缀换为 `pezmax-one-`，补 `.pkg.tar.zst` 多段扩展名、`amd64` 不算 `x86_64` 等用例 |
-| `spec/fixtures/envelope/`、`pagination/`、`state-cache/`、`url/` | M1 必需的协议夹具 |
-| `spec/tools/` | 只读契约探针（登录用测试账号，不写数据），用来给夹具取 `source` |
+| 项 | 内容 | 状态 |
+|---|---|---|
+| `spec/api/endpoints.md` | 补齐 M1 范围端点的参数与响应形状（账户、资料、下载、收藏、通知、个人资料） | 🟡 读接口已补，写接口随实现 |
+| `spec/api/envelope.md` | 信封、错误、401 | ✅ |
+| `spec/fixtures/update/` | 自 Ncrust 规则移植，前缀换为 `pezmax-one-`，补 `.pkg.tar.zst` 多段扩展名、`amd64` 不算 `x86_64` 等用例 | 待写 |
+| `spec/fixtures/envelope/`、`pagination/`、`auth/` | M1 必需的协议与表单夹具 | ✅ 13 + 11 + 25 例 |
+| `spec/fixtures/state-cache/`、`url/`、`download/`、`notification/` | 哈希缓存、URL 归一、续传状态机、通知可见性 | 待写（随对应实现） |
+| `spec/tools/` | 只读契约探针（登录用测试账号，不写数据），用来给夹具取 `source` | 待写；需要测试账号 |
 
 ### 风险验证（spike）
 
@@ -59,6 +65,16 @@ Linux 与 Android 随后照 spec 实现，少走弯路。（D14 已定为 Window
 spike 代码不进主干，结论写进平台文档（「规格是资产，跑规格的工程不是」——Kanesumi `PORT_ROADMAP.md`）。
 
 ## M1 · Windows MVP
+
+进度（2026-11-05）：
+
+| 项 | 状态 |
+|---|---|
+| 账户：登录（验证码）、注册（三步）、找回密码（两步）、登出、会话失效处理 | ✅ 流程与界面已接通；待测试服务器手工回归 |
+| 资料：文件树（哈希缓存）、列表、搜索、详情、PDF / 图片 / TXT 预览 | 🟡 树 / 列表 / 搜索 / 详情 / 三种预览已接；PDF 网格与连续两种视图未做 |
+| 收藏、通知、个人中心、设置 | 🟡 页面已接；通知本地已读、缓存清理未做 |
+| 下载：续传、串行队列、进度与取消、本地记录 +「我的下载」 | ⏳ 只有 `DownloadService` 骨架，W1 未验证 |
+| 发布：`windows/tools/release/` 与第一班 CrateStack | ⏳ 未开始；没有签名证书，装包与冒烟都还跑不了 |
 
 范围：
 
@@ -103,41 +119,6 @@ Linux 与 Android 各自按「MVP（同 Windows M1 范围）→ 对齐（同 Win
 
 任何一项不通过，回到对应平台文档重新评估方案，记录结论后再进入下一阶段。
 spike 代码不进主干，结论写进平台文档（「规格是资产，跑规格的工程不是」——Kanesumi `PORT_ROADMAP.md`）。
-
-## M1 · Windows MVP
-
-范围：
-
-- 账户：登录（验证码）、注册（三步）、找回密码（两步）、登出、会话失效处理。
-- 资料：文件树（哈希缓存）、列表、搜索、详情、PDF / 图片 / TXT 预览。
-- 下载：续传、串行队列、进度与取消、本地记录 + 「我的下载」。
-- 收藏：资料收藏与「我的收藏」。
-- 通知：弹窗、滚动提醒、本地已读。
-- 个人中心：资料、头像、统计。
-- 设置：外观、下载目录、缓存、服务器地址、关于 + 检查更新。
-- 发布：`windows/tools/release/`（编译 + 签名 + `.appinstaller` + `.cer` + `manifest.json`），第一班 CrateStack。
-
-验收：注册 → 登录 → 浏览 → 预览 → 下载（断网续传）→ 收藏 → 我的下载 / 收藏可见 → 登出 → 401 恢复，全链路在测试服务器上手工回归一遍；
-Core 测试全绿，且全部读 `spec/`。
-
-## M2 · Windows 对齐官方端
-
-电子书（列表、学科、PDF / EPUB 在线阅读、下载、收藏、举报）、书签（CRUD、封面、收藏、举报、外链）、
-上传（多文件 / 文件夹、元信息表单、待审提示）、举报与处理时间线、我的上传 / 举报、社区排行、密保三问三答与改密、
-Markdown 预览、快捷键补全、开机启动、ARM64 包（D9）。
-
-## M3 / M4
-
-Linux 与 Android 各自按「MVP（同 Windows M1 范围）→ 对齐（同 Windows M2 范围）」两段推进；
-开工时以当时的 `spec/` 为准，发现 spec 缺口先补 spec 再写实现。Linux 的 EPUB 原生阅读器不在 M3 范围内。
-
-## 等负责人的事
-
-- `ARCHITECTURE.md` 待定决策 D2、D3、D4、D7、D9、D11、D12、D13、D14。
-- 生产后端地址与测试服务器访问方式（测试服务器在内网 `10.*`，UWP 需 `privateNetworkClientServer`）。
-- Windows 包身份 `Publisher`（首次发布前必须定，之后永不改变）。
-- 是否在上游 PezMax-Go 登记本项目为第三方客户端，以及契约变更的通知渠道（建议订阅上游 `k_admin/internal/kadmin/docs/swagger.json` 的变更）。
-- 测试账号（用于 spec 探针取证；只读，不在上游产生垃圾数据）。
 
 ## 风险
 
