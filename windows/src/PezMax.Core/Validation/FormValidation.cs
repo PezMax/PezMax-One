@@ -25,35 +25,70 @@ public static class FormValidation
         return bytes is < 5 or > 64 ? "密码格式错误：长度需在 5 到 64 位之间" : null;
     }
 
-    public static string? ValidateRegister(RegisterRequest request, bool validateCaptcha = true)
+    /// <summary>注册第一步：用户名与两次密码。互不相同的判定顺序与上游 592-604 行一致。</summary>
+    public static string? ValidateAccount(string? userName, string? password, string? confirmPassword)
     {
-        var userName = ValidateUserName(request.UserName);
-        if (userName != null) return userName;
+        var name = ValidateUserName(userName);
+        if (name != null) return name;
 
-        var password = ValidatePassword(request.Password);
-        if (password != null) return password;
+        var secret = ValidatePassword(password);
+        if (secret != null) return secret;
 
-        if (request.Password != request.ConfirmPassword) return "两次输入的密码不一致";
-        if (string.IsNullOrWhiteSpace(request.SecurityQuestionOne) ||
-            string.IsNullOrWhiteSpace(request.SecurityQuestionTwo) ||
-            string.IsNullOrWhiteSpace(request.SecurityQuestionThree))
+        return password != confirmPassword ? "两次输入的密码不一致" : null;
+    }
+
+    /// <summary>注册第二步：三问三答。空白与空串同等对待（上游先 TrimSpace）。</summary>
+    public static string? ValidateSecurity(
+        string? questionOne,
+        string? questionTwo,
+        string? questionThree,
+        string? answerOne,
+        string? answerTwo,
+        string? answerThree)
+    {
+        if (string.IsNullOrWhiteSpace(questionOne) ||
+            string.IsNullOrWhiteSpace(questionTwo) ||
+            string.IsNullOrWhiteSpace(questionThree))
             return "密保问题不能为空";
-        if (string.IsNullOrWhiteSpace(request.SecurityAnswerOne) ||
-            string.IsNullOrWhiteSpace(request.SecurityAnswerTwo) ||
-            string.IsNullOrWhiteSpace(request.SecurityAnswerThree))
+        if (string.IsNullOrWhiteSpace(answerOne) ||
+            string.IsNullOrWhiteSpace(answerTwo) ||
+            string.IsNullOrWhiteSpace(answerThree))
             return "密保答案不能为空";
-        if (Encoding.UTF8.GetByteCount(request.Avatar ?? "") > 255) return "头像地址格式错误";
-        if (validateCaptcha && (string.IsNullOrWhiteSpace(request.Code) || string.IsNullOrWhiteSpace(request.Uuid)))
-            return "验证码错误或已过期";
         return null;
     }
 
+    public static string? ValidateRegister(RegisterRequest request, bool validateCaptcha = true)
+    {
+        var account = ValidateAccount(request.UserName, request.Password, request.ConfirmPassword);
+        if (account != null) return account;
+
+        var security = ValidateSecurity(
+            request.SecurityQuestionOne, request.SecurityQuestionTwo, request.SecurityQuestionThree,
+            request.SecurityAnswerOne, request.SecurityAnswerTwo, request.SecurityAnswerThree);
+        if (security != null) return security;
+
+        if (Encoding.UTF8.GetByteCount(request.Avatar ?? "") > 255) return "头像地址格式错误";
+        if (validateCaptcha)
+        {
+            var captcha = ValidateCaptchaEntry(request.Code, request.Uuid);
+            if (captcha != null) return captcha;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// 验证码两件套：`code` 与 `uuid` 缺一不可，缺哪一种上游都回同一句（`datum_user_auth.go:718-720`）。
+    /// 验证码本身是否正确只能由服务端判断，这里只管「填没填」。
+    /// </summary>
+    public static string? ValidateCaptchaEntry(string? code, string? uuid) =>
+        string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(uuid) ? "验证码错误或已过期" : null;
+
     public static string? ValidateResetPassword(ResetPasswordRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.UserName) ||
-            string.IsNullOrWhiteSpace(request.Uuid) ||
-            string.IsNullOrWhiteSpace(request.Code))
-            return "验证码错误或已过期";
+        // 上游把「用户名 / uuid / code 为空」合并成一个分支，文案都是验证码错误（:718-720）。
+        if (string.IsNullOrWhiteSpace(request.UserName)) return "验证码错误或已过期";
+        var captcha = ValidateCaptchaEntry(request.Code, request.Uuid);
+        if (captcha != null) return captcha;
         if (string.IsNullOrWhiteSpace(request.SecurityAnswerOne) ||
             string.IsNullOrWhiteSpace(request.SecurityAnswerTwo) ||
             string.IsNullOrWhiteSpace(request.SecurityAnswerThree))

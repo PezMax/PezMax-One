@@ -3,6 +3,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    xmlns:login="using:PezMax.Login"
     Background="{ThemeResource PezBackgroundBrush}">
 
     <Grid>
@@ -125,5 +126,21 @@
             HorizontalAlignment="Center"
             Style="{StaticResource PezCaptionStyle}"
             Text="登录后可在「设置 → 高级」中修改服务器地址" />
+
+        <!-- 注册 / 找回密码覆盖层：整页盖住登录卡，关掉后回到登录 -->
+        <Grid
+            x:Name="OverlayHost"
+            Grid.RowSpan="2"
+            Background="{ThemeResource PezBackgroundBrush}"
+            Visibility="Collapsed">
+            <login:RegisterView
+                x:Name="RegisterLayer"
+                Closed="RegisterLayerClosed"
+                Visibility="Collapsed" />
+            <login:ResetPasswordView
+                x:Name="ResetLayer"
+                Closed="ResetLayerClosed"
+                Visibility="Collapsed" />
+        </Grid>
     </Grid>
 </Page>

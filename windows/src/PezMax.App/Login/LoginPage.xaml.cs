@@ -19,6 +19,7 @@ namespace PezMax.Login
         private CaptchaResult? _captcha;
         private bool _busy;
         private bool _dialogOpen;
+        private bool _overlayOpen;
 
         public LoginPage()
         {
@@ -116,7 +117,7 @@ namespace PezMax.Login
                 SetBusy(true);
                 _captcha = await AppServices.Auth.GetCaptchaAsync();
                 CodeBox.Text = "";
-                await ShowCaptchaAsync(_captcha.ImageBase64);
+                await CaptchaPresenter.ShowAsync(CaptchaImage, _captcha.ImageBase64);
             }
             catch (Exception ex)
             {
@@ -126,30 +127,6 @@ namespace PezMax.Login
             {
                 SetBusy(false);
             }
-        }
-
-        private async Task ShowCaptchaAsync(string base64)
-        {
-            if (string.IsNullOrWhiteSpace(base64))
-            {
-                CaptchaImage.Source = null;
-                return;
-            }
-
-            var bytes = Convert.FromBase64String(base64);
-            using var stream = new InMemoryRandomAccessStream();
-            using (var writer = new DataWriter(stream))
-            {
-                writer.WriteBytes(bytes);
-                await writer.StoreAsync();
-                await writer.FlushAsync();
-                writer.DetachStream();
-            }
-
-            stream.Seek(0);
-            var bitmap = new BitmapImage();
-            await bitmap.SetSourceAsync(stream);
-            CaptchaImage.Source = bitmap;
         }
 
         private async void LoginClick(object sender, RoutedEventArgs e) => await LoginAsync();
@@ -215,44 +192,46 @@ namespace PezMax.Login
             Frame.BackStack.Clear();
         }
 
-        private async void RegisterClick(object sender, RoutedEventArgs e)
+        private void RegisterClick(object sender, RoutedEventArgs e)
         {
-            if (_dialogOpen) return;
-            _dialogOpen = true;
-            try
-            {
-                await new PezDialog
-                {
-                    Title = "注册账号",
-                    Content = "注册流程将在下一批接入；当前可先在官方客户端或网页完成注册。",
-                    CloseButtonText = "知道了",
-                    DefaultButton = ContentDialogButton.Close,
-                }.ShowAsync();
-            }
-            finally
-            {
-                _dialogOpen = false;
-            }
+            if (_dialogOpen || _overlayOpen) return;
+            RegisterLayer.Begin();
+            ShowOverlay(RegisterLayer);
         }
 
         private async void ForgotClick(object sender, RoutedEventArgs e)
         {
-            if (_dialogOpen) return;
-            _dialogOpen = true;
-            try
-            {
-                await new PezDialog
-                {
-                    Title = "找回密码",
-                    Content = "两步密保找回将在下一批接入；当前可先在官方客户端或网页完成重置。",
-                    CloseButtonText = "知道了",
-                    DefaultButton = ContentDialogButton.Close,
-                }.ShowAsync();
-            }
-            finally
-            {
-                _dialogOpen = false;
-            }
+            if (_dialogOpen || _overlayOpen) return;
+            ResetLayer.Begin();
+            ShowOverlay(ResetLayer);
+            await ResetLayer.ShowCaptchaAsync();
+        }
+        private void ShowOverlay(UIElement layer)
+        {
+            RegisterLayer.Visibility = ReferenceEquals(layer, RegisterLayer) ? Visibility.Visible : Visibility.Collapsed;
+            ResetLayer.Visibility = ReferenceEquals(layer, ResetLayer) ? Visibility.Visible : Visibility.Collapsed;
+            OverlayHost.Visibility = Visibility.Visible;
+            _overlayOpen = true;
+        }
+
+        private async void RegisterLayerClosed(object sender, string? userName) =>
+            await CloseOverlayAsync(userName);
+
+        private async void ResetLayerClosed(object sender, string? userName) =>
+            await CloseOverlayAsync(userName);
+
+        private async Task CloseOverlayAsync(string? userName)
+        {
+            _overlayOpen = false;
+            OverlayHost.Visibility = Visibility.Collapsed;
+            RegisterLayer.Visibility = Visibility.Collapsed;
+            ResetLayer.Visibility = Visibility.Collapsed;
+
+            if (!string.IsNullOrWhiteSpace(userName)) UsernameBox.Text = userName!.Trim();
+
+            // 覆盖层里折腾的这段时间，登录页那张验证码可能已经过期（默认 120 秒），回来就换新的。
+            await LoadCaptchaAsync();
+            PasswordBox.Focus(FocusState.Programmatic);
         }
 
         private void SetBusy(bool busy)

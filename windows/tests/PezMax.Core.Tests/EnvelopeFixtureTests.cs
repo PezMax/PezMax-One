@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using PezMax.Core.Net;
 using Xunit;
 
@@ -67,13 +67,13 @@ public class EnvelopeFixtureTests
                     Assert.True(expect.GetProperty("hash").GetString() == response.Hash, $"{id}: hash");
                     break;
                 default:
-                    throw new Xunit.Sdk.XunitException($"{id}: 鏈煡 kind {expectedKind}");
+                    throw new Xunit.Sdk.XunitException($"{id}: 未知 kind {expectedKind}");
             }
 
             checkedCases++;
         }
 
-        Assert.True(checkedCases >= 12, $"淇″皝澶瑰叿璺戝埌鐨勭敤渚嬪お灏戯細{checkedCases}");
+        Assert.True(checkedCases >= 12, $"信封夹具跑到的用例太少：{checkedCases}");
     }
 
     [Fact]
