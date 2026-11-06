@@ -51,6 +51,7 @@
                     <StackPanel x:Name="SecurityStep" Spacing="14" Visibility="Collapsed">
                         <TextBlock
                             Style="{StaticResource PezCaptionStyle}"
+                            TextWrapping="Wrap"
                             Text="密保用于找回密码，答案在服务端做哈希存储。三组问题与答案都要填，答案请自己记住。" />
                         <TextBox x:Name="QuestionOneBox" Header="密保问题一" />
                         <TextBox x:Name="AnswerOneBox" Header="答案一" />
@@ -72,6 +73,7 @@
                     <StackPanel x:Name="CaptchaStep" Spacing="14" Visibility="Collapsed">
                         <TextBlock
                             Style="{StaticResource PezCaptionStyle}"
+                            TextWrapping="Wrap"
                             Text="验证码一次性有效：提交失败（含用户名已被占用）后都要换一张，点图片可刷新。" />
                         <Grid ColumnSpacing="12">
                             <Grid.ColumnDefinitions>
