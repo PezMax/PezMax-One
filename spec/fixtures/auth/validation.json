@@ -1,0 +1,456 @@
+[
+  {
+    "id": "auth.register.ok",
+    "description": "合法注册请求：用户名、5 字节密码、三问三答、空头像、验证码占位齐全时校验通过",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_user_auth.go:592-617",
+    "input": {
+      "action": "register",
+      "username": "alice",
+      "password": "12345",
+      "confirmPassword": "12345",
+      "securityQuestionOne": "母亲的姓名？",
+      "securityQuestionTwo": "第一所学校？",
+      "securityQuestionThree": "最喜欢的城市？",
+      "securityAnswerOne": "张三",
+      "securityAnswerTwo": "实验小学",
+      "securityAnswerThree": "济南",
+      "avatar": "",
+      "code": "123456",
+      "uuid": "uuid-fixture"
+    },
+    "expect": { "error": null }
+  },
+  {
+    "id": "auth.register.username.64-runes-ok",
+    "description": "用户名按 rune 计 64 个汉字仍通过；上限是 rune 不是字节",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_user_auth.go:596-598",
+    "input": {
+      "action": "register",
+      "username": "中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中",
+      "password": "12345",
+      "confirmPassword": "12345",
+      "securityQuestionOne": "q1",
+      "securityQuestionTwo": "q2",
+      "securityQuestionThree": "q3",
+      "securityAnswerOne": "a1",
+      "securityAnswerTwo": "a2",
+      "securityAnswerThree": "a3",
+      "code": "123456",
+      "uuid": "uuid-fixture"
+    },
+    "expect": { "error": null }
+  },
+  {
+    "id": "auth.register.username.65-runes-too-long",
+    "description": "用户名 65 个汉字超限，按上游文案拦截",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_user_auth.go:596-598",
+    "input": {
+      "action": "register",
+      "username": "中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中",
+      "password": "12345",
+      "confirmPassword": "12345",
+      "securityQuestionOne": "q1",
+      "securityQuestionTwo": "q2",
+      "securityQuestionThree": "q3",
+      "securityAnswerOne": "a1",
+      "securityAnswerTwo": "a2",
+      "securityAnswerThree": "a3",
+      "code": "123456",
+      "uuid": "uuid-fixture"
+    },
+    "expect": { "error": "用户名格式错误" }
+  },
+  {
+    "id": "auth.register.username.empty",
+    "description": "用户名为空串时拦截",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_user_auth.go:593-595",
+    "input": {
+      "action": "register",
+      "username": "",
+      "password": "12345",
+      "confirmPassword": "12345",
+      "securityQuestionOne": "q1",
+      "securityQuestionTwo": "q2",
+      "securityQuestionThree": "q3",
+      "securityAnswerOne": "a1",
+      "securityAnswerTwo": "a2",
+      "securityAnswerThree": "a3",
+      "code": "123456",
+      "uuid": "uuid-fixture"
+    },
+    "expect": { "error": "用户名不能为空" }
+  },
+  {
+    "id": "auth.register.username.whitespace-only",
+    "description": "用户名只有空白：上游先 TrimSpace 再判空，因此与空串同文案",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_user_auth.go:591-595",
+    "input": {
+      "action": "register",
+      "username": "   ",
+      "password": "12345",
+      "confirmPassword": "12345",
+      "securityQuestionOne": "q1",
+      "securityQuestionTwo": "q2",
+      "securityQuestionThree": "q3",
+      "securityAnswerOne": "a1",
+      "securityAnswerTwo": "a2",
+      "securityAnswerThree": "a3",
+      "code": "123456",
+      "uuid": "uuid-fixture"
+    },
+    "expect": { "error": "用户名不能为空" }
+  },
+  {
+    "id": "auth.register.username.no-charset-limit",
+    "description": "用户名里有空格、中文标点也照样通过：上游只限长度，客户端不得自行加字符集限制",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_user_auth.go:591-598",
+    "input": {
+      "action": "register",
+      "username": "张三 · 2021 级",
+      "password": "12345",
+      "confirmPassword": "12345",
+      "securityQuestionOne": "q1",
+      "securityQuestionTwo": "q2",
+      "securityQuestionThree": "q3",
+      "securityAnswerOne": "a1",
+      "securityAnswerTwo": "a2",
+      "securityAnswerThree": "a3",
+      "code": "123456",
+      "uuid": "uuid-fixture"
+    },
+    "expect": { "error": null }
+  },
+  {
+    "id": "auth.register.password.too-short",
+    "description": "密码 4 个 ASCII 字符（4 字节）低于下限",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_user_auth.go:599-601",
+    "input": {
+      "action": "register",
+      "username": "alice",
+      "password": "1234",
+      "confirmPassword": "1234",
+      "securityQuestionOne": "q1",
+      "securityQuestionTwo": "q2",
+      "securityQuestionThree": "q3",
+      "securityAnswerOne": "a1",
+      "securityAnswerTwo": "a2",
+      "securityAnswerThree": "a3",
+      "code": "123456",
+      "uuid": "uuid-fixture"
+    },
+    "expect": { "error": "密码格式错误：长度需在 5 到 64 位之间" }
+  },
+  {
+    "id": "auth.register.password.counted-by-byte",
+    "description": "4 个汉字密码只有 4 个 rune、却是 12 字节，按上游口径通过：密码按字节计数",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_user_auth.go:599-601",
+    "input": {
+      "action": "register",
+      "username": "alice",
+      "password": "密码两字",
+      "confirmPassword": "密码两字",
+      "securityQuestionOne": "q1",
+      "securityQuestionTwo": "q2",
+      "securityQuestionThree": "q3",
+      "securityAnswerOne": "a1",
+      "securityAnswerTwo": "a2",
+      "securityAnswerThree": "a3",
+      "code": "123456",
+      "uuid": "uuid-fixture"
+    },
+    "expect": { "error": null }
+  },
+  {
+    "id": "auth.register.password.too-long",
+    "description": "密码 65 个 ASCII 字符（65 字节）超过上限",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_user_auth.go:599-601",
+    "input": {
+      "action": "register",
+      "username": "alice",
+      "password": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "confirmPassword": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "securityQuestionOne": "q1",
+      "securityQuestionTwo": "q2",
+      "securityQuestionThree": "q3",
+      "securityAnswerOne": "a1",
+      "securityAnswerTwo": "a2",
+      "securityAnswerThree": "a3",
+      "code": "123456",
+      "uuid": "uuid-fixture"
+    },
+    "expect": { "error": "密码格式错误：长度需在 5 到 64 位之间" }
+  },
+  {
+    "id": "auth.register.password.mismatch",
+    "description": "两次输入的密码不一致",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_user_auth.go:602-604",
+    "input": {
+      "action": "register",
+      "username": "alice",
+      "password": "12345",
+      "confirmPassword": "54321",
+      "securityQuestionOne": "q1",
+      "securityQuestionTwo": "q2",
+      "securityQuestionThree": "q3",
+      "securityAnswerOne": "a1",
+      "securityAnswerTwo": "a2",
+      "securityAnswerThree": "a3",
+      "code": "123456",
+      "uuid": "uuid-fixture"
+    },
+    "expect": { "error": "两次输入的密码不一致" }
+  },
+  {
+    "id": "auth.register.question.whitespace",
+    "description": "任一条密保问题只有空白即拦截，三问同等对待",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_user_auth.go:605-607",
+    "input": {
+      "action": "register",
+      "username": "alice",
+      "password": "12345",
+      "confirmPassword": "12345",
+      "securityQuestionOne": "q1",
+      "securityQuestionTwo": " ",
+      "securityQuestionThree": "q3",
+      "securityAnswerOne": "a1",
+      "securityAnswerTwo": "a2",
+      "securityAnswerThree": "a3",
+      "code": "123456",
+      "uuid": "uuid-fixture"
+    },
+    "expect": { "error": "密保问题不能为空" }
+  },
+  {
+    "id": "auth.register.answer.empty",
+    "description": "第三条密保答案为空即拦截",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_user_auth.go:608-610",
+    "input": {
+      "action": "register",
+      "username": "alice",
+      "password": "12345",
+      "confirmPassword": "12345",
+      "securityQuestionOne": "q1",
+      "securityQuestionTwo": "q2",
+      "securityQuestionThree": "q3",
+      "securityAnswerOne": "a1",
+      "securityAnswerTwo": "a2",
+      "securityAnswerThree": "",
+      "code": "123456",
+      "uuid": "uuid-fixture"
+    },
+    "expect": { "error": "密保答案不能为空" }
+  },
+  {
+    "id": "auth.register.avatar.too-long",
+    "description": "头像地址 256 字节超过上限",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_user_auth.go:611-613",
+    "input": {
+      "action": "register",
+      "username": "alice",
+      "password": "12345",
+      "confirmPassword": "12345",
+      "securityQuestionOne": "q1",
+      "securityQuestionTwo": "q2",
+      "securityQuestionThree": "q3",
+      "securityAnswerOne": "a1",
+      "securityAnswerTwo": "a2",
+      "securityAnswerThree": "a3",
+      "avatar": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "code": "123456",
+      "uuid": "uuid-fixture"
+    },
+    "expect": { "error": "头像地址格式错误" }
+  },
+  {
+    "id": "auth.register.captcha.code-missing",
+    "description": "验证码为空：客户端在提交前拦下，文案与验证码错误一致，不浪费一次往返",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_user_auth.go:615-617",
+    "input": {
+      "action": "register",
+      "username": "alice",
+      "password": "12345",
+      "confirmPassword": "12345",
+      "securityQuestionOne": "q1",
+      "securityQuestionTwo": "q2",
+      "securityQuestionThree": "q3",
+      "securityAnswerOne": "a1",
+      "securityAnswerTwo": "a2",
+      "securityAnswerThree": "a3",
+      "code": "",
+      "uuid": "uuid-fixture"
+    },
+    "expect": { "error": "验证码错误或已过期" }
+  },
+  {
+    "id": "auth.register.captcha.uuid-missing",
+    "description": "验证码 uuid 为空：与验证码为空同样处理，缺一不可提交",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_user_auth.go:615-617",
+    "input": {
+      "action": "register",
+      "username": "alice",
+      "password": "12345",
+      "confirmPassword": "12345",
+      "securityQuestionOne": "q1",
+      "securityQuestionTwo": "q2",
+      "securityQuestionThree": "q3",
+      "securityAnswerOne": "a1",
+      "securityAnswerTwo": "a2",
+      "securityAnswerThree": "a3",
+      "code": "123456",
+      "uuid": ""
+    },
+    "expect": { "error": "验证码错误或已过期" }
+  },
+  {
+    "id": "auth.reset.ok",
+    "description": "两步找回第二步：用户名、验证码占位、三答、新密码一致时校验通过",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_user_auth.go:717-741",
+    "input": {
+      "action": "reset",
+      "username": "alice",
+      "code": "123456",
+      "uuid": "uuid-fixture",
+      "securityAnswerOne": "张三",
+      "securityAnswerTwo": "实验小学",
+      "securityAnswerThree": "济南",
+      "newPassword": "newsecret",
+      "confirmPassword": "newsecret"
+    },
+    "expect": { "error": null }
+  },
+  {
+    "id": "auth.reset.username.missing",
+    "description": "第二步缺用户名：与验证码错误的文案相同，客户端不单独提示",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_user_auth.go:718-720",
+    "input": {
+      "action": "reset",
+      "username": "",
+      "code": "123456",
+      "uuid": "uuid-fixture",
+      "securityAnswerOne": "a1",
+      "securityAnswerTwo": "a2",
+      "securityAnswerThree": "a3",
+      "newPassword": "newsecret",
+      "confirmPassword": "newsecret"
+    },
+    "expect": { "error": "验证码错误或已过期" }
+  },
+  {
+    "id": "auth.reset.uuid.missing",
+    "description": "第二步缺 uuid：工单键由 uuid + username 组成，缺一样就没法领工单",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_user_auth.go:718-720",
+    "input": {
+      "action": "reset",
+      "username": "alice",
+      "code": "123456",
+      "uuid": "",
+      "securityAnswerOne": "a1",
+      "securityAnswerTwo": "a2",
+      "securityAnswerThree": "a3",
+      "newPassword": "newsecret",
+      "confirmPassword": "newsecret"
+    },
+    "expect": { "error": "验证码错误或已过期" }
+  },
+  {
+    "id": "auth.reset.code.missing",
+    "description": "第二步的 code 只做非空校验（真凭证是第一步的工单），但空值仍然拦",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_user_auth.go:718-720",
+    "input": {
+      "action": "reset",
+      "username": "alice",
+      "code": "",
+      "uuid": "uuid-fixture",
+      "securityAnswerOne": "a1",
+      "securityAnswerTwo": "a2",
+      "securityAnswerThree": "a3",
+      "newPassword": "newsecret",
+      "confirmPassword": "newsecret"
+    },
+    "expect": { "error": "验证码错误或已过期" }
+  },
+  {
+    "id": "auth.reset.answer.blank",
+    "description": "第二步某条密保答案为空白即拦截，三答必须都填",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_user_auth.go:721-723",
+    "input": {
+      "action": "reset",
+      "username": "alice",
+      "code": "123456",
+      "uuid": "uuid-fixture",
+      "securityAnswerOne": "a1",
+      "securityAnswerTwo": "  ",
+      "securityAnswerThree": "a3",
+      "newPassword": "newsecret",
+      "confirmPassword": "newsecret"
+    },
+    "expect": { "error": "密保答案不能为空" }
+  },
+  {
+    "id": "auth.reset.new-password.too-short",
+    "description": "新密码 4 字节低于下限",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_user_auth.go:724-726",
+    "input": {
+      "action": "reset",
+      "username": "alice",
+      "code": "123456",
+      "uuid": "uuid-fixture",
+      "securityAnswerOne": "a1",
+      "securityAnswerTwo": "a2",
+      "securityAnswerThree": "a3",
+      "newPassword": "1234",
+      "confirmPassword": "1234"
+    },
+    "expect": { "error": "密码格式错误：长度需在 5 到 64 位之间" }
+  },
+  {
+    "id": "auth.reset.new-password.mismatch",
+    "description": "两次输入的新密码不一致",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_user_auth.go:727-729",
+    "input": {
+      "action": "reset",
+      "username": "alice",
+      "code": "123456",
+      "uuid": "uuid-fixture",
+      "securityAnswerOne": "a1",
+      "securityAnswerTwo": "a2",
+      "securityAnswerThree": "a3",
+      "newPassword": "newsecret",
+      "confirmPassword": "othersecret"
+    },
+    "expect": { "error": "两次输入的密码不一致" }
+  },
+  {
+    "id": "auth.login.ok",
+    "description": "登录：用户名与密码都非空时客户端不做额外限制（其余交给服务端）",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_user_auth.go:507-560",
+    "input": {
+      "action": "login",
+      "username": "alice",
+      "password": "12345"
+    },
+    "expect": { "error": null }
+  },
+  {
+    "id": "auth.login.username.empty",
+    "description": "登录用户名为空：上游回「用户名或密码错误」，客户端沿用同一句，不细分「用户不存在」",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_user_auth.go:507-560",
+    "input": {
+      "action": "login",
+      "username": "",
+      "password": "12345"
+    },
+    "expect": { "error": "用户名或密码错误" }
+  },
+  {
+    "id": "auth.login.password.empty",
+    "description": "登录密码为空：与用户名为空同文案",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_user_auth.go:507-560",
+    "input": {
+      "action": "login",
+      "username": "alice",
+      "password": ""
+    },
+    "expect": { "error": "用户名或密码错误" }
+  }
+]
