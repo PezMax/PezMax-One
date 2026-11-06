@@ -108,6 +108,10 @@
 - 空科目 / 空学校显示为「未知科目」/「未知学校」；年份 ≤ 0 用服务端当前年份。
 - 文件夹 id 由路径段哈希生成，不保证跨版本稳定；客户端只把它当节点键，不要解析。
 - 只包含已审核（`file_status=1`、`del_flag=0`）文件。
+- ⚠️ 树与排行共用 Redis 哈希缓存，**Redis 故障时直接 503、没有降级**（树 `datum_file.go:357-364`，
+  排行 `:634-639`；预热器 `datum_state_warmup.go:19-51` 同样过 `cached()`，不构成降级）。
+  客户端必须：有本地缓存就继续显示旧树、没有就出空态 + 重试；**不要**把 503 当登录失效，
+  也**不要**让首屏等树。
 
 ### 列表参数
 
@@ -136,10 +140,22 @@ multipart 字段：
 扩展名白名单：`doc docx ppt pptx pdf jpg jpeg png webp txt md epub mobi azw3`。
 
 - `doc/docx/ppt/pptx` 会转成 PDF 存储，`fileFormat` 落 `pdf`，`fileSize` 是转换后的字节数。
+- 转档走 LibreOffice，默认 **2 分钟超时、2 并发**（`platform/convert/convert.go:34-47`）：大文件会排队，
+  客户端要有长耗时提示，**不要**在 30 秒超时后判失败。soffice 起不来回 **503「转档服务不可用」**、
+  源文件损坏回 400（`datum_file.go:807-825`）。
+- ⚠️ 转档后**`fileName` 保留原始扩展名**，内容却是 PDF（`datum_file.go:807-825`、`:853-855`）：
+  下载下来可能是「.docx 的扩展名 + PDF 的内容」。客户端预览要按 `fileFormat` 判断类型，不要看扩展名。
 - `txt/md` 必须是 UTF-8，否则 400「文本文件仅支持 UTF-8 编码」。
 - 上传成功 `data{fileId,fileUrl,fileName}`；新文件 `fileStatus=0`，不计入公开列表 / 树，直到审核通过。
+- **电子书不要走这条端点**：即使 `fileType=7` 仍能写进 `ptmj_file`（`datum_file.go:48-51` 只留了个类型名），
+  它也不会出现在电子书列表里。电子书走 `/datum/ebook/upload`。
 
 ## 电子书 `/datum/ebook`
+
+> **数据源是独立表 `ptmj_ebook`**（`modules/datum/schema.go:199-266`、`modules/datum/ebook_repository.go`），
+> 不是 `ptmj_file.fileType=7`。`fileType` 字典里那个 7 只是历史名字（`datum_file.go:48-51`），
+> 普通上传显式传 7 只会写进 `ptmj_file`，**不会出现在电子书列表**。上游旧文档「电子书复用试卷链路」已作废。
+> 下载也走**独立端点** `/datum/download/ebook`，不共用 `/datum/download/file`。
 
 | 方法 | 路径 | 门禁 | 用途 | 形状 |
 |---|---|---|---|---|
@@ -240,8 +256,14 @@ multipart 字段：`file`（必填）、`ebookName`（缺省用文件名，1–2
 - 支持 `Range`；`http.ServeContent` 负责 `206` / `416` / `Content-Length`。
 - 资料 / 电子书未审核时仅属主可下载，其余 404。
 - 每次成功建立流都会写一条下载记录；**Range 续传每次也会写一条**，这是上游接受的口径
-  （`datum_activity.go:520-585`）。客户端「我的下载」按 `fileId` 合并去重，不要按记录条数展示。
-- 经 edge 时每 IP 只允许 1 个下载连接（`deploy/nginx.conf.template`）：**下载队列默认串行**，并发 > 1 会被拒。
+  （`datum_activity.go:549-552`、注释 `:570`）。记录是**纯 INSERT、无去重**（`modules/datum/activity_repository.go:19-23`）。
+- 客户端「我的下载」按 `fileId` 合并去重，不要按记录条数展示。
+- ⚠️ 上游 `我的下载` 的 `total` 与 `rows` 口径不一致：页查询 `GROUP BY f.file_id`（`:53-65`），
+  而 `total` 数的是 join 行数 `count(*)`（`:44-50`）。因此**分页是否有下一页要看 `rows` 条数，不要用 `total` 推算**，
+  否则会出现「提前判定到底」或「翻到空页」。
+- 经 edge 时每 IP 只允许 1 个下载连接（`deploy/nginx.conf.template:86-93`）：**下载队列默认串行**，并发 > 1 会被拒。
+- 应用层还有一条全局 bulk 令牌桶（`qos.go:29-50`）：下载与封面 / 头像 / 上传物**共用同一个桶**，
+  多连接不会更快，只会互抢。取消必须由客户端做，否则额度一直被占。
 
 ## 举报
 
@@ -277,13 +299,15 @@ multipart 字段：`file`（必填）、`ebookName`（缺省用文件名，1–2
   「举报已受理，请勿重复举报，若遇到问题请联系管理员」。
 - `result`：0 待处理、1 属实（内容下架）、2 不属实。
 - 时间线是**按举报 id**，不是按文件 id；初稿写成 `/timeline/{fileId}` 是错的，已按源码修正。
+- ⚠️ 审核**没有封禁分支**（`datum_report.go:283-333` 只有「属实 → 下架 → 发 type-4 通知」）：
+  界面**不要**向用户承诺「举报会封号」，写「核实后会下架内容」。
 
 ## 社区
 
 | 方法 | 路径 | 门禁 | 用途 | 形状 |
 |---|---|---|---|---|
 | GET | `/datum/user/rank` # | 匿名 | 上传排行（Top 50） | ✅ `data[{userId,userName,avatar,count,uploads}]`；Redis 故障 503，客户端显示旧缓存 |
-| GET | `/datum/user/{userId}` | 匿名 | 用户公开资料 | ✅ `data{userId,userName,nickName,avatar,count,status,createTime,updateTime,remark}` |
+| GET | `/datum/user/{userId}` | 匿名 | 用户公开资料 | ✅ `data{userId,userName,nickName,avatar,count,status,createTime,updateTime,remark}`；**`remark` 是运营备注，客户端不得渲染**，`status` 只用来判「该用户不可见」 |
 | GET | `/datum/user/list` | 匿名 | 平台用户列表（管理向） | — 客户端暂无用途 |
 
 ## 通知
@@ -323,7 +347,11 @@ multipart 字段：`file`（必填）、`ebookName`（缺省用文件名，1–2
 |---|---|---|---|
 | GET | `/datum/knowledge/manifest` | 会话 | `{sources, total, partial}`；按 `updated` 倒序，最多返回前 200 条 |
 | GET | `/datum/knowledge/source?kind=&id=&revision=` | 会话 | 单资源元信息；`kind` 为 `file` / `ebook`，仅已审核；`revision` 不匹配 409 |
-| GET | `/datum/knowledge/content?kind=&id=&revision=` ⇣ | 可选会话 | 正文流；仅 `pdf` / `epub` / `txt` / `md`，≤ 16 MiB，不落下载记录 |
+| GET | `/datum/knowledge/content?kind=&id=&revision=` ⇣ | **匿名** | 正文流；仅 `pdf` / `epub` / `txt` / `md`，≤ 16 MiB，不落下载记录；响应带 `no-store` 与 `inline` |
+
+- `content` 是**唯一匿名**的一条（`datum_knowledge.go:23` 没挂鉴权中间件），另外两条要 datum 会话（`:19-20`）。
+  本仓客户端不调用它，但它和 `/datum/file/content` 长得像，容易混。
+- 只读已上架、未删、格式与大小合规的资源；正文直接从存储读，**不写 `ptmj_file_download`**。
 
 这是独立 Agent 模块的契约，Windows / Linux / Android 客户端**不调用**；列出只为避免与文件预览混淆。
 后续若要接本地阅读助手，先补 `spec/api/knowledge.md` 与夹具，再在端上实现。
