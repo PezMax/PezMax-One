@@ -41,6 +41,23 @@ System.ComponentModel.Win32Exception (5): 拒绝访问
 这不是测试本身的问题——vstest 的 testhost 要 `OpenProcess` 父进程句柄来挂退出回调，被沙箱拦了。
 换普通终端跑即可；实在要在沙箱里验证，把测试产物目录里的程序集当成库、自己反射调用 `[Fact]` 方法。
 
+### 免签名本地运行（验证界面）
+
+还没有代码签名证书，`Add-AppxPackage -Path *.msix` 会被拒。可绕开签名做**松散文件注册**，
+但**必须用 `AppPackages\..._Test\` 里 `.msix` 的内容**，不能注册 `bin\Release\AppxManifest.xml`：
+后者指向 IL 布局，激活期直接崩（`0xe0434352`，没有任何托管日志）。
+
+```powershell
+$dest = "$env:TEMP\pezmax-run"
+Expand-Archive windows\src\PezMax.App\AppPackages\PezMax.App_*_x64_Test\PezMax.App_*_x64.msix -DestinationPath $dest -Force
+Add-AppxPackage -Register "$dest\AppxManifest.xml"
+Start-Process "shell:AppsFolder\PezMax.One_0say9r0m9v83e!App"   # AUMID 用 Get-AppxPackage 查
+```
+
+每次改了代码要重新解包再注册（注册记录指向那份解包目录，不指向仓库）。验证完 `Remove-AppxPackage` 收拾干净。
+截图不必上工具：`user32!PrintWindow` 对 UWP 的 `Windows.UI.Core.CoreWindow` 用 `PW_RENDERFULLCONTENT(2)`
+能抓到位图，被遮挡也能抓。
+
 ## Linux 端
 
 Kanesumi harness 只在 Linux（Wayland）上编译与运行。
