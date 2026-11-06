@@ -42,6 +42,7 @@ PezMax-One 的三个端（Windows `windows/`、Linux `linux/`、Android `android
 | `api/endpoints.md` | 客户端用到的端点目录：方法、路径、门禁、参数、响应形状 | 📝 M1 读接口与账户 / 个人中心已补齐；写接口随实现补 |
 | `api/envelope.md` | 信封、错误、HTTP 状态码与会话失效 | ✅ 已按源码写定 |
 | `api/auth.md` | 登录 / 注册 / 找回密码 / 密保三问三答流程与校验规则 | ✅ 已按源码写定 |
+| `api/desktop-reference.md` | 旧 Electron 官方端的调用方式（参数怎么写、字段读哪个）+ 它的过时用法清单 | ✅ 参考手册；契约仍以 `endpoints.md` 为准 |
 | `fixtures/envelope/` | 成功、业务错误、401、非 JSON 响应的解析结果 | ✅ 初版 13 例 |
 | `fixtures/pagination/` | `TableDataInfo` 与其它分页形状的归一；`pageSize ≤ 100`；按 `total` 拉全量的终止条件 | ✅ 初版 11 例 |
 | `fixtures/auth/` | 注册 / 两步找回 / 登录的表单校验矩阵（文案与判定顺序逐条对齐上游 handler） | ✅ 初版 25 例 |
