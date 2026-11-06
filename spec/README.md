@@ -46,7 +46,7 @@ PezMax-One 的三个端（Windows `windows/`、Linux `linux/`、Android `android
 | `fixtures/envelope/` | 成功、业务错误、401、非 JSON 响应的解析结果 | ✅ 初版 13 例 |
 | `fixtures/pagination/` | `TableDataInfo` 与其它分页形状的归一；`pageSize ≤ 100`；按 `total` 拉全量的终止条件 | ✅ 初版 11 例 |
 | `fixtures/auth/` | 注册 / 两步找回 / 登录的表单校验矩阵（文案与判定顺序逐条对齐上游 handler） | ✅ 初版 25 例 |
-| `fixtures/state-cache/` | 文件树 / 排行的哈希缓存协议：首次、未变化、已变化、本地缓存损坏 | 待写 |
+| `fixtures/state-cache/` | 哈希缓存的本地状态机：键按 (服务器, 资源) 隔离、损坏缓存不可用、并发响应按序号落地 | ✅ 初版 17 例 |
 | `fixtures/file-tree/` | 树响应 → 导航模型（层级、文件夹在前、面包屑、`fileId` 不从 `id` 解析、服务端兜底值原样显示） | ✅ 初版 15 例 |
 | `fixtures/url/` | 文件 URL 归一：相对路径、内网 host 改写、`minio://`、`data:` / `blob:` 原样。**过渡规则**，上游 ETL 后按条撤除 | ✅ 初版 21 例 |
 | `fixtures/download/` | 断点续传决策表：`before` / `response` / `after` 三个决策点，`Range`、`If-Range`、`206`、`416`、ETag 失效 | ✅ 初版 20 例 |

@@ -1,0 +1,169 @@
+[
+  {
+    "id": "state-cache.key.same-server-hit",
+    "description": "同一服务器、同一资源：命中，可以直接用它带 hash 去问",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:181-195",
+    "input": {
+      "kind": "key",
+      "serverUrl": "https://pz.example.com",
+      "resource": "tree",
+      "entries": [
+        { "serverUrl": "https://pz.example.com", "resource": "tree", "hash": "h1", "payload": [] }
+      ]
+    },
+    "expect": { "hit": true }
+  },
+  {
+    "id": "state-cache.key.server-changed",
+    "description": "换后端地址后旧服务器的树缓存必须未命中：否则渲染的是另一个站点的数据",
+    "source": "spec/ARCHITECTURE.md 决策 D13（改服务器地址后清会话）+ 本目录 README「key」",
+    "input": {
+      "kind": "key",
+      "serverUrl": "https://new.example.com",
+      "resource": "tree",
+      "entries": [
+        { "serverUrl": "https://old.example.com", "resource": "tree", "hash": "h1", "payload": [] }
+      ]
+    },
+    "expect": { "hit": false }
+  },
+  {
+    "id": "state-cache.key.resource-independent",
+    "description": "树与排行各自一个键：排行的缓存不能拿来当树用",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:245-262",
+    "input": {
+      "kind": "key",
+      "serverUrl": "https://pz.example.com",
+      "resource": "tree",
+      "entries": [
+        { "serverUrl": "https://pz.example.com", "resource": "rank", "hash": "r1", "payload": [] }
+      ]
+    },
+    "expect": { "hit": false }
+  },
+  {
+    "id": "state-cache.key.trailing-slash-normalized",
+    "description": "服务器地址末尾带斜杠属于同一台服务器：仍命中（存键前先归一）",
+    "source": "spec/fixtures/state-cache/README.md「key」",
+    "input": {
+      "kind": "key",
+      "serverUrl": "https://pz.example.com/",
+      "resource": "tree",
+      "entries": [
+        { "serverUrl": "https://pz.example.com", "resource": "tree", "hash": "h1", "payload": [] }
+      ]
+    },
+    "expect": { "hit": true }
+  },
+  {
+    "id": "state-cache.load.missing-file",
+    "description": "本地没有缓存文件：当没有缓存处理，首次请求不带 hash",
+    "source": "spec/fixtures/state-cache/README.md「load」",
+    "input": { "kind": "load", "entry": null },
+    "expect": { "usable": false }
+  },
+  {
+    "id": "state-cache.load.corrupt-json",
+    "description": "缓存文件损坏（写一半断电）：当没有缓存，并删掉坏文件",
+    "source": "spec/fixtures/state-cache/README.md「load」",
+    "input": { "kind": "load", "entry": { "raw": "{\"hash\":\"h1\",\"payload\":[{" } },
+    "expect": { "usable": false }
+  },
+  {
+    "id": "state-cache.load.empty-hash",
+    "description": "hash 为空串：缓存不可用，不要带空 hash 去问",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:182",
+    "input": { "kind": "load", "entry": { "hash": "", "payload": [] } },
+    "expect": { "usable": false }
+  },
+  {
+    "id": "state-cache.load.null-payload",
+    "description": "payload 为 null：不可用（上次是 unchanged，本地数据已经丢了）",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:182-188",
+    "input": { "kind": "load", "entry": { "hash": "h1", "payload": null } },
+    "expect": { "usable": false }
+  },
+  {
+    "id": "state-cache.load.ok",
+    "description": "hash 与 payload 都在：可用，带 hash 去问",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:181-195",
+    "input": { "kind": "load", "entry": { "hash": "h1", "payload": [ { "id": "folder-a" } ] } },
+    "expect": { "usable": true }
+  },
+  {
+    "id": "state-cache.apply.first-fetch",
+    "description": "首次请求（本地无 hash）：保存服务端给的 hash 与 payload",
+    "source": "spec/api/envelope.md §5 规则 1",
+    "input": {
+      "kind": "apply",
+      "previous": { "hash": "", "usable": false },
+      "response": { "kind": "success", "unchanged": false, "hash": "h1", "data": [ { "id": "folder-a" } ] }
+    },
+    "expect": { "action": "store", "hash": "h1" }
+  },
+  {
+    "id": "state-cache.apply.unchanged-keeps-local",
+    "description": "服务端说未变：沿用本地 payload，绝不把 null 写进缓存",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:184-186",
+    "input": {
+      "kind": "apply",
+      "previous": { "hash": "h1", "usable": true },
+      "response": { "kind": "success", "unchanged": true, "hash": "h1", "data": null }
+    },
+    "expect": { "action": "keep", "hash": "h1" }
+  },
+  {
+    "id": "state-cache.apply.changed-replaces",
+    "description": "有写操作导致 hash 变了：整体替换 payload 与 hash",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:169-180、260-262",
+    "input": {
+      "kind": "apply",
+      "previous": { "hash": "h1", "usable": true },
+      "response": { "kind": "success", "unchanged": false, "hash": "h2", "data": [ { "id": "folder-b" } ] }
+    },
+    "expect": { "action": "store", "hash": "h2" }
+  },
+  {
+    "id": "state-cache.apply.unchanged-without-local",
+    "description": "服务端说未变但本地没有可用 payload：立刻不带 hash 重取一次",
+    "source": "spec/api/envelope.md §5 规则 5",
+    "input": {
+      "kind": "apply",
+      "previous": { "hash": "h1", "usable": false },
+      "response": { "kind": "success", "unchanged": true, "hash": "h1", "data": null }
+    },
+    "expect": { "action": "refetch" }
+  },
+  {
+    "id": "state-cache.apply.failure-keeps-local",
+    "description": "请求失败（5xx / 断网）：保留旧 payload 继续显示，不要把错误写进缓存",
+    "source": "spec/api/envelope.md §5 规则 6",
+    "input": {
+      "kind": "apply",
+      "previous": { "hash": "h1", "usable": true },
+      "response": { "kind": "failure", "status": 503 }
+    },
+    "expect": { "action": "keep", "hash": "h1" }
+  },
+  {
+    "id": "state-cache.stale.old-response-discarded",
+    "description": "先发的请求后到：序号更小，丢弃，不能覆盖已经落地的新结果",
+    "source": "spec/fixtures/state-cache/README.md「stale」",
+    "input": { "kind": "stale", "appliedSeq": 2, "incomingSeq": 1 },
+    "expect": { "apply": false }
+  },
+  {
+    "id": "state-cache.stale.newer-response-applied",
+    "description": "序号更大的响应正常落地",
+    "source": "spec/fixtures/state-cache/README.md「stale」",
+    "input": { "kind": "stale", "appliedSeq": 1, "incomingSeq": 2 },
+    "expect": { "apply": true }
+  },
+  {
+    "id": "state-cache.stale.same-seq-idempotent",
+    "description": "同一序号重复到达（重试）：允许落地，结果幂等",
+    "source": "spec/fixtures/state-cache/README.md「stale」",
+    "input": { "kind": "stale", "appliedSeq": 2, "incomingSeq": 2 },
+    "expect": { "apply": true }
+  }
+]
