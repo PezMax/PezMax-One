@@ -1,0 +1,213 @@
+[
+  {
+    "id": "download.before.no-part",
+    "description": "没有半成品：直接从头请求，不带 Range / If-Range",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_activity.go:568-573",
+    "input": { "kind": "before", "part": { "size": 0 } },
+    "expect": { "action": "start", "offset": 0, "discardPart": false }
+  },
+  {
+    "id": "download.before.resume-with-strong-etag",
+    "description": "半成品 + 强 ETag：带 Range 与 If-Range 续传",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_activity.go:562-573",
+    "input": { "kind": "before", "part": { "size": 1024, "etag": "\"datum-12-4096\"" } },
+    "expect": {
+      "action": "resume",
+      "offset": 1024,
+      "discardPart": false,
+      "range": "bytes=1024-",
+      "ifRange": "\"datum-12-4096\""
+    }
+  },
+  {
+    "id": "download.before.no-etag",
+    "description": "半成品在但元数据没 ETag：无法校验，删掉重下，不发半个 If-Range",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_activity.go:562-566",
+    "input": { "kind": "before", "part": { "size": 1024 } },
+    "expect": { "action": "restart", "offset": 0, "discardPart": true }
+  },
+  {
+    "id": "download.before.weak-etag",
+    "description": "只有弱 ETag（W/ 前缀）：If-Range 不接受弱校验器，按无法校验处理",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_activity.go:562-566",
+    "input": { "kind": "before", "part": { "size": 1024, "etag": "W/\"datum-12-4096\"" } },
+    "expect": { "action": "restart", "offset": 0, "discardPart": true }
+  },
+  {
+    "id": "download.response.200-fresh",
+    "description": "全新下载、服务端回 200：按 Content-Length 作为总大小",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_activity.go:568-573",
+    "input": {
+      "kind": "response",
+      "part": { "size": 0 },
+      "response": { "status": 200, "etag": "\"datum-12-4096\"", "contentLength": 4096 }
+    },
+    "expect": { "action": "start", "offset": 0, "total": 4096, "discardPart": false }
+  },
+  {
+    "id": "download.response.200-ignores-range",
+    "description": "续传时服务端回 200（If-Range 不匹配 / 被忽略）：必须截断重写，不能追加",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_activity.go:568-573",
+    "input": {
+      "kind": "response",
+      "part": { "size": 1024, "etag": "\"datum-12-4096\"" },
+      "response": { "status": 200, "etag": "\"datum-12-9999\"", "contentLength": 9999 }
+    },
+    "expect": { "action": "restart", "offset": 0, "total": 9999, "discardPart": true }
+  },
+  {
+    "id": "download.response.206-valid",
+    "description": "半成品 1024 字节、ETag 一致、Content-Range 覆盖到末尾：可以续",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_activity.go:562-573",
+    "input": {
+      "kind": "response",
+      "part": { "size": 1024, "etag": "\"datum-12-4096\"" },
+      "response": {
+        "status": 206,
+        "etag": "\"datum-12-4096\"",
+        "contentLength": 3072,
+        "contentRange": "bytes 1024-4095/4096"
+      }
+    },
+    "expect": { "action": "resume", "offset": 1024, "total": 4096, "discardPart": false }
+  },
+  {
+    "id": "download.response.206-unexpected-without-part",
+    "description": "没发 Range 却收到 206：服务端行为异常，直接失败而不是猜着写",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_activity.go:568-573",
+    "input": {
+      "kind": "response",
+      "part": { "size": 0 },
+      "response": {
+        "status": 206,
+        "etag": "\"datum-12-4096\"",
+        "contentRange": "bytes 0-1023/4096"
+      }
+    },
+    "expect": { "action": "fail", "offset": 0, "total": 0, "discardPart": false }
+  },
+  {
+    "id": "download.response.206-etag-changed",
+    "description": "206 但 ETag 与半成品记录不符：续上去就是拼错文件，重下",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_activity.go:562-573",
+    "input": {
+      "kind": "response",
+      "part": { "size": 1024, "etag": "\"datum-12-4096\"" },
+      "response": {
+        "status": 206,
+        "etag": "\"datum-12-5000\"",
+        "contentRange": "bytes 1024-4999/5000"
+      }
+    },
+    "expect": { "action": "restart", "offset": 0, "total": 0, "discardPart": true }
+  },
+  {
+    "id": "download.response.206-not-tail",
+    "description": "Content-Range 没有到文件末尾：起点不可信，重下",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_activity.go:568-573",
+    "input": {
+      "kind": "response",
+      "part": { "size": 1024, "etag": "\"datum-12-9999\"" },
+      "response": {
+        "status": 206,
+        "etag": "\"datum-12-9999\"",
+        "contentRange": "bytes 1024-2047/9999"
+      }
+    },
+    "expect": { "action": "restart", "offset": 0, "total": 0, "discardPart": true }
+  },
+  {
+    "id": "download.response.206-missing-content-range",
+    "description": "206 但没有 Content-Range：拿不到总大小与终点，重下",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_activity.go:568-573",
+    "input": {
+      "kind": "response",
+      "part": { "size": 1024, "etag": "\"datum-12-4096\"" },
+      "response": { "status": 206, "etag": "\"datum-12-4096\"" }
+    },
+    "expect": { "action": "restart", "offset": 0, "total": 0, "discardPart": true }
+  },
+  {
+    "id": "download.response.416-with-part",
+    "description": "半成品已等于服务端文件大小（只是没改名）再要 Range 会 416：删掉重下，别死循环",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_activity.go:568-573",
+    "input": {
+      "kind": "response",
+      "part": { "size": 4096, "etag": "\"datum-12-4096\"" },
+      "response": { "status": 416, "etag": "\"datum-12-4096\"" }
+    },
+    "expect": { "action": "restart", "offset": 0, "total": 0, "discardPart": true }
+  },
+  {
+    "id": "download.response.416-without-part",
+    "description": "没有半成品却收到 416：请求本身不合法，报错并把半成品留着",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_activity.go:568-573",
+    "input": {
+      "kind": "response",
+      "part": { "size": 0 },
+      "response": { "status": 416 }
+    },
+    "expect": { "action": "fail", "offset": 0, "total": 0, "discardPart": false }
+  },
+  {
+    "id": "download.response.401",
+    "description": "401：清会话回登录层；半成品保留，重新登录还能接着下",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_user_auth.go:462-489",
+    "input": {
+      "kind": "response",
+      "part": { "size": 1024, "etag": "\"datum-12-4096\"" },
+      "response": { "status": 401 }
+    },
+    "expect": { "action": "session-expired", "offset": 0, "total": 0, "discardPart": false }
+  },
+  {
+    "id": "download.response.404",
+    "description": "404（未过审 / 对象键无法解析 / 对象不存在）：报错，保留半成品，不自动重试",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_activity.go:532-546",
+    "input": {
+      "kind": "response",
+      "part": { "size": 0 },
+      "response": { "status": 404 }
+    },
+    "expect": { "action": "fail", "offset": 0, "total": 0, "discardPart": false }
+  },
+  {
+    "id": "download.response.503",
+    "description": "5xx：可重试的失败，半成品保留",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_activity.go:568-573",
+    "input": {
+      "kind": "response",
+      "part": { "size": 2048, "etag": "\"datum-12-4096\"" },
+      "response": { "status": 503 }
+    },
+    "expect": { "action": "fail", "offset": 0, "total": 0, "discardPart": false }
+  },
+  {
+    "id": "download.after.reached-total",
+    "description": "写完的字节数等于总大小：改名收工",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_activity.go:568-573",
+    "input": { "kind": "after", "written": 4096, "total": 4096 },
+    "expect": { "action": "complete", "offset": 0, "total": 4096, "discardPart": false }
+  },
+  {
+    "id": "download.after.partial",
+    "description": "还没写完：继续写",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_activity.go:568-573",
+    "input": { "kind": "after", "written": 1024, "total": 4096 },
+    "expect": { "action": "continue", "offset": 0, "total": 4096, "discardPart": false }
+  },
+  {
+    "id": "download.after.unknown-total",
+    "description": "总大小未知（服务端没给 Content-Length）：不能按字节数判定完成，等流结束",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_activity.go:554-578",
+    "input": { "kind": "after", "written": 1024, "total": 0 },
+    "expect": { "action": "continue", "offset": 0, "total": 0, "discardPart": false }
+  },
+  {
+    "id": "download.after.overflow",
+    "description": "写入字节数超过总大小：流或长度不可信，报错并清掉半成品",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_activity.go:568-573",
+    "input": { "kind": "after", "written": 5000, "total": 4096 },
+    "expect": { "action": "fail", "offset": 0, "total": 4096, "discardPart": true }
+  }
+]

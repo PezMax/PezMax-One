@@ -1,0 +1,149 @@
+[
+  {
+    "id": "url.empty",
+    "description": "空地址返回空串，调用方按「没有地址」处理，不要拼出 BaseUrl 自身",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/platform/fileurl/fileurl.go:100-102",
+    "input": { "url": "", "baseUrl": "https://pz.example.com" },
+    "expect": { "url": "" }
+  },
+  {
+    "id": "url.whitespace",
+    "description": "只有空白的地址等同于空：库里偶尔有被空格污染的字段",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/platform/fileurl/fileurl.go:99-102",
+    "input": { "url": "   ", "baseUrl": "https://pz.example.com" },
+    "expect": { "url": "" }
+  },
+  {
+    "id": "url.data-uri",
+    "description": "data: 内联图原样返回（头像、预览缩略图会用到）；服务端对象地址不会是这个形态",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/platform/fileurl/fileurl.go:89-97",
+    "input": { "url": "data:image/png;base64,iVBORw0KGgo=", "baseUrl": "https://pz.example.com" },
+    "expect": { "url": "data:image/png;base64,iVBORw0KGgo=" }
+  },
+  {
+    "id": "url.blob-uri",
+    "description": "blob: 原样返回：那是本端生成的临时对象，拼 BaseUrl 只会拼坏",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/platform/fileurl/fileurl.go:89-97",
+    "input": { "url": "blob:https://pz.example.com/2f9a-11", "baseUrl": "https://pz.example.com" },
+    "expect": { "url": "blob:https://pz.example.com/2f9a-11" }
+  },
+  {
+    "id": "url.relative.leading-slash",
+    "description": "以 / 开头的相对路径：BaseUrl + 原路径（封面 / 头像这类静态文件要能显示）",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/platform/fileurl/fileurl.go:23-26",
+    "input": { "url": "/upload/2025/a.pdf", "baseUrl": "https://pz.example.com" },
+    "expect": { "url": "https://pz.example.com/upload/2025/a.pdf" }
+  },
+  {
+    "id": "url.relative.no-leading-slash",
+    "description": "不带前导 / 的相对路径：补一个再拼，避免拼出 https://pz.example.comupload",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/platform/fileurl/fileurl.go:23-26",
+    "input": { "url": "upload/2025/a.pdf", "baseUrl": "https://pz.example.com" },
+    "expect": { "url": "https://pz.example.com/upload/2025/a.pdf" }
+  },
+  {
+    "id": "url.relative.base-with-trailing-slash",
+    "description": "BaseUrl 末尾带斜杠时不能拼出双斜杠",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/platform/fileurl/fileurl.go:23-26",
+    "input": { "url": "/upload/a.pdf", "baseUrl": "https://pz.example.com/" },
+    "expect": { "url": "https://pz.example.com/upload/a.pdf" }
+  },
+  {
+    "id": "url.relative.base-with-path-prefix",
+    "description": "BaseUrl 带路径前缀（反代常见）时保留前缀",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/platform/fileurl/fileurl.go:34-37",
+    "input": { "url": "/upload/a.pdf", "baseUrl": "https://pz.example.com/pez" },
+    "expect": { "url": "https://pz.example.com/pez/upload/a.pdf" }
+  },
+  {
+    "id": "url.minio-scheme",
+    "description": "minio:// 是存量行里的私有 scheme：host 是 bucket，路径是 objectKey",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/platform/fileurl/fileurl.go:109-114",
+    "input": { "url": "minio://kadmin/2025/a.pdf", "baseUrl": "https://pz.example.com" },
+    "expect": { "url": "https://pz.example.com/kadmin/2025/a.pdf" }
+  },
+  {
+    "id": "url.internal.localhost-with-port",
+    "description": "内网 localhost 带端口：换成 BaseUrl 的 origin，端口不保留",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/platform/fileurl/fileurl.go:4-12",
+    "input": { "url": "http://localhost:9000/kadmin/a.pdf", "baseUrl": "https://pz.example.com" },
+    "expect": { "url": "https://pz.example.com/kadmin/a.pdf" }
+  },
+  {
+    "id": "url.internal.loopback-ip",
+    "description": "127.0.0.1 与 localhost 同等对待：都是开发机回环",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/platform/fileurl/fileurl.go:4-12",
+    "input": { "url": "http://127.0.0.1:29000/kadmin/a.pdf", "baseUrl": "https://pz.example.com" },
+    "expect": { "url": "https://pz.example.com/kadmin/a.pdf" }
+  },
+  {
+    "id": "url.internal.docker-service-name",
+    "description": "docker compose 服务名 minio 出现在 host 上：同样是内网，改写到 BaseUrl",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/platform/fileurl/fileurl.go:4-12",
+    "input": { "url": "http://minio:9000/kadmin/a.pdf", "baseUrl": "https://pz.example.com" },
+    "expect": { "url": "https://pz.example.com/kadmin/a.pdf" }
+  },
+  {
+    "id": "url.internal.server-alias",
+    "description": "server 是 compose 里的别名，一并算内网",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/platform/fileurl/fileurl.go:4-12",
+    "input": { "url": "http://server:8080/kadmin/a.pdf", "baseUrl": "https://pz.example.com" },
+    "expect": { "url": "https://pz.example.com/kadmin/a.pdf" }
+  },
+  {
+    "id": "url.internal.private-172",
+    "description": "172.x 私有网段：内网部署最常见的一种，按前缀识别",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/platform/fileurl/fileurl.go:4-12",
+    "input": { "url": "http://172.20.0.5:9000/kadmin/a.pdf", "baseUrl": "https://pz.example.com" },
+    "expect": { "url": "https://pz.example.com/kadmin/a.pdf" }
+  },
+  {
+    "id": "url.internal.keeps-query",
+    "description": "改写只换 origin，query 与签名参数必须原样保留，否则外链失效",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/platform/fileurl/fileurl.go:4-12",
+    "input": { "url": "http://localhost:9000/kadmin/a.pdf?X-Amz-Signature=abc&exp=1", "baseUrl": "https://pz.example.com" },
+    "expect": { "url": "https://pz.example.com/kadmin/a.pdf?X-Amz-Signature=abc&exp=1" }
+  },
+  {
+    "id": "url.internal.base-with-port",
+    "description": "BaseUrl 自带端口时用 BaseUrl 的端口，不用原地址的端口",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/platform/fileurl/fileurl.go:4-12",
+    "input": { "url": "http://minio:9000/kadmin/a.pdf", "baseUrl": "https://pz.example.com:8443" },
+    "expect": { "url": "https://pz.example.com:8443/kadmin/a.pdf" }
+  },
+  {
+    "id": "url.public-absolute-untouched",
+    "description": "公网地址一个字符都不动：CDN、外链书签都靠这条",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/platform/fileurl/fileurl.go:1-13",
+    "input": { "url": "https://cdn.example.net/a.pdf?sig=1", "baseUrl": "https://pz.example.com" },
+    "expect": { "url": "https://cdn.example.net/a.pdf?sig=1" }
+  },
+  {
+    "id": "url.public-http-untouched",
+    "description": "公网明文 http 也原样返回：后端不做 http→https 改写，客户端也不擅自升",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/platform/fileurl/fileurl.go:1-13",
+    "input": { "url": "http://files.example.com:29000/kadmin/a.pdf", "baseUrl": "https://pz.example.com" },
+    "expect": { "url": "http://files.example.com:29000/kadmin/a.pdf" }
+  },
+  {
+    "id": "url.uppercase-scheme-public",
+    "description": "scheme 大小写不影响判定，公网地址按原样（含大写）返回",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/platform/fileurl/fileurl.go:115-117",
+    "input": { "url": "HTTPS://cdn.example.net/a.pdf", "baseUrl": "https://pz.example.com" },
+    "expect": { "url": "HTTPS://cdn.example.net/a.pdf" }
+  },
+  {
+    "id": "url.uppercase-scheme-internal",
+    "description": "大写 scheme 的内网地址照样要改写",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/platform/fileurl/fileurl.go:4-12",
+    "input": { "url": "HTTP://LOCALHOST:9000/kadmin/a.pdf", "baseUrl": "https://pz.example.com" },
+    "expect": { "url": "https://pz.example.com/kadmin/a.pdf" }
+  },
+  {
+    "id": "url.internal.keeps-path-encoding",
+    "description": "已百分号编码的路径不要二次编码：上游 ObjectURL 已按段转义",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/platform/fileurl/fileurl.go:151-156",
+    "input": { "url": "http://minio:9000/kadmin/%E5%9B%BE%E7%89%87%201.png", "baseUrl": "https://pz.example.com" },
+    "expect": { "url": "https://pz.example.com/kadmin/%E5%9B%BE%E7%89%87%201.png" }
+  }
+]

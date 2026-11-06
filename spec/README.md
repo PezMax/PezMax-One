@@ -47,8 +47,8 @@ PezMax-One 的三个端（Windows `windows/`、Linux `linux/`、Android `android
 | `fixtures/auth/` | 注册 / 两步找回 / 登录的表单校验矩阵（文案与判定顺序逐条对齐上游 handler） | ✅ 初版 25 例 |
 | `fixtures/state-cache/` | 文件树 / 排行的哈希缓存协议：首次、未变化、已变化、本地缓存损坏 | 待写 |
 | `fixtures/file-tree/` | 树响应 → 导航模型（学科 / 学校 / 类型 / 年份层级、节点 id、排序） | 待写 |
-| `fixtures/url/` | 文件 URL 归一：相对路径、内网 host 改写、`data:` / `blob:` 原样。**过渡规则**，上游修库后按条撤除 | 待写 |
-| `fixtures/download/` | 断点续传状态机：Range 续传、ETag 变化重下、416、空对象、取消、服务端限流 | 待写 |
+| `fixtures/url/` | 文件 URL 归一：相对路径、内网 host 改写、`minio://`、`data:` / `blob:` 原样。**过渡规则**，上游 ETL 后按条撤除 | ✅ 初版 21 例 |
+| `fixtures/download/` | 断点续传决策表：`before` / `response` / `after` 三个决策点，`Range`、`If-Range`、`206`、`416`、ETag 失效 | ✅ 初版 20 例 |
 | `fixtures/upload/` | 扩展名白名单、大小上限、哪些格式会转 PDF、TXT / MD 编码要求 | 待写 |
 | `fixtures/notification/` | 5 类通知的可见窗口（发布 / 故障 / 维护时间段）、展示方式、本地已读按用户隔离 | 待写 |
 | `fixtures/update/` | CrateStack 资产解析与版本比较（规则同 Ncrust，前缀换为 `pezmax-one-`，补多段扩展名） | 待写（M0 第一批） |
