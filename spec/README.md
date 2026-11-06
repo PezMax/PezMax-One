@@ -53,7 +53,7 @@ PezMax-One 的三个端（Windows `windows/`、Linux `linux/`、Android `android
 | `fixtures/upload/` | 两套上传规则（资料 / 电子书）、字节 vs rune 的边界、转档与 200MB 硬上限、批量逐个结果 | ✅ 初版 28 例 |
 | `fixtures/notification/` | 通道判定、弹窗队列与一次性语义、本地已读按用户隔离、`hash` + `unchanged` 缓存 | ✅ 初版 25 例 |
 | `fixtures/update/` | CrateStack 资产解析与版本比较（前缀 `pezmax-one-`，多段扩展名，`amd64` 不算 `x86_64`，镜像前缀） | ✅ 初版 23 例 |
-| `design/tokens.json` | 颜色、字号、缓动、时长、布局常量 | 待写（随第一个端落地） |
+| `design/tokens.json` | 颜色（深 / 浅 / 高对比三档）、圆角、字号、布局不变量；只收已落地的值 | ✅ 首版（来源：Windows `Themes/PezMax.xaml`） |
 | `tools/` | 零依赖的契约探针脚本（只读请求；写操作的脚本必须在文件头注明「会改账号数据」） | 待写 |
 
 消费方：
