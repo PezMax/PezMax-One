@@ -51,7 +51,7 @@ PezMax-One 的三个端（Windows `windows/`、Linux `linux/`、Android `android
 | `fixtures/url/` | 文件 URL 归一：相对路径、内网 host 改写、`minio://`、`data:` / `blob:` 原样。**过渡规则**，上游 ETL 后按条撤除 | ✅ 初版 21 例 |
 | `fixtures/download/` | 断点续传决策表：`before` / `response` / `after` 三个决策点，`Range`、`If-Range`、`206`、`416`、ETag 失效 | ✅ 初版 20 例 |
 | `fixtures/upload/` | 扩展名白名单、大小上限、哪些格式会转 PDF、TXT / MD 编码要求 | 待写 |
-| `fixtures/notification/` | 5 类通知的可见窗口（发布 / 故障 / 维护时间段）、展示方式、本地已读按用户隔离 | 待写 |
+| `fixtures/notification/` | 通道判定、弹窗队列与一次性语义、本地已读按用户隔离、`hash` + `unchanged` 缓存 | ✅ 初版 25 例 |
 | `fixtures/update/` | CrateStack 资产解析与版本比较（规则同 Ncrust，前缀换为 `pezmax-one-`，补多段扩展名） | 待写（M0 第一批） |
 | `design/tokens.json` | 颜色、字号、缓动、时长、布局常量 | 待写（随第一个端落地） |
 | `tools/` | 零依赖的契约探针脚本（只读请求；写操作的脚本必须在文件头注明「会改账号数据」） | 待写 |

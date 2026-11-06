@@ -339,6 +339,13 @@ multipart 字段：`file`（必填）、`ebookName`（缺省用文件名，1–2
 - `displayMode` 与可见窗口由服务端筛选；客户端只按返回结果展示，不自行判断时间段。
 - 已读状态**只在客户端本地**按 `(userId, notifyId)` 记录；服务端没有 per-user 已读模型。
 - `popup` / `scroll` 用内容哈希：同一组通知未变时 `unchanged=true`、`data=null`，客户端沿用本地。
+- ⚠️ 两个容易踩空的点（细节与用例见 `fixtures/notification/`）：
+  - `scroll` 通道**没有** type 4 定向过滤（`notification_repository.go:52-56`，`popup` 才有 `:44`），
+    客户端要自己挡掉「别人的下架通知」；
+  - 响应里**没有** `forceUpdate` / `updateDownloadUrl`。所谓「强制更新」在契约里不存在，
+    要做只能靠客户端比版本，别指望通知字段（旧 Electron 端就是这么空转的）。
+- `faultStartTime` / `faultEndTime` / `maintenanceStartTime` / `maintenanceEndTime` / `remindBeforeMinutes`
+  上游**只存不判**，客户端只能拿来做展示文案（如维护倒计时）。
 
 ## 本地 Agent 接口（非客户端 M1 范围）
 

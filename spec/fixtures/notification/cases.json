@@ -1,0 +1,308 @@
+[
+  {
+    "id": "notification.channel.popup-type1",
+    "description": "弹窗通道的版本更新：服务端已按通道筛过，来了就展示",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/modules/datum/notification_repository.go:41-45",
+    "input": {
+      "kind": "channel",
+      "userId": 7,
+      "channel": "popup",
+      "notification": { "notifyId": 1, "notifyType": "1", "displayMode": "0", "uploadUserId": 0 }
+    },
+    "expect": { "show": true }
+  },
+  {
+    "id": "notification.channel.popup-type4-for-owner",
+    "description": "下架通知给到材料上传者本人：弹",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/modules/datum/notification_repository.go:44",
+    "input": {
+      "kind": "channel",
+      "userId": 7,
+      "channel": "popup",
+      "notification": { "notifyId": 9, "notifyType": "4", "displayMode": "0", "uploadUserId": 7, "materialId": 12 }
+    },
+    "expect": { "show": true }
+  },
+  {
+    "id": "notification.channel.popup-type4-not-owner",
+    "description": "服务端不该把别人的下架通知发到弹窗通道；万一发了也不展示",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/modules/datum/notification_repository.go:44",
+    "input": {
+      "kind": "channel",
+      "userId": 7,
+      "channel": "popup",
+      "notification": { "notifyId": 9, "notifyType": "4", "displayMode": "0", "uploadUserId": 42, "materialId": 12 }
+    },
+    "expect": { "show": false }
+  },
+  {
+    "id": "notification.channel.scroll-type4-other-user",
+    "description": "滚动通道不排除 type 4：别人的下架通知不能在滚动条里出现",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/modules/datum/notification_repository.go:52-56",
+    "input": {
+      "kind": "channel",
+      "userId": 7,
+      "channel": "scroll",
+      "notification": { "notifyId": 9, "notifyType": "4", "displayMode": "1", "uploadUserId": 42, "materialId": 12 }
+    },
+    "expect": { "show": false }
+  },
+  {
+    "id": "notification.channel.scroll-type4-for-owner",
+    "description": "自己的下架通知落在滚动通道时正常展示（兜底不误杀）",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/modules/datum/notification_repository.go:52-56",
+    "input": {
+      "kind": "channel",
+      "userId": 7,
+      "channel": "scroll",
+      "notification": { "notifyId": 9, "notifyType": "4", "displayMode": "1", "uploadUserId": 7, "materialId": 12 }
+    },
+    "expect": { "show": true }
+  },
+  {
+    "id": "notification.channel.scroll-type5",
+    "description": "公告走滚动通道，与本用户无关也展示",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/modules/datum/notification_repository.go:52-56",
+    "input": {
+      "kind": "channel",
+      "userId": 7,
+      "channel": "scroll",
+      "notification": { "notifyId": 3, "notifyType": "5", "displayMode": "1", "uploadUserId": 0 }
+    },
+    "expect": { "show": true }
+  },
+  {
+    "id": "notification.popup-plan.all-fresh",
+    "description": "都没弹过：按服务端顺序（sort DESC, notify_id DESC）依次弹",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/modules/datum/notification_repository.go:45",
+    "input": {
+      "kind": "popup-plan",
+      "userId": 7,
+      "seen": [],
+      "rows": [
+        { "notifyId": 12, "notifyType": "2", "displayMode": "0" },
+        { "notifyId": 11, "notifyType": "1", "displayMode": "0" },
+        { "notifyId": 10, "notifyType": "5", "displayMode": "0" }
+      ]
+    },
+    "expect": { "notifyIds": [12, 11, 10] }
+  },
+  {
+    "id": "notification.popup-plan.skip-seen-type1",
+    "description": "版本更新确认过一次就不再弹",
+    "source": "PezMax-Desktop/src/renderer/views/home/index.vue:279-290",
+    "input": {
+      "kind": "popup-plan",
+      "userId": 7,
+      "seen": [{ "userId": 7, "notifyId": 11 }],
+      "rows": [
+        { "notifyId": 11, "notifyType": "1", "displayMode": "0" },
+        { "notifyId": 10, "notifyType": "5", "displayMode": "0" }
+      ]
+    },
+    "expect": { "notifyIds": [10] }
+  },
+  {
+    "id": "notification.popup-plan.skip-seen-type4",
+    "description": "下架通知确认过不再弹（同 type 1 的一次性语义）",
+    "source": "PezMax-Desktop/src/renderer/views/home/index.vue:279-290",
+    "input": {
+      "kind": "popup-plan",
+      "userId": 7,
+      "seen": [{ "userId": 7, "notifyId": 9 }],
+      "rows": [
+        { "notifyId": 9, "notifyType": "4", "displayMode": "0", "uploadUserId": 7 }
+      ]
+    },
+    "expect": { "notifyIds": [] }
+  },
+  {
+    "id": "notification.popup-plan.fault-always",
+    "description": "系统故障（type 2）每次启动都要弹：故障还没好就该再提醒",
+    "source": "PezMax-Desktop/src/renderer/views/home/index.vue:281-288",
+    "input": {
+      "kind": "popup-plan",
+      "userId": 7,
+      "seen": [{ "userId": 7, "notifyId": 12 }],
+      "rows": [
+        { "notifyId": 12, "notifyType": "2", "displayMode": "0" }
+      ]
+    },
+    "expect": { "notifyIds": [12] }
+  },
+  {
+    "id": "notification.popup-plan.seen-other-user-does-not-hide",
+    "description": "「已弹过」按用户隔离：别的账号弹过同一条，不影响我",
+    "source": "spec/README.md 规则 5（本地数据按用户隔离）",
+    "input": {
+      "kind": "popup-plan",
+      "userId": 7,
+      "seen": [{ "userId": 42, "notifyId": 11 }],
+      "rows": [
+        { "notifyId": 11, "notifyType": "1", "displayMode": "0" }
+      ]
+    },
+    "expect": { "notifyIds": [11] }
+  },
+  {
+    "id": "notification.popup-plan.dedupe-same-id",
+    "description": "同一 notifyId 重复出现只弹一次（服务端不会重复返回，客户端仍要防）",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/modules/datum/notification_repository.go:41-50",
+    "input": {
+      "kind": "popup-plan",
+      "userId": 7,
+      "seen": [],
+      "rows": [
+        { "notifyId": 12, "notifyType": "2", "displayMode": "0" },
+        { "notifyId": 12, "notifyType": "2", "displayMode": "0" }
+      ]
+    },
+    "expect": { "notifyIds": [12] }
+  },
+  {
+    "id": "notification.read-set.fresh",
+    "description": "本地没有任何已读记录：未读",
+    "source": "spec/ARCHITECTURE.md 核心原则 5（通知已读按 (userId, notifyId) 本地持有）",
+    "input": { "kind": "read-set", "userId": 7, "notifyId": 10, "reads": [] },
+    "expect": { "read": false }
+  },
+  {
+    "id": "notification.read-set.marked",
+    "description": "读过就记着，重新打开仍是已读",
+    "source": "spec/ARCHITECTURE.md 核心原则 5",
+    "input": {
+      "kind": "read-set",
+      "userId": 7,
+      "notifyId": 10,
+      "reads": [{ "userId": 7, "notifyId": 10 }]
+    },
+    "expect": { "read": true }
+  },
+  {
+    "id": "notification.read-set.other-user",
+    "description": "同一 notifyId 被别的账号读过，我这边仍是未读",
+    "source": "spec/ARCHITECTURE.md 核心原则 5",
+    "input": {
+      "kind": "read-set",
+      "userId": 7,
+      "notifyId": 10,
+      "reads": [{ "userId": 42, "notifyId": 10 }]
+    },
+    "expect": { "read": false }
+  },
+  {
+    "id": "notification.read-set.same-id-different-user",
+    "description": "同一个 notifyId 对不同用户各自独立：分别判定，互不影响",
+    "source": "spec/ARCHITECTURE.md 核心原则 5",
+    "input": {
+      "kind": "read-set",
+      "userId": 42,
+      "notifyId": 10,
+      "reads": [{ "userId": 7, "notifyId": 10 }, { "userId": 42, "notifyId": 10 }]
+    },
+    "expect": { "read": true }
+  },
+  {
+    "id": "notification.feed-cache.unchanged-keeps",
+    "description": "hash 一致且本地有 payload：沿用本地，不把 data:null 当空列表",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_notification.go:295-308",
+    "input": {
+      "kind": "feed-cache",
+      "previous": { "hash": "a1b2", "hasPayload": true },
+      "response": { "unchanged": true, "hash": "a1b2", "data": null }
+    },
+    "expect": { "action": "keep", "hash": "a1b2" }
+  },
+  {
+    "id": "notification.feed-cache.unchanged-without-payload",
+    "description": "unchanged 但本地没有可用 payload：立刻不带 hash 重取一次",
+    "source": "spec/api/envelope.md §5 规则 5",
+    "input": {
+      "kind": "feed-cache",
+      "previous": { "hash": "a1b2", "hasPayload": false },
+      "response": { "unchanged": true, "hash": "a1b2", "data": null }
+    },
+    "expect": { "action": "refetch" }
+  },
+  {
+    "id": "notification.feed-cache.changed-replaces",
+    "description": "hash 变了（发布窗口推进也会让它变）：整体替换并记住新 hash",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_notification.go:283-306",
+    "input": {
+      "kind": "feed-cache",
+      "previous": { "hash": "a1b2", "hasPayload": true },
+      "response": {
+        "unchanged": false,
+        "hash": "c3d4",
+        "data": [{ "notifyId": 10, "notifyType": "5", "displayMode": "1" }]
+      }
+    },
+    "expect": { "action": "replace", "hash": "c3d4" }
+  },
+  {
+    "id": "notification.feed-cache.empty-list",
+    "description": "服务端没有可见通知：hash 是空数组的哈希，正常替换成空列表（这是真的没通知，不是缺 data）",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_notification.go:287-308",
+    "input": {
+      "kind": "feed-cache",
+      "previous": { "hash": "a1b2", "hasPayload": true },
+      "response": { "unchanged": false, "hash": "e5f6", "data": [] }
+    },
+    "expect": { "action": "replace", "hash": "e5f6" }
+  },
+  {
+    "id": "notification.feed-cache.changed-without-data",
+    "description": "unchanged=false 却没有 data（上游不该这样）：保留本地并报错，别清空",
+    "source": "spec/api/envelope.md §5 规则 6",
+    "input": {
+      "kind": "feed-cache",
+      "previous": { "hash": "a1b2", "hasPayload": true },
+      "response": { "unchanged": false, "hash": "c3d4", "data": null }
+    },
+    "expect": { "action": "keep-and-warn" }
+  },
+  {
+    "id": "notification.dismissible.type3-after-start",
+    "description": "维护通知在 maintenanceStartTime 之后不可关闭：正处在维护窗口里",
+    "source": "PezMax-Desktop/src/renderer/components/NotificationDialog/index.vue:75-86",
+    "input": {
+      "kind": "dismissible",
+      "now": "2026-11-06 20:00:00",
+      "notification": { "notifyId": 5, "notifyType": "3", "maintenanceStartTime": "2026-11-06 18:00:00", "maintenanceEndTime": "2026-11-06 22:00:00" }
+    },
+    "expect": { "dismissible": false }
+  },
+  {
+    "id": "notification.dismissible.type3-before-start",
+    "description": "维护还没开始：可以关掉，之后再看",
+    "source": "PezMax-Desktop/src/renderer/components/NotificationDialog/index.vue:75-86",
+    "input": {
+      "kind": "dismissible",
+      "now": "2026-11-06 17:00:00",
+      "notification": { "notifyId": 5, "notifyType": "3", "maintenanceStartTime": "2026-11-06 18:00:00", "maintenanceEndTime": "2026-11-06 22:00:00" }
+    },
+    "expect": { "dismissible": true }
+  },
+  {
+    "id": "notification.dismissible.type2-fault",
+    "description": "系统故障通知可关闭（但下次启动仍会再弹，见 popup-plan）",
+    "source": "PezMax-Desktop/src/renderer/components/NotificationDialog/index.vue:81-86",
+    "input": {
+      "kind": "dismissible",
+      "now": "2026-11-06 20:00:00",
+      "notification": { "notifyId": 12, "notifyType": "2" }
+    },
+    "expect": { "dismissible": true }
+  },
+  {
+    "id": "notification.dismissible.type1-no-force-field",
+    "description": "版本更新可关闭：契约里没有 forceUpdate / updateDownloadUrl 字段，强制更新只能靠版本比较",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_notification.go:58-81",
+    "input": {
+      "kind": "dismissible",
+      "now": "2026-11-06 20:00:00",
+      "notification": { "notifyId": 11, "notifyType": "1" }
+    },
+    "expect": { "dismissible": true }
+  }
+]
