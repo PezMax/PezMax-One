@@ -1,0 +1,651 @@
+[
+  {
+    "id": "update.train.higher-version",
+    "description": "班次里有更高版本：选中它，并给出该 release 的 tag 与页面",
+    "source": "docs/RELEASES.md「应用内更新」第 2 条",
+    "input": {
+      "currentVersion": "1.1.0",
+      "platform": "windows",
+      "arch": "x86_64",
+      "mirrorBase": null,
+      "releases": [
+        {
+          "tag_name": "CrateStack-20261102A",
+          "html_url": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261102A",
+          "draft": false,
+          "prerelease": false,
+          "assets": [
+            {
+              "name": "pezmax-one-windows-x86_64-1.2.0.appinstaller",
+              "browser_download_url": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/pezmax-one-windows-x86_64-1.2.0.appinstaller",
+              "size": 2048
+            }
+          ]
+        }
+      ]
+    },
+    "expect": {
+      "version": "1.2.0",
+      "releaseTag": "CrateStack-20261102A",
+      "releasePageUrl": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261102A",
+      "assets": {
+        "appinstaller": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/pezmax-one-windows-x86_64-1.2.0.appinstaller",
+        "msix": null,
+        "cer": null
+      }
+    }
+  },
+  {
+    "id": "update.train.same-version",
+    "description": "只有同版本：不算更新。原地换包的修复不会被发现，这是刻意设计",
+    "source": "docs/RELEASES.md「原地换包与应用内更新」",
+    "input": {
+      "currentVersion": "1.2.0",
+      "platform": "windows",
+      "arch": "x86_64",
+      "mirrorBase": null,
+      "releases": [
+        {
+          "tag_name": "CrateStack-20261102A",
+          "html_url": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261102A",
+          "draft": false,
+          "prerelease": false,
+          "assets": [
+            {
+              "name": "pezmax-one-windows-x86_64-1.2.0.msix",
+              "browser_download_url": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/pezmax-one-windows-x86_64-1.2.0.msix",
+              "size": 1024
+            }
+          ]
+        }
+      ]
+    },
+    "expect": null
+  },
+  {
+    "id": "update.train.older-only",
+    "description": "只有更低版本：不降级，无更新",
+    "source": "docs/RELEASES.md「应用内更新」第 2 条（严格大于当前版本）",
+    "input": {
+      "currentVersion": "2.0.0",
+      "platform": "windows",
+      "arch": "x86_64",
+      "mirrorBase": null,
+      "releases": [
+        {
+          "tag_name": "CrateStack-20261001A",
+          "html_url": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261001A",
+          "draft": false,
+          "prerelease": false,
+          "assets": [
+            {
+              "name": "pezmax-one-windows-x86_64-1.9.0.msix",
+              "browser_download_url": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261001A/pezmax-one-windows-x86_64-1.9.0.msix",
+              "size": 1024
+            }
+          ]
+        }
+      ]
+    },
+    "expect": null
+  },
+  {
+    "id": "update.train.multiple-trains",
+    "description": "跨班次取最高：不依赖数组顺序，1.3.0 在较老的班次里也照样选中",
+    "source": "docs/RELEASES.md「应用内更新」第 2 条 + 「班次」一节",
+    "input": {
+      "currentVersion": "1.1.0",
+      "platform": "windows",
+      "arch": "x86_64",
+      "mirrorBase": null,
+      "releases": [
+        {
+          "tag_name": "CrateStack-20260901A",
+          "html_url": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20260901A",
+          "draft": false,
+          "prerelease": false,
+          "assets": [
+            {
+              "name": "pezmax-one-windows-x86_64-1.3.0.msix",
+              "browser_download_url": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20260901A/pezmax-one-windows-x86_64-1.3.0.msix",
+              "size": 1024
+            }
+          ]
+        },
+        {
+          "tag_name": "CrateStack-20261001A",
+          "html_url": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261001A",
+          "draft": false,
+          "prerelease": false,
+          "assets": [
+            {
+              "name": "pezmax-one-windows-x86_64-1.2.0.msix",
+              "browser_download_url": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261001A/pezmax-one-windows-x86_64-1.2.0.msix",
+              "size": 1024
+            }
+          ]
+        }
+      ]
+    },
+    "expect": {
+      "version": "1.3.0",
+      "releaseTag": "CrateStack-20260901A",
+      "releasePageUrl": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20260901A",
+      "assets": { "appinstaller": null, "msix": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20260901A/pezmax-one-windows-x86_64-1.3.0.msix", "cer": null }
+    }
+  },
+  {
+    "id": "update.train.highest-within-train",
+    "description": "同一班次里多个版本：取最高那个，URL 也跟着它，不看资产排列顺序",
+    "source": "docs/RELEASES.md「应用内更新」+ Ncrust 同源规则 4",
+    "input": {
+      "currentVersion": "1.1.0",
+      "platform": "windows",
+      "arch": "x86_64",
+      "mirrorBase": null,
+      "releases": [
+        {
+          "tag_name": "CrateStack-20261102A",
+          "html_url": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261102A",
+          "draft": false,
+          "prerelease": false,
+          "assets": [
+            {
+              "name": "pezmax-one-windows-x86_64-1.2.0.msix",
+              "browser_download_url": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/pezmax-one-windows-x86_64-1.2.0.msix",
+              "size": 1024
+            },
+            {
+              "name": "pezmax-one-windows-x86_64-1.5.0.msix",
+              "browser_download_url": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/pezmax-one-windows-x86_64-1.5.0.msix",
+              "size": 1024
+            }
+          ]
+        }
+      ]
+    },
+    "expect": {
+      "version": "1.5.0",
+      "releaseTag": "CrateStack-20261102A",
+      "releasePageUrl": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261102A",
+      "assets": { "appinstaller": null, "msix": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/pezmax-one-windows-x86_64-1.5.0.msix", "cer": null }
+    }
+  },
+  {
+    "id": "update.windows.assets-same-version",
+    "description": "Windows 三件套齐全且同版本：三个 URL 都给出",
+    "source": "docs/RELEASES.md「资产命名」+「Windows 签名与包身份」",
+    "input": {
+      "currentVersion": "1.1.0",
+      "platform": "windows",
+      "arch": "x86_64",
+      "mirrorBase": null,
+      "releases": [
+        {
+          "tag_name": "CrateStack-20261102A",
+          "html_url": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261102A",
+          "draft": false,
+          "prerelease": false,
+          "assets": [
+            { "name": "pezmax-one-windows-x86_64-1.2.0.appinstaller", "browser_download_url": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/pezmax-one-windows-x86_64-1.2.0.appinstaller", "size": 2048 },
+            { "name": "pezmax-one-windows-x86_64-1.2.0.msix", "browser_download_url": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/pezmax-one-windows-x86_64-1.2.0.msix", "size": 1024 },
+            { "name": "pezmax-one-windows-x86_64-1.2.0.cer", "browser_download_url": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/pezmax-one-windows-x86_64-1.2.0.cer", "size": 512 }
+          ]
+        }
+      ]
+    },
+    "expect": {
+      "version": "1.2.0",
+      "releaseTag": "CrateStack-20261102A",
+      "releasePageUrl": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261102A",
+      "assets": {
+        "appinstaller": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/pezmax-one-windows-x86_64-1.2.0.appinstaller",
+        "msix": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/pezmax-one-windows-x86_64-1.2.0.msix",
+        "cer": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/pezmax-one-windows-x86_64-1.2.0.cer"
+      }
+    }
+  },
+  {
+    "id": "update.windows.partial-assets",
+    "description": "某版本缺 .cer：那一项为 null，不得借用旧版本的证书补齐",
+    "source": "docs/RELEASES.md「资产命名」（附属文件）+ Ncrust 同源规则 4",
+    "input": {
+      "currentVersion": "1.1.0",
+      "platform": "windows",
+      "arch": "x86_64",
+      "mirrorBase": null,
+      "releases": [
+        {
+          "tag_name": "CrateStack-20261102A",
+          "html_url": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261102A",
+          "draft": false,
+          "prerelease": false,
+          "assets": [
+            { "name": "pezmax-one-windows-x86_64-1.2.0.appinstaller", "browser_download_url": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/pezmax-one-windows-x86_64-1.2.0.appinstaller", "size": 2048 },
+            { "name": "pezmax-one-windows-x86_64-1.1.0.cer", "browser_download_url": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/pezmax-one-windows-x86_64-1.1.0.cer", "size": 512 }
+          ]
+        }
+      ]
+    },
+    "expect": {
+      "version": "1.2.0",
+      "releaseTag": "CrateStack-20261102A",
+      "releasePageUrl": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261102A",
+      "assets": { "appinstaller": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/pezmax-one-windows-x86_64-1.2.0.appinstaller", "msix": null, "cer": null }
+    }
+  },
+  {
+    "id": "update.asset.wrong-extension",
+    "description": "签名 / 校验文件不是资产：版本再高也不算",
+    "source": "docs/RELEASES.md「资产命名」+ Ncrust 同源规则 1",
+    "input": {
+      "currentVersion": "1.1.0",
+      "platform": "windows",
+      "arch": "x86_64",
+      "mirrorBase": null,
+      "releases": [
+        {
+          "tag_name": "CrateStack-20261102A",
+          "html_url": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261102A",
+          "draft": false,
+          "prerelease": false,
+          "assets": [
+            { "name": "pezmax-one-windows-x86_64-9.0.0.msix.asc", "browser_download_url": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/x.asc", "size": 512 },
+            { "name": "pezmax-one-windows-x86_64-9.0.0.msix.sha256", "browser_download_url": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/x.sha256", "size": 64 }
+          ]
+        }
+      ]
+    },
+    "expect": null
+  },
+  {
+    "id": "update.asset.legacy-name",
+    "description": "1.0.0 的旧命名（版本在平台前）：一律忽略，绝不猜",
+    "source": "docs/RELEASES.md「资产命名」末尾",
+    "input": {
+      "currentVersion": "1.1.0",
+      "platform": "windows",
+      "arch": "x86_64",
+      "mirrorBase": null,
+      "releases": [
+        {
+          "tag_name": "v1.0.0",
+          "html_url": "https://github.com/PezMax/PezMax-One/releases/tag/v1.0.0",
+          "draft": false,
+          "prerelease": false,
+          "assets": [
+            { "name": "pezmax-one-1.0.0-windows-x86_64.msi", "browser_download_url": "https://github.com/PezMax/PezMax-One/releases/download/v1.0.0/pezmax-one-1.0.0-windows-x86_64.msi", "size": 1024 },
+            { "name": "manifest.json", "browser_download_url": "https://github.com/PezMax/PezMax-One/releases/download/v1.0.0/manifest.json", "size": 256 }
+          ]
+        }
+      ]
+    },
+    "expect": null
+  },
+  {
+    "id": "update.draft.ignored",
+    "description": "draft 的 release 整条忽略：草稿还没冒烟测试完，不能让用户装到",
+    "source": "docs/RELEASES.md「班次」（创建时 --draft）",
+    "input": {
+      "currentVersion": "1.1.0",
+      "platform": "windows",
+      "arch": "x86_64",
+      "mirrorBase": null,
+      "releases": [
+        {
+          "tag_name": "CrateStack-20261103A",
+          "html_url": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261103A",
+          "draft": true,
+          "prerelease": false,
+          "assets": [
+            { "name": "pezmax-one-windows-x86_64-9.0.0.msix", "browser_download_url": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261103A/x.msix", "size": 1024 }
+          ]
+        }
+      ]
+    },
+    "expect": null
+  },
+  {
+    "id": "update.prerelease.ignored",
+    "description": "prerelease 整条忽略",
+    "source": "docs/RELEASES.md「应用内更新」第 1 条",
+    "input": {
+      "currentVersion": "1.1.0",
+      "platform": "windows",
+      "arch": "x86_64",
+      "mirrorBase": null,
+      "releases": [
+        {
+          "tag_name": "CrateStack-20261103A",
+          "html_url": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261103A",
+          "draft": false,
+          "prerelease": true,
+          "assets": [
+            { "name": "pezmax-one-windows-x86_64-9.0.0.msix", "browser_download_url": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261103A/x.msix", "size": 1024 }
+          ]
+        }
+      ]
+    },
+    "expect": null
+  },
+  {
+    "id": "update.arch.mismatch",
+    "description": "架构段必须逐字符相等：amd64 不是 x86_64，arm64 不是 aarch64",
+    "source": "docs/RELEASES.md「资产命名」（架构段统一写 x86_64 / aarch64）",
+    "input": {
+      "currentVersion": "1.1.0",
+      "platform": "windows",
+      "arch": "x86_64",
+      "mirrorBase": null,
+      "releases": [
+        {
+          "tag_name": "CrateStack-20261102A",
+          "html_url": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261102A",
+          "draft": false,
+          "prerelease": false,
+          "assets": [
+            { "name": "pezmax-one-windows-amd64-2.0.0.msix", "browser_download_url": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/x.msix", "size": 1024 }
+          ]
+        }
+      ]
+    },
+    "expect": null
+  },
+  {
+    "id": "update.platform.cross",
+    "description": "跨平台资产不互相命中：Windows 端看不到 Android 的包",
+    "source": "docs/RELEASES.md「资产命名」",
+    "input": {
+      "currentVersion": "1.1.0",
+      "platform": "windows",
+      "arch": "x86_64",
+      "mirrorBase": null,
+      "releases": [
+        {
+          "tag_name": "CrateStack-20261102A",
+          "html_url": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261102A",
+          "draft": false,
+          "prerelease": false,
+          "assets": [
+            { "name": "pezmax-one-android-universal-3.0.0.apk", "browser_download_url": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/x.apk", "size": 1024 }
+          ]
+        }
+      ]
+    },
+    "expect": null
+  },
+  {
+    "id": "update.version.segment-count",
+    "description": "版本段缺省补 0：1.10 大于 1.9.0（按数字比，不按字符串）",
+    "source": "docs/RELEASES.md「资产命名」（最多 4 段，缺段补 0）",
+    "input": {
+      "currentVersion": "1.9.0",
+      "platform": "windows",
+      "arch": "x86_64",
+      "mirrorBase": null,
+      "releases": [
+        {
+          "tag_name": "CrateStack-20261102A",
+          "html_url": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261102A",
+          "draft": false,
+          "prerelease": false,
+          "assets": [
+            { "name": "pezmax-one-windows-x86_64-1.10.msix", "browser_download_url": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/x.msix", "size": 1024 }
+          ]
+        }
+      ]
+    },
+    "expect": {
+      "version": "1.10.0",
+      "releaseTag": "CrateStack-20261102A",
+      "releasePageUrl": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261102A",
+      "assets": { "appinstaller": null, "msix": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/x.msix", "cer": null }
+    }
+  },
+  {
+    "id": "update.version.four-segments",
+    "description": "四段版本号（Windows 清单就是 X.Y.Z.0）：按四段比较，显示归一",
+    "source": "docs/RELEASES.md「版本号」（Windows 的 Identity Version 是四段）",
+    "input": {
+      "currentVersion": "1.1.0",
+      "platform": "windows",
+      "arch": "x86_64",
+      "mirrorBase": null,
+      "releases": [
+        {
+          "tag_name": "CrateStack-20261102A",
+          "html_url": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261102A",
+          "draft": false,
+          "prerelease": false,
+          "assets": [
+            { "name": "pezmax-one-windows-x86_64-1.2.0.3.msix", "browser_download_url": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/x.msix", "size": 1024 }
+          ]
+        }
+      ]
+    },
+    "expect": {
+      "version": "1.2.0.3",
+      "releaseTag": "CrateStack-20261102A",
+      "releasePageUrl": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261102A",
+      "assets": { "appinstaller": null, "msix": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/x.msix", "cer": null }
+    }
+  },
+  {
+    "id": "update.version.leading-v",
+    "description": "版本段允许前缀 v：v1.2.0 与 1.2.0 等价",
+    "source": "docs/RELEASES.md「资产命名」",
+    "input": {
+      "currentVersion": "1.1.0",
+      "platform": "windows",
+      "arch": "x86_64",
+      "mirrorBase": null,
+      "releases": [
+        {
+          "tag_name": "CrateStack-20261102A",
+          "html_url": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261102A",
+          "draft": false,
+          "prerelease": false,
+          "assets": [
+            { "name": "pezmax-one-windows-x86_64-v1.2.0.msix", "browser_download_url": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/x.msix", "size": 1024 }
+          ]
+        }
+      ]
+    },
+    "expect": {
+      "version": "1.2.0",
+      "releaseTag": "CrateStack-20261102A",
+      "releasePageUrl": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261102A",
+      "assets": { "appinstaller": null, "msix": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/x.msix", "cer": null }
+    }
+  },
+  {
+    "id": "update.linux.deb",
+    "description": "Linux deb：平台与架构段都匹配才命中",
+    "source": "docs/RELEASES.md「资产命名」",
+    "input": {
+      "currentVersion": "1.1.0",
+      "platform": "linux",
+      "arch": "x86_64",
+      "mirrorBase": null,
+      "releases": [
+        {
+          "tag_name": "CrateStack-20261102A",
+          "html_url": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261102A",
+          "draft": false,
+          "prerelease": false,
+          "assets": [
+            { "name": "pezmax-one-linux-x86_64-1.2.0.deb", "browser_download_url": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/x.deb", "size": 1024 }
+          ]
+        }
+      ]
+    },
+    "expect": {
+      "version": "1.2.0",
+      "releaseTag": "CrateStack-20261102A",
+      "releasePageUrl": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261102A",
+      "assets": { "deb": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/x.deb", "pkg.tar.zst": null }
+    }
+  },
+  {
+    "id": "update.linux.multi-part-extension",
+    "description": "多段扩展名整段剥离：1.3.0.pkg.tar.zst 的版本是 1.3.0，不是 1.3.0.pkg.tar",
+    "source": "docs/RELEASES.md「资产命名」（.pkg.tar.zst 这类多段扩展名按整体剥离）",
+    "input": {
+      "currentVersion": "1.1.0",
+      "platform": "linux",
+      "arch": "x86_64",
+      "mirrorBase": null,
+      "releases": [
+        {
+          "tag_name": "CrateStack-20261102A",
+          "html_url": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261102A",
+          "draft": false,
+          "prerelease": false,
+          "assets": [
+            { "name": "pezmax-one-linux-x86_64-1.3.0.pkg.tar.zst", "browser_download_url": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/x.pkg.tar.zst", "size": 1024 }
+          ]
+        }
+      ]
+    },
+    "expect": {
+      "version": "1.3.0",
+      "releaseTag": "CrateStack-20261102A",
+      "releasePageUrl": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261102A",
+      "assets": { "deb": null, "pkg.tar.zst": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/x.pkg.tar.zst" }
+    }
+  },
+  {
+    "id": "update.linux.arch-mismatch",
+    "description": "Linux arm64 不是 aarch64：架构段不匹配就不算资产",
+    "source": "docs/RELEASES.md「资产命名」（架构段统一写 aarch64）",
+    "input": {
+      "currentVersion": "1.1.0",
+      "platform": "linux",
+      "arch": "x86_64",
+      "mirrorBase": null,
+      "releases": [
+        {
+          "tag_name": "CrateStack-20261102A",
+          "html_url": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261102A",
+          "draft": false,
+          "prerelease": false,
+          "assets": [
+            { "name": "pezmax-one-linux-aarch64-9.0.0.deb", "browser_download_url": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/a.deb", "size": 1024 },
+            { "name": "pezmax-one-linux-arm64-9.0.0.deb", "browser_download_url": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/b.deb", "size": 1024 }
+          ]
+        }
+      ]
+    },
+    "expect": null
+  },
+  {
+    "id": "update.android.apk",
+    "description": "Android 通用包：只认 .apk，.aab 不是可安装资产",
+    "source": "docs/RELEASES.md「资产命名」（android / universal / .apk）",
+    "input": {
+      "currentVersion": "1.1.0",
+      "platform": "android",
+      "arch": "universal",
+      "mirrorBase": null,
+      "releases": [
+        {
+          "tag_name": "CrateStack-20261102A",
+          "html_url": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261102A",
+          "draft": false,
+          "prerelease": false,
+          "assets": [
+            { "name": "pezmax-one-android-universal-1.4.0.aab", "browser_download_url": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/x.aab", "size": 4096 },
+            { "name": "pezmax-one-android-universal-1.4.0.apk", "browser_download_url": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/x.apk", "size": 8192 }
+          ]
+        }
+      ]
+    },
+    "expect": {
+      "version": "1.4.0",
+      "releaseTag": "CrateStack-20261102A",
+      "releasePageUrl": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261102A",
+      "assets": { "apk": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/x.apk" }
+    }
+  },
+  {
+    "id": "update.release.no-assets",
+    "description": "release 没有任何资产：跳过，不报错",
+    "source": "docs/RELEASES.md「应用内更新」第 2 条",
+    "input": {
+      "currentVersion": "1.1.0",
+      "platform": "windows",
+      "arch": "x86_64",
+      "mirrorBase": null,
+      "releases": [
+        {
+          "tag_name": "CrateStack-20261102A",
+          "html_url": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261102A",
+          "draft": false,
+          "prerelease": false,
+          "assets": []
+        }
+      ]
+    },
+    "expect": null
+  },
+  {
+    "id": "update.mirror.enabled",
+    "description": "开启镜像前缀后，下载地址换成「镜像基址 + 原 URL 的路径」，选中的版本不变",
+    "source": "docs/RELEASES.md「应用内更新」第 6 条 + ARCHITECTURE.md D12",
+    "input": {
+      "currentVersion": "1.1.0",
+      "platform": "windows",
+      "arch": "x86_64",
+      "mirrorBase": "https://mirror.example.net/gh",
+      "releases": [
+        {
+          "tag_name": "CrateStack-20261102A",
+          "html_url": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261102A",
+          "draft": false,
+          "prerelease": false,
+          "assets": [
+            { "name": "pezmax-one-windows-x86_64-1.2.0.appinstaller", "browser_download_url": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/pezmax-one-windows-x86_64-1.2.0.appinstaller", "size": 2048 }
+          ]
+        }
+      ]
+    },
+    "expect": {
+      "version": "1.2.0",
+      "releaseTag": "CrateStack-20261102A",
+      "releasePageUrl": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261102A",
+      "assets": {
+        "appinstaller": "https://mirror.example.net/gh/PezMax/PezMax-One/releases/download/CrateStack-20261102A/pezmax-one-windows-x86_64-1.2.0.appinstaller",
+        "msix": null,
+        "cer": null
+      }
+    }
+  },
+  {
+    "id": "update.mirror.disabled",
+    "description": "镜像关闭（默认）：地址原样，不加前缀",
+    "source": "docs/RELEASES.md「应用内更新」第 6 条（默认关闭）",
+    "input": {
+      "currentVersion": "1.1.0",
+      "platform": "windows",
+      "arch": "x86_64",
+      "mirrorBase": null,
+      "releases": [
+        {
+          "tag_name": "CrateStack-20261102A",
+          "html_url": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261102A",
+          "draft": false,
+          "prerelease": false,
+          "assets": [
+            { "name": "pezmax-one-windows-x86_64-1.2.0.msix", "browser_download_url": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/x.msix", "size": 1024 }
+          ]
+        }
+      ]
+    },
+    "expect": {
+      "version": "1.2.0",
+      "releaseTag": "CrateStack-20261102A",
+      "releasePageUrl": "https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261102A",
+      "assets": { "appinstaller": null, "msix": "https://github.com/PezMax/PezMax-One/releases/download/CrateStack-20261102A/x.msix", "cer": null }
+    }
+  }
+]
