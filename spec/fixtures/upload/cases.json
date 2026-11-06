@@ -1,0 +1,218 @@
+[
+  {
+    "id": "upload.file.pdf-ok",
+    "description": "白名单内的 PDF：直接放行，不转档、不查编码",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:667-671、782-785",
+    "input": { "kind": "file", "fileName": "期中试卷.pdf", "sizeBytes": 2097152, "maxUploadMb": 200 },
+    "expect": { "accept": true, "convertsToPdf": false, "needsUtf8Check": false }
+  },
+  {
+    "id": "upload.file.docx-converts",
+    "description": "docx 会转成 PDF 存储：本地就要提示「将转换为 PDF」",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:807-825",
+    "input": { "kind": "file", "fileName": "复习提纲.docx", "sizeBytes": 1048576, "maxUploadMb": 200 },
+    "expect": { "accept": true, "convertsToPdf": true, "needsUtf8Check": false }
+  },
+  {
+    "id": "upload.file.ppt-converts",
+    "description": "ppt/pptx 与 doc/docx 同属转档集合",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:807-825",
+    "input": { "kind": "file", "fileName": "第三章.pptx", "sizeBytes": 5242880, "maxUploadMb": 200 },
+    "expect": { "accept": true, "convertsToPdf": true, "needsUtf8Check": false }
+  },
+  {
+    "id": "upload.file.txt-needs-utf8",
+    "description": "txt / md 上传前必须自己验 UTF-8：服务端会拒，但本地先拦能省一次往返",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:790-799",
+    "input": { "kind": "file", "fileName": "笔记.md", "sizeBytes": 4096, "maxUploadMb": 200 },
+    "expect": { "accept": true, "convertsToPdf": false, "needsUtf8Check": true }
+  },
+  {
+    "id": "upload.file.uppercase-extension",
+    "description": "扩展名大小写不敏感：PDF 与 pdf 等价",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:778-782",
+    "input": { "kind": "file", "fileName": "SCAN.PDF", "sizeBytes": 1024, "maxUploadMb": 200 },
+    "expect": { "accept": true, "convertsToPdf": false, "needsUtf8Check": false }
+  },
+  {
+    "id": "upload.file.unknown-extension",
+    "description": "白名单外（exe）：本地就要拦，文案用上游那句「不支持的文件格式…」",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:782-785",
+    "input": { "kind": "file", "fileName": "setup.exe", "sizeBytes": 1024, "maxUploadMb": 200 },
+    "expect": {
+      "accept": false,
+      "reason": "不支持的文件格式：仅支持 doc/docx/pdf/jpg/png/webp/txt/md/ppt/pptx"
+    }
+  },
+  {
+    "id": "upload.file.no-extension",
+    "description": "没有扩展名：与白名单外同样处理",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:778-785",
+    "input": { "kind": "file", "fileName": "README", "sizeBytes": 1024, "maxUploadMb": 200 },
+    "expect": {
+      "accept": false,
+      "reason": "不支持的文件格式：仅支持 doc/docx/pdf/jpg/png/webp/txt/md/ppt/pptx"
+    }
+  },
+  {
+    "id": "upload.file.epub-goes-to-file-table",
+    "description": "资料上传也收 epub：能传，但它进 ptmj_file、不进电子书列表——界面应引导到电子书上传",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:667-671（白名单含 epub/mobi/azw3）",
+    "input": { "kind": "file", "fileName": "高等数学.epub", "sizeBytes": 1048576, "maxUploadMb": 200 },
+    "expect": { "accept": true, "convertsToPdf": false, "needsUtf8Check": false, "warnsNotEbook": true }
+  },
+  {
+    "id": "upload.file.at-size-limit",
+    "description": "正好等于上限：放行（判断是「大于」才拒）",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:734-737",
+    "input": { "kind": "file", "fileName": "大题.pdf", "sizeBytes": 209715200, "maxUploadMb": 200 },
+    "expect": { "accept": true, "convertsToPdf": false, "needsUtf8Check": false }
+  },
+  {
+    "id": "upload.file.over-size-limit",
+    "description": "超过可配置上限：400「文件过大：不能超过 NMB」",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:734-737",
+    "input": { "kind": "file", "fileName": "大题.pdf", "sizeBytes": 209715201, "maxUploadMb": 200 },
+    "expect": { "accept": false, "reason": "文件过大：不能超过 200MB" }
+  },
+  {
+    "id": "upload.file.empty",
+    "description": "空文件（0 字节）：按「文件过大」同一条分支拒掉",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:734-737",
+    "input": { "kind": "file", "fileName": "空.pdf", "sizeBytes": 0, "maxUploadMb": 200 },
+    "expect": { "accept": false, "reason": "文件过大：不能超过 200MB" }
+  },
+  {
+    "id": "upload.file.convert-over-hard-limit",
+    "description": "管理员把上限调到 4096MB 时，docx 仍受 200MB 硬上限约束，超了回 413",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:807-811",
+    "input": { "kind": "file", "fileName": "超大讲义.docx", "sizeBytes": 314572800, "maxUploadMb": 4096 },
+    "expect": { "accept": false, "reason": "转档文件不能超过 200MB" }
+  },
+  {
+    "id": "upload.meta.subject-64-bytes-ok",
+    "description": "科目按字节算 64：21 个汉字 + 1 个 ASCII 正好 64 字节，放行",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:761-764",
+    "input": { "kind": "meta", "fileSubject": "数数数数数数数数数数数数数数数数数数数数数x", "fileYear": 2025, "fileType": 1, "fileName": "a.pdf" },
+    "expect": { "accept": true }
+  },
+  {
+    "id": "upload.meta.subject-65-bytes-too-long",
+    "description": "21 个汉字 + 2 个 ASCII = 65 字节 > 64：本地必须按字节拦，否则用户点上传才被拒",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:761-764",
+    "input": { "kind": "meta", "fileSubject": "数数数数数数数数数数数数数数数数数数数数数xy", "fileYear": 2025, "fileType": 1, "fileName": "a.pdf" },
+    "expect": { "accept": false, "reason": "科目不能为空且不超过 64 个字符" }
+  },
+  {
+    "id": "upload.meta.subject-empty",
+    "description": "科目为空：同一条分支",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:761-764",
+    "input": { "kind": "meta", "fileSubject": "   ", "fileYear": 2025, "fileType": 1, "fileName": "a.pdf" },
+    "expect": { "accept": false, "reason": "科目不能为空且不超过 64 个字符" }
+  },
+  {
+    "id": "upload.meta.school-101-bytes-too-long",
+    "description": "学校名按字节算 100：33 个汉字 + 2 个 ASCII = 101 字节，超限",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:765-768",
+    "input": { "kind": "meta", "fileSubject": "数学", "fileSchool": "学学学学学学学学学学学学学学学学学学学学学学学学学学学学学学学学学ab", "fileYear": 2025, "fileType": 1, "fileName": "a.pdf" },
+    "expect": { "accept": false, "reason": "学校名称不能超过 100 个字符" }
+  },
+  {
+    "id": "upload.meta.year-low-bound",
+    "description": "年份下界 1900：1899 拒",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:769-772",
+    "input": { "kind": "meta", "fileSubject": "数学", "fileYear": 1899, "fileType": 1, "fileName": "a.pdf" },
+    "expect": { "accept": false, "reason": "年份需在 1900 到 2100 之间" }
+  },
+  {
+    "id": "upload.meta.year-ok",
+    "description": "年份边界内：放行",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:769-772",
+    "input": { "kind": "meta", "fileSubject": "数学", "fileYear": 1900, "fileType": 1, "fileName": "a.pdf" },
+    "expect": { "accept": true }
+  },
+  {
+    "id": "upload.meta.type-out-of-range",
+    "description": "fileType 必须在类型字典里（1–7）：8 拒",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:773-776",
+    "input": { "kind": "meta", "fileSubject": "数学", "fileYear": 2025, "fileType": 8, "fileName": "a.pdf" },
+    "expect": { "accept": false, "reason": "文件类型不正确" }
+  },
+  {
+    "id": "upload.meta.type-7-warns",
+    "description": "fileType=7（电子书名）能传，但只会进 ptmj_file：界面要提示改用电子书上传",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:48-51、773-776",
+    "input": { "kind": "meta", "fileSubject": "数学", "fileYear": 2025, "fileType": 7, "fileName": "a.pdf" },
+    "expect": { "accept": true, "warnsNotEbook": true }
+  },
+  {
+    "id": "upload.meta.file-name-255-runes",
+    "description": "文件名按 rune 算 255：255 个汉字也放行",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:745-752",
+    "input": { "kind": "meta", "fileSubject": "数学", "fileYear": 2025, "fileType": 1, "fileName": "题", "fileNameRunes": 255, "fileNameExt": ".pdf" },
+    "expect": { "accept": true }
+  },
+  {
+    "id": "upload.meta.file-name-256-runes",
+    "description": "文件名 256 个字符：拒，文案是「文件名不能为空且不超过 255 个字符」",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:745-752",
+    "input": { "kind": "meta", "fileSubject": "数学", "fileYear": 2025, "fileType": 1, "fileName": "题", "fileNameRunes": 256, "fileNameExt": ".pdf" },
+    "expect": { "accept": false, "reason": "文件名不能为空且不超过 255 个字符" }
+  },
+  {
+    "id": "upload.ebook.ok",
+    "description": "电子书：epub + 书名 + 学科 + 类型齐备，放行且不转档",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_ebook.go:384-417",
+    "input": { "kind": "ebook", "fileName": "高等数学.epub", "ebookName": "高等数学（第七版）", "ebookSubject": "数学", "ebookType": 1 },
+    "expect": { "accept": true }
+  },
+  {
+    "id": "upload.ebook.docx-rejected",
+    "description": "电子书白名单只有四种格式：docx 拒，且不转档",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_ebook.go:354-355、413-417",
+    "input": { "kind": "ebook", "fileName": "讲义.docx", "ebookName": "讲义", "ebookSubject": "数学", "ebookType": 1 },
+    "expect": { "accept": false, "reason": "不支持的电子书格式：仅支持 pdf/epub/mobi/azw3" }
+  },
+  {
+    "id": "upload.ebook.type-out-of-range",
+    "description": "ebookType 只有 1–4：5 拒",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_ebook.go:357、407-411",
+    "input": { "kind": "ebook", "fileName": "书.pdf", "ebookName": "书", "ebookSubject": "数学", "ebookType": 5 },
+    "expect": { "accept": false, "reason": "电子书类型不正确" }
+  },
+  {
+    "id": "upload.ebook.subject-byte-limit",
+    "description": "ebookSubject 也是按字节 64：与资料上传同一个坑",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_ebook.go:402-406",
+    "input": { "kind": "ebook", "fileName": "书.pdf", "ebookName": "书", "ebookSubject": "高等数学与线性代数基础复习提纲第一章课后习题精选汇编", "ebookType": 1 },
+    "expect": { "accept": false, "reason": "学科分类不能为空且不超过 64 个字符" }
+  },
+  {
+    "id": "upload.ebook.author-255-runes-ok",
+    "description": "作者按 rune 算 255：放行（与学科字段的口径不同，别统一）",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_ebook.go:392-396",
+    "input": { "kind": "ebook", "fileName": "书.pdf", "ebookName": "书", "ebookSubject": "数学", "ebookType": 1, "author": "著", "authorRunes": 255 },
+    "expect": { "accept": true }
+  },
+  {
+    "id": "upload.batch.partial-failure",
+    "description": "多选上传：坏格式只影响它自己，其余照常提交，结果按文件逐个给",
+    "source": "spec/fixtures/upload/README.md「三个容易踩的点」+ PezMax-Go 单文件端点",
+    "input": {
+      "kind": "batch",
+      "maxUploadMb": 200,
+      "files": [
+        { "fileName": "期中.pdf", "sizeBytes": 1024 },
+        { "fileName": "病毒.exe", "sizeBytes": 1024 },
+        { "fileName": "期末.docx", "sizeBytes": 2048 }
+      ]
+    },
+    "expect": {
+      "results": [
+        { "name": "期中.pdf", "accept": true },
+        { "name": "病毒.exe", "accept": false },
+        { "name": "期末.docx", "accept": true }
+      ]
+    }
+  }
+]

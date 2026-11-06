@@ -131,12 +131,15 @@ multipart 字段：
 | 字段 | 必填 | 规则 |
 |---|---|---|
 | `file` | 是 | 单文件；默认 ≤ 200 MiB（`KADMIN_DATUM_UPLOAD_MAX_MB` 可配 1–4096） |
-| `fileName` | 否 | 缺省用上传文件名；1–255 字符 |
-| `fileSubject` | 是 | 1–64 字符 |
-| `fileSchool` | 否 | ≤ 100 字符 |
+| `fileName` | 否 | 缺省用上传文件名；≤ 255 **rune** |
+| `fileSubject` | 是 | ≤ 64 **字节**——一个汉字 3 字节，中文科目实际只有 21 个字（`datum_file.go:761-764`） |
+| `fileSchool` | 否 | ≤ 100 **字节** |
 | `fileYear` | 是 | 1900–2100 |
 | `fileType` | 是 | 1–7，越界 400 |
 | `remark` | 否 | 文件夹路径；按 `/` 分段清理后作为树的自定义目录 |
+
+⚠️ **字节与 rune 混用**：`fileName` 按 rune 计，`fileSubject` / `fileSchool` 按字节计。
+客户端两边必须分别计数（`fixtures/upload/` 有边界用例），统一口径必然放过一边。
 
 扩展名白名单：`doc docx ppt pptx pdf jpg jpeg png webp txt md epub mobi azw3`。
 
