@@ -35,19 +35,19 @@ public static class UrlNormalizer
         }
 
         if (!Uri.TryCreate(text, UriKind.Absolute, out var parsed) ||
-            !Uri.TryCreate(normalizedBase, UriKind.Absolute, out var baseUri))
+            !Uri.TryCreate(normalizedBase, UriKind.Absolute, out _))
         {
             return text;
         }
 
         if (!IsInternalHost(parsed.Host)) return text;
 
-        var builder = new UriBuilder(baseUri)
-        {
-            Path = parsed.AbsolutePath,
-            Query = parsed.Query.TrimStart('?'),
-        };
-        return builder.Uri.ToString();
+        // 只换 origin：path 与 query 原样搬过去。
+        // 用 UriBuilder 会把 `%E5%9B%BE…` 解码成中文再重新拼，双重转义/丢失转义都踩过，所以直接拼字符串。
+        var origin = normalizedBase;
+        var pathAndQuery = parsed.PathAndQuery;
+        if (pathAndQuery.Length <= 1) return origin;
+        return origin + pathAndQuery;
     }
 
     private static bool IsInternalHost(string host)

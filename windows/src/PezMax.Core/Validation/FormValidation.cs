@@ -5,21 +5,21 @@ namespace PezMax.Core.Validation;
 
 public static class FormValidation
 {
-    public static string? ValidateLogin(string userName, string password)
+    public static string? ValidateLogin(string? userName, string? password)
     {
         if (string.IsNullOrWhiteSpace(userName) || string.IsNullOrEmpty(password))
             return "用户名或密码错误";
         return null;
     }
 
-    public static string? ValidateUserName(string userName)
+    public static string? ValidateUserName(string? userName)
     {
         var text = (userName ?? "").Trim();
         if (text.Length == 0) return "用户名不能为空";
         return RuneCount(text) > 64 ? "用户名格式错误" : null;
     }
 
-    public static string? ValidatePassword(string password)
+    public static string? ValidatePassword(string? password)
     {
         var bytes = Encoding.UTF8.GetByteCount(password ?? "");
         return bytes is < 5 or > 64 ? "密码格式错误：长度需在 5 到 64 位之间" : null;
