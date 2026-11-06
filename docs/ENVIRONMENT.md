@@ -11,7 +11,7 @@
 | `../Kanesumi-sec-a` | Android 端 composite build | ✅ |
 | `../Kanesumi-xaml` | Windows 端视觉底座（D3，待从 Ncrust 抽出） | ⏳ 尚未建立；当前在 `../Ncrust/windows/src/Kanesumi.Xaml` |
 | `../Ether/shared/kanesumi` | Linux 端本机开发时的 `[patch]` 目标（正式构建用 git rev） | ✅ |
-| `../PezMax-Go` | 上游后端，契约来源（只读） | ✅ 基线 `f79a4e0` |
+| `../PezMax-Go` | 上游后端，契约来源（只读） | ✅ 基线 `061a888` |
 | `../Ncrust` | 样板工程（Windows 端做法、CrateStack、spec 约定） | ✅ |
 
 ## Windows 端
@@ -30,6 +30,16 @@ $msbuild = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBui
 & $msbuild windows\PezMax.Windows.sln /p:Configuration=Release /p:Platform=x64
 dotnet test windows\tests\PezMax.Core.Tests
 ```
+
+`dotnet test` 在**受限沙箱**（agent 以受限令牌跑命令时）会崩在 testhost 启动阶段：
+
+```
+System.ComponentModel.Win32Exception (5): 拒绝访问
+   at System.Diagnostics.Process.set_EnableRaisingEvents(...)
+```
+
+这不是测试本身的问题——vstest 的 testhost 要 `OpenProcess` 父进程句柄来挂退出回调，被沙箱拦了。
+换普通终端跑即可；实在要在沙箱里验证，把测试产物目录里的程序集当成库、自己反射调用 `[Fact]` 方法。
 
 ## Linux 端
 
