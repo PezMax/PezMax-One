@@ -84,6 +84,35 @@ public class UpdateFixtureTests
             UpdateChecker.WindowsExtensions, out _));
     }
 
+    [Fact]
+    public void ReleaseFeed_ParsesGitHubShapeAndToleratesGarbage()
+    {
+        const string json = @"[
+          {
+            ""tag_name"": ""CrateStack-20261102A"",
+            ""html_url"": ""https://github.com/PezMax/PezMax-One/releases/tag/CrateStack-20261102A"",
+            ""draft"": false,
+            ""prerelease"": true,
+            ""assets"": [
+              { ""name"": ""pezmax-one-windows-x86_64-1.2.0.msix"", ""browser_download_url"": ""https://x/1.msix"", ""size"": 1024 }
+            ]
+          }
+        ]";
+
+        var releases = ReleaseFeed.Parse(json);
+        Assert.Single(releases);
+        Assert.Equal("CrateStack-20261102A", releases[0].TagName);
+        Assert.True(releases[0].Prerelease);
+        Assert.False(releases[0].Draft);
+        Assert.Single(releases[0].Assets);
+        Assert.Equal(1024, releases[0].Assets[0].Size);
+
+        // 坏 JSON / 空响应都不该把更新检查弄崩。
+        Assert.Empty(ReleaseFeed.Parse("{not json"));
+        Assert.Empty(ReleaseFeed.Parse(null));
+        Assert.Empty(ReleaseFeed.Parse("{\"a\":1}"));
+    }
+
     private static UpdateRelease ReadRelease(JsonElement element) => new()
     {
         TagName = Str(element, "tag_name"),
