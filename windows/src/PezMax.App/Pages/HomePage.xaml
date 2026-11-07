@@ -72,7 +72,7 @@
                     ItemContainerTransitions="{x:Null}">
                     <ListView.ItemTemplate>
                         <DataTemplate x:DataType="models:FileItem">
-                            <Grid Padding="4,8" ColumnSpacing="16">
+                            <Grid Padding="4,8" ColumnSpacing="16" AutomationProperties.Name="{x:Bind DisplayName}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="160" />

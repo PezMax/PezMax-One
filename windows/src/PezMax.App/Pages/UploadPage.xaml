@@ -191,7 +191,7 @@
                         SelectionMode="None">
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="models:FileItem">
-                                <Grid Padding="0,6" ColumnSpacing="12">
+                                <Grid Padding="0,6" ColumnSpacing="12" AutomationProperties.Name="{x:Bind DisplayName}">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />

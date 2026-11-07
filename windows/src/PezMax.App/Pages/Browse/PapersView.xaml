@@ -73,7 +73,12 @@
                     SelectionMode="Single">
                     <ListView.ItemTemplate>
                         <DataTemplate x:DataType="models:FileItem">
-                            <StackPanel Padding="2,6" Spacing="2">
+                            <!-- 列表项的自动化名字：不写的话读屏念的是类型全名
+                                 （PezMax.Core.Models.FileItem），看不出来但听得出来。 -->
+                            <StackPanel
+                                Padding="2,6"
+                                Spacing="2"
+                                AutomationProperties.Name="{x:Bind DisplayName}">
                                 <TextBlock Style="{StaticResource PezBodyStyle}" Text="{x:Bind DisplayName}" />
                                 <TextBlock Style="{StaticResource PezCaptionStyle}" Text="{x:Bind SubjectSchoolText}" />
                                 <StackPanel Orientation="Horizontal" Spacing="8">

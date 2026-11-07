@@ -32,7 +32,7 @@
                     <ListView x:Name="FileList" Grid.Row="0" SelectionMode="Single">
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="models:FileItem">
-                                <StackPanel Padding="2,6" Spacing="2">
+                                <StackPanel Padding="2,6" Spacing="2" AutomationProperties.Name="{x:Bind DisplayName}">
                                     <TextBlock Style="{StaticResource PezBodyStyle}" Text="{x:Bind DisplayName}" />
                                     <TextBlock Style="{StaticResource PezCaptionStyle}" Text="{x:Bind SubjectSchoolText}" />
                                 </StackPanel>
@@ -55,7 +55,7 @@
                     <ListView x:Name="EbookList" Grid.Row="0" SelectionMode="Single">
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="models:EbookItem">
-                                <StackPanel Padding="2,6" Spacing="2">
+                                <StackPanel Padding="2,6" Spacing="2" AutomationProperties.Name="{x:Bind DisplayName}">
                                     <TextBlock Style="{StaticResource PezBodyStyle}" Text="{x:Bind DisplayName}" />
                                     <TextBlock Style="{StaticResource PezCaptionStyle}" Text="{x:Bind EbookSubject}" />
                                 </StackPanel>
@@ -78,7 +78,7 @@
                     <ListView x:Name="BookmarkList" Grid.Row="0" SelectionMode="Single">
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="models:Bookmark">
-                                <StackPanel Padding="2,6" Spacing="2">
+                                <StackPanel Padding="2,6" Spacing="2" AutomationProperties.Name="{x:Bind Title}">
                                     <TextBlock Style="{StaticResource PezBodyStyle}" Text="{x:Bind Title}" />
                                     <TextBlock Style="{StaticResource PezCaptionStyle}" Text="{x:Bind Url}" />
                                 </StackPanel>
