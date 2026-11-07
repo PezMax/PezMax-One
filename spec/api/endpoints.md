@@ -154,6 +154,23 @@ multipart 字段：
 - **电子书不要走这条端点**：即使 `fileType=7` 仍能写进 `ptmj_file`（`datum_file.go:48-51` 只留了个类型名），
   它也不会出现在电子书列表里。电子书走 `/datum/ebook/upload`。
 
+### 编辑与删除（属主）
+
+> `PUT /datum/file` 的上游实现是 `datum_file.go:878-912` + `file_repository.go:59-76`；
+> 删除是 `datum_file.go:914-933` + `file_repository.go:78-89`。
+
+| 事实 | 细节 |
+|---|---|
+| 请求是**整组覆盖** | `UPDATE ptmj_file SET file_name, file_year, file_type, file_school, file_subject, remark, update_by, update_time`。**没带 `remark` 就等于把它清空**——树里那条自定义目录也跟着没了。客户端必须从当前行回填，不要只发改动的字段 |
+| 校验比上传**松** | 只判：`fileId > 0`、`fileName` 非空且 ≤255 rune、`fileSubject` 非空、`fileType ∈ 1..7`。**不判**科目 64 字节、学校 100 字节、年份区间 |
+| 不退回待审 | `file_status` 不在 SET 里：编辑已通过的文件**仍然是已通过**，不会重新审核 |
+| 属主闸门 | `WHERE file_id = ? AND user_id = ? AND del_flag = 0`，否则 404「文件不存在或无权修改」 |
+| 删除是软删 | `del_flag = 1`，同时 `DecrementUploads(userID)`（该用户上传计数 −1）；非属主 / 已删 404「文件不存在或无权删除」 |
+
+客户端取舍：编辑表单**沿用上传那套元信息校验**（`UploadValidation.ValidateFileMeta`），
+而不是照抄服务端这段更松的规则。理由与账户表单相同——更松会造出「客户端放行、服务端 400」的挫败；
+更严只影响极端历史数据（当年上传时科目就超了 64 字节的那种），改一次名顺手补对也算修复。
+
 ## 电子书 `/datum/ebook`
 
 > **数据源是独立表 `ptmj_ebook`**（`modules/datum/schema.go:199-266`、`modules/datum/ebook_repository.go`），
