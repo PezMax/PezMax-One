@@ -48,11 +48,17 @@ System.ComponentModel.Win32Exception (5): 拒绝访问
 后者指向 IL 布局，激活期直接崩（`0xe0434352`，没有任何托管日志）。
 
 ```powershell
-$dest = "$env:TEMP\pezmax-run"
+# 解包目录**不要**放 %TEMP%：松散注册的「安装位置」就是它，清一次临时文件
+# 就把装好的应用拆掉（症状是窗口一片空白、进程 Not Responding、目录里只剩十几个文件）。
+$dest = "$env:LOCALAPPDATA\pezmax-run"
+New-Item -ItemType Directory -Path $dest -Force | Out-Null
 Expand-Archive windows\src\PezMax.App\AppPackages\PezMax.App_*_x64_Test\PezMax.App_*_x64.msix -DestinationPath $dest -Force
 Add-AppxPackage -Register "$dest\AppxManifest.xml"
 Start-Process "shell:AppsFolder\PezMax.One_0say9r0m9v83e!App"   # AUMID 用 Get-AppxPackage 查
 ```
+
+重新注册等于换了一份安装，`PackageFamilyName` 一般不变、环回豁免仍有效；`LocalState` 里的设置会
+随旧注册一起没掉（登录态在 `PasswordVault`，通常还在），所以改过服务器地址的要再改一次。
 
 每次改了代码要重新解包再注册（注册记录指向那份解包目录，不指向仓库）。验证完 `Remove-AppxPackage` 收拾干净。
 截图不必上工具：`user32!PrintWindow` 对 UWP 的 `Windows.UI.Core.CoreWindow` 用 `PW_RENDERFULLCONTENT(2)`
