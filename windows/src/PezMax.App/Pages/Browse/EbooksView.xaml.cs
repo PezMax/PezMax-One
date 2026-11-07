@@ -158,11 +158,13 @@ namespace PezMax.Pages.Browse
 
         private async Task OpenReaderAsync(EbookItem item)
         {
-            ReaderOverlay.Visibility = Visibility.Visible;
             try
             {
                 var stream = await DownloadService.ReadStreamAsync(
                     ct => AppServices.Ebooks.OpenContentAsync(item.EbookId, ct));
+
+                // 下载完再显示覆盖层：先显示的话读者对着空窗口等，还以为卡住了。
+                ReaderOverlay.Visibility = Visibility.Visible;
                 await PdfHost.OpenAsync(
                     stream,
                     item.EbookId,

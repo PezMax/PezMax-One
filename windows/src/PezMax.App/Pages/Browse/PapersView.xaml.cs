@@ -266,15 +266,20 @@ namespace PezMax.Pages.Browse
             PreviewText.Text = "";
             PreviewTextHost.Visibility = Visibility.Collapsed;
             PreviewError.IsOpen = false;
+
+            // 换了文件就关阅读器，免得覆盖层上还停着上一份文档。
+            if (ReaderOverlay.Visibility == Visibility.Visible) CloseReader();
         }
 
         private async Task OpenReaderAsync(FileItem file)
         {
-            ReaderOverlay.Visibility = Visibility.Visible;
             try
             {
                 var stream = await DownloadService.ReadStreamAsync(
                     ct => AppServices.Downloads.OpenFileStreamAsync(file.FileId, ct));
+
+                // 下载完再显示覆盖层：先显示的话读者对着空窗口等，还以为卡住了。
+                ReaderOverlay.Visibility = Visibility.Visible;
                 await PdfHost.OpenAsync(
                     stream,
                     file.FileId,
