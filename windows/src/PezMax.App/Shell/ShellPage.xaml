@@ -53,6 +53,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
                 <Grid Grid.Row="0" Margin="12,8,12,4" ColumnSpacing="8">
@@ -68,9 +69,47 @@
                         CornerRadius="0" />
                     <Button Grid.Column="1" Click="SearchClick" Content="搜索" />
                 </Grid>
+
+                <!-- 滚动提醒：一条窄条，可关闭；多条时用左右切换 -->
+                <Border
+                    x:Name="ScrollNoticeHost"
+                    Grid.Row="1"
+                    Margin="12,0,12,4"
+                    Padding="12,6"
+                    Background="{ThemeResource PezSurfaceAltBrush}"
+                    BorderBrush="{ThemeResource PezBorderBrush}"
+                    BorderThickness="1"
+                    Visibility="Collapsed">
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock
+                            x:Name="ScrollNoticeText"
+                            Grid.Column="0"
+                            VerticalAlignment="Center"
+                            Style="{StaticResource PezBodyStyle}"
+                            TextTrimming="CharacterEllipsis" />
+                        <Button
+                            Grid.Column="1"
+                            Click="ScrollNoticeNextClick"
+                            ToolTipService.ToolTip="下一条">
+                            <FontIcon FontFamily="Segoe MDL2 Assets" FontSize="12" Glyph="&#xE76C;" />
+                        </Button>
+                        <Button
+                            Grid.Column="2"
+                            Click="ScrollNoticeCloseClick"
+                            ToolTipService.ToolTip="关闭">
+                            <FontIcon FontFamily="Segoe MDL2 Assets" FontSize="12" Glyph="&#xE711;" />
+                        </Button>
+                    </Grid>
+                </Border>
+
                 <muxc:InfoBar
                     x:Name="SessionBar"
-                    Grid.Row="1"
+                    Grid.Row="2"
                     IsClosable="False"
                     IsOpen="False"
                     Severity="Warning">
@@ -78,7 +117,7 @@
                         <Button Click="SessionLoginClick" Content="重新登录" />
                     </muxc:InfoBar.ActionButton>
                 </muxc:InfoBar>
-                <Frame x:Name="ContentFrame" Grid.Row="2" />
+                <Frame x:Name="ContentFrame" Grid.Row="3" />
             </Grid>
         </muxc:NavigationView>
 
@@ -100,6 +139,28 @@
                     FontSize="12"
                     Foreground="{ThemeResource PezTextSecondaryBrush}"
                     Text="PezMax One" />
+            </StackPanel>
+            <StackPanel
+                Margin="0,0,140,0"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Center"
+                Orientation="Horizontal"
+                Spacing="4">
+                <Button
+                    x:Name="NoticeBell"
+                    Click="NoticeBellClick"
+                    Padding="6,2"
+                    ToolTipService.ToolTip="通知">
+                    <Grid>
+                        <FontIcon FontFamily="Segoe MDL2 Assets" FontSize="14" Glyph="&#xE7ED;" />
+                        <muxc:InfoBadge
+                            x:Name="NoticeBadge"
+                            Margin="10,-8,-10,0"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            Visibility="Collapsed" />
+                    </Grid>
+                </Button>
             </StackPanel>
         </Grid>
     </Grid>

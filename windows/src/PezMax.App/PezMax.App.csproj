@@ -47,6 +47,7 @@
     <Compile Include="Compat\IsExternalInit.cs" />
     <Compile Include="Controls\PezDialog.cs" />
     <Compile Include="Preview\PreviewData.cs" />
+    <Compile Include="Shell\NotificationCenter.cs" />
     <Compile Include="Shell\ShellPage.xaml.cs">
       <DependentUpon>ShellPage.xaml</DependentUpon>
     </Compile>
