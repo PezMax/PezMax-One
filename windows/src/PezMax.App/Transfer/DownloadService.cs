@@ -135,10 +135,31 @@ namespace PezMax.Transfer
             CancellationToken cancellationToken)
         {
             await Queue.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+            // 外壳浮层靠 DownloadCenter 显示进度与取消；取消令牌与调用方的链接在一起。
+            var lease = DownloadCenter.Begin(fileName, cancellationToken);
+            var forwarded = new Progress<DownloadProgress>(report =>
+            {
+                DownloadCenter.Report(report);
+                progress?.Report(report);
+            });
+
             try
             {
-                return await TransferLockedAsync(kind, id, fileName, open, progress, cancellationToken)
+                var file = await TransferLockedAsync(kind, id, fileName, open, forwarded, lease.Token)
                     .ConfigureAwait(false);
+                DownloadCenter.Complete(lease, fileName);
+                return file;
+            }
+            catch (OperationCanceledException)
+            {
+                DownloadCenter.Fail(lease, fileName, "已取消（半成品保留，可继续下载）");
+                throw;
+            }
+            catch (Exception ex)
+            {
+                DownloadCenter.Fail(lease, fileName, ex is DatumException datum ? datum.Message : "下载失败");
+                throw;
             }
             finally
             {

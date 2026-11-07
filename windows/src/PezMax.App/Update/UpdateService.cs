@@ -47,6 +47,20 @@ namespace PezMax.Update
             }
         }
 
+        /// <summary>启动时的自动检查：24 小时内最多一次（`docs/RELEASES.md`）。</summary>
+        public static async Task<UpdateChoice?> CheckIfDueAsync(AppSettings settings)
+        {
+            if (!settings.AutoCheckUpdate) return null;
+
+            var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            if (now - settings.UpdateCheckedAtSeconds < 24 * 60 * 60) return null;
+
+            settings.UpdateCheckedAtSeconds = now;
+            await AppServices.SaveSettingsAsync().ConfigureAwait(false);
+
+            return await CheckAsync(settings.UpdateMirrorBase).ConfigureAwait(false);
+        }
+
         /// <summary>
         /// Windows 的安装动作：把 `.appinstaller` 交给系统 App Installer（UWP 不能静默自装）。
         /// 没有 `.appinstaller` 就退回 Release 页面，别让用户卡在「有个版本但你装不了」。

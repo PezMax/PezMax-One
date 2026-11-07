@@ -6,6 +6,7 @@ using PezMax.Core.Models;
 using PezMax.Core.Notify;
 using PezMax.Login;
 using PezMax.Pages;
+using PezMax.Update;
 using Windows.ApplicationModel.Core;
 using Windows.UI.ViewManagement;
 using Windows.UI.Xaml;
@@ -32,6 +33,7 @@ namespace PezMax.Shell
             SetUpTitleBar();
             AppServices.SessionChanged += UpdateAccount;
             AppServices.SessionExpired += OnSessionExpired;
+            HookDownloadCenter();
             Loaded += OnLoaded;
         }
 
@@ -51,6 +53,84 @@ namespace PezMax.Shell
             }
 
             await RefreshNotificationsAsync();
+            await CheckUpdateAsync();
+        }
+
+        private PezMax.Core.Update.UpdateChoice? _pendingUpdate;
+
+        /// <summary>下载浮层：订阅 DownloadCenter 的事件，串行队列里同时只会有一个在跑。</summary>
+        private void HookDownloadCenter()
+        {
+            Transfer.DownloadCenter.Started += fileName => RunOnUi(() =>
+            {
+                DownloadFileText.Text = "正在下载 " + fileName;
+                DownloadBar.Value = 0;
+                DownloadHost.Visibility = Visibility.Visible;
+            });
+
+            Transfer.DownloadCenter.Progress += report => RunOnUi(() =>
+            {
+                DownloadFileText.Text = "正在下载 " + report.FileName + "（" +
+                                        FileItem.FormatSize(report.BytesReceived) + " / " +
+                                        FileItem.FormatSize(report.Total) + "）";
+                DownloadBar.Value = report.Fraction;
+            });
+
+            Transfer.DownloadCenter.Completed += _ => RunOnUi(() =>
+            {
+                DownloadBar.Value = 1;
+                DownloadHost.Visibility = Visibility.Collapsed;
+            });
+
+            Transfer.DownloadCenter.Failed += (_, message) => RunOnUi(() =>
+            {
+                DownloadHost.Visibility = Visibility.Collapsed;
+                SessionBar.Severity = muxc.InfoBarSeverity.Warning;
+                SessionBar.Message = message;
+                SessionBar.IsOpen = true;
+            });
+        }
+
+        private static void RunOnUi(Action action) => AppServices.RunOnUi(action);
+
+        private void DownloadCancelClick(object sender, RoutedEventArgs e)
+        {
+            Transfer.DownloadCenter.Cancel();
+            DownloadHost.Visibility = Visibility.Collapsed;
+        }
+
+        /// <summary>启动后查一次更新（24 小时节流），有新版只在顶部挂一条提示，不弹模态框。</summary>
+        private async Task CheckUpdateAsync()
+        {
+            try
+            {
+                _pendingUpdate = await UpdateService.CheckIfDueAsync(AppServices.Settings);
+                if (_pendingUpdate == null) return;
+
+                UpdateBar.Message = "有新版本 " + _pendingUpdate.Version + "（" + _pendingUpdate.ReleaseTag + "），可以在「设置 → 关于」里安装。";
+                UpdateBar.IsOpen = true;
+            }
+            catch (Exception ex)
+            {
+                App.WriteCrashLog(ex);
+            }
+        }
+
+        private async void UpdateInstallClick(object sender, RoutedEventArgs e)
+        {
+            if (_pendingUpdate == null) return;
+
+            UpdateBar.IsOpen = false;
+            try
+            {
+                await UpdateService.InstallAsync(_pendingUpdate);
+            }
+            catch (Exception ex)
+            {
+                App.WriteCrashLog(ex);
+                SessionBar.Message = "打开安装程序失败，请到 Release 页面手动下载";
+                SessionBar.IsOpen = true;
+            }
         }
 
         /// <summary>

@@ -21,6 +21,8 @@ public sealed class AppSettings
     public bool AutoCheckUpdate { get; set; } = true;
     /// <summary>更新下载的镜像前缀（D12，默认关闭）；空表示直连 GitHub。</summary>
     public string? UpdateMirrorBase { get; set; }
+    /// <summary>上次检查更新的 Unix 秒；0 表示没查过。启动时按 24 小时节流。</summary>
+    public long UpdateCheckedAtSeconds { get; set; }
 
     public static AppSettings Load(string? json)
     {
@@ -47,6 +49,7 @@ public sealed class AppSettings
             settings.AutoCheckUpdate = root.GetBool("autoCheckUpdate", true);
             var mirror = root.GetString("updateMirrorBase");
             if (!string.IsNullOrWhiteSpace(mirror)) settings.UpdateMirrorBase = mirror;
+            settings.UpdateCheckedAtSeconds = root.GetLong("updateCheckedAt");
         }
         catch (JsonParseException)
         {
@@ -73,6 +76,8 @@ public sealed class AppSettings
 
         if (UpdateMirrorBase == null) builder.Null("updateMirrorBase");
         else builder.String("updateMirrorBase", UpdateMirrorBase);
+
+        builder.Number("updateCheckedAt", UpdateCheckedAtSeconds);
 
         if (DownloadDirectory == null) builder.Null("downloadDirectory");
         else builder.String("downloadDirectory", DownloadDirectory);

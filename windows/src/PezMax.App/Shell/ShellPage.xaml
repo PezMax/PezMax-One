@@ -54,6 +54,7 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
                 <Grid Grid.Row="0" Margin="12,8,12,4" ColumnSpacing="8">
@@ -107,9 +108,21 @@
                     </Grid>
                 </Border>
 
+                <!-- 有新版时的一条提示：不弹模态框、不打断阅读（docs/RELEASES.md） -->
+                <muxc:InfoBar
+                    x:Name="UpdateBar"
+                    Grid.Row="2"
+                    IsClosable="True"
+                    IsOpen="False"
+                    Severity="Informational">
+                    <muxc:InfoBar.ActionButton>
+                        <Button Click="UpdateInstallClick" Content="去安装" />
+                    </muxc:InfoBar.ActionButton>
+                </muxc:InfoBar>
+
                 <muxc:InfoBar
                     x:Name="SessionBar"
-                    Grid.Row="2"
+                    Grid.Row="3"
                     IsClosable="False"
                     IsOpen="False"
                     Severity="Warning">
@@ -117,7 +130,38 @@
                         <Button Click="SessionLoginClick" Content="重新登录" />
                     </muxc:InfoBar.ActionButton>
                 </muxc:InfoBar>
-                <Frame x:Name="ContentFrame" Grid.Row="3" />
+                <Frame x:Name="ContentFrame" Grid.Row="4" />
+
+                <!-- 下载浮层：串行队列里正在下的那一个，可取消 -->
+                <Border
+                    x:Name="DownloadHost"
+                    Grid.Row="4"
+                    Margin="12,0,12,10"
+                    Padding="12,8"
+                    VerticalAlignment="Bottom"
+                    Background="{ThemeResource PezSurfaceBrush}"
+                    BorderBrush="{ThemeResource PezBorderBrush}"
+                    BorderThickness="1"
+                    Visibility="Collapsed">
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Spacing="4">
+                            <TextBlock
+                                x:Name="DownloadFileText"
+                                Style="{StaticResource PezCaptionStyle}"
+                                TextTrimming="CharacterEllipsis" />
+                            <ProgressBar x:Name="DownloadBar" Maximum="1" Minimum="0" Value="0" />
+                        </StackPanel>
+                        <Button
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            Click="DownloadCancelClick"
+                            Content="取消" />
+                    </Grid>
+                </Border>
             </Grid>
         </muxc:NavigationView>
 
