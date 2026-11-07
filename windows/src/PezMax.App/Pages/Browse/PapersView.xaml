@@ -29,10 +29,13 @@
         </Grid>
 
         <Grid Grid.Row="1">
+            <!-- 三栏在 1000 级窗口里要能站住：树与详情给固定宽，列表吃剩下的。
+                 原来列表也固定 340，窗口一窄详情栏被压到几十像素，标题逐字换行、
+                 按钮被切掉——详情面板等于不可用。 -->
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="220" />
+                <ColumnDefinition Width="*" MinWidth="260" />
                 <ColumnDefinition Width="260" />
-                <ColumnDefinition Width="340" />
-                <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
             <Grid Grid.Column="0" Margin="0,0,12,0">
@@ -92,19 +95,63 @@
                 </ListView>
             </Grid>
 
-            <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
+            <!-- 详情栏的 ScrollViewer 必须关掉横向滚动：默认允许横滚时内容是按无限宽测量的，
+                 TextWrapping 形同虚设，信息行会被右边缘切掉。 -->
+            <ScrollViewer
+                Grid.Column="2"
+                HorizontalScrollMode="Disabled"
+                HorizontalScrollBarVisibility="Disabled"
+                VerticalScrollBarVisibility="Auto">
                 <StackPanel x:Name="DetailPanel" Spacing="10" Visibility="Collapsed">
                     <TextBlock x:Name="DetailTitle" Style="{StaticResource PezSectionTitleStyle}" TextWrapping="Wrap" />
-                    <TextBlock x:Name="DetailMeta" Style="{StaticResource PezCaptionStyle}" />
-                    <TextBlock x:Name="DetailStatus" Style="{StaticResource PezCaptionStyle}" />
+                    <TextBlock x:Name="DetailMeta" Style="{StaticResource PezCaptionStyle}" TextWrapping="Wrap" />
+                    <TextBlock x:Name="DetailStatus" Style="{StaticResource PezCaptionStyle}" TextWrapping="Wrap" />
 
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <Button Click="PreviewClick" Content="预览" Style="{StaticResource AccentButtonStyle}" />
-                        <Button Click="DownloadClick" Content="下载" />
-                        <Button x:Name="FavoriteButton" Click="FavoriteClick" Content="收藏" />
-                        <Button Click="ReportClick" Content="举报" />
-                        <Button Click="CopyLinkClick" Content="复制链接" />
-                    </StackPanel>
+                    <!-- 五个按钮排一行在 260 宽里放不下，「复制链接」会被切掉；两列铺开。 -->
+                    <Grid ColumnSpacing="8" RowSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Button
+                            Grid.Row="0"
+                            Grid.Column="0"
+                            HorizontalAlignment="Stretch"
+                            Click="PreviewClick"
+                            Content="预览"
+                            Style="{StaticResource AccentButtonStyle}" />
+                        <Button
+                            Grid.Row="0"
+                            Grid.Column="1"
+                            HorizontalAlignment="Stretch"
+                            Click="DownloadClick"
+                            Content="下载" />
+                        <Button
+                            x:Name="FavoriteButton"
+                            Grid.Row="1"
+                            Grid.Column="0"
+                            HorizontalAlignment="Stretch"
+                            Click="FavoriteClick"
+                            Content="收藏" />
+                        <Button
+                            Grid.Row="1"
+                            Grid.Column="1"
+                            HorizontalAlignment="Stretch"
+                            Click="ReportClick"
+                            Content="举报" />
+                        <Button
+                            Grid.Row="2"
+                            Grid.Column="0"
+                            Grid.ColumnSpan="2"
+                            HorizontalAlignment="Stretch"
+                            Click="CopyLinkClick"
+                            Content="复制链接" />
+                    </Grid>
 
                     <ProgressRing
                         x:Name="PreviewProgress"

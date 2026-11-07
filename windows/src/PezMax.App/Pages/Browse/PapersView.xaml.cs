@@ -248,7 +248,10 @@ namespace PezMax.Pages.Browse
             _selected = file;
             DetailPanel.Visibility = Visibility.Visible;
             DetailTitle.Text = file.DisplayName;
-            DetailMeta.Text = $"{file.TypeName} · {file.SubjectSchoolText} · {file.FileYear} · {file.SizeText} · {file.FileFormat.ToUpperInvariant()}";
+            // 一行铺不下：详情栏只有 260，硬塞会把「格式」整段切在边缘外。
+            // 主动断成两行，比让 TextBlock 在无限宽里量出超长行更可控。
+            DetailMeta.Text = $"{file.TypeName} · {file.SubjectSchoolText}\n" +
+                              $"{file.FileYear} · {file.SizeText} · {file.FileFormat.ToUpperInvariant()}";
             DetailStatus.Text = $"状态：{file.StatusText} · 上传者 ID {file.UserId} · {file.CreateTime}";
             ResetPreview();
             _ = RefreshFavoriteAsync();
