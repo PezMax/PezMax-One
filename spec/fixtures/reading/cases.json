@@ -1,0 +1,479 @@
+[
+  {
+    "id": "reading.continuous.a4-three-pages",
+    "description": "三页 A4、显示宽度等于页宽时页高保持不变，页顶偏移要把页间距算进去",
+    "source": "legacy/egui-1.x:src/pdf/mod.rs:47-70 + windows/AGENTS.md 阅读器表",
+    "input": {
+      "kind": "continuous",
+      "pages": [{ "width": 595, "height": 842 }, { "width": 595, "height": 842 }, { "width": 595, "height": 842 }],
+      "displayWidth": 595,
+      "gap": 8,
+      "ops": [
+        { "op": "tops" },
+        { "op": "contentHeight" },
+        { "op": "visible", "scrollOffset": 0, "viewportHeight": 900 },
+        { "op": "pageAt", "y": 845 },
+        { "op": "offsetOf", "page": 2 },
+        { "op": "current", "scrollOffset": 0, "viewportHeight": 900 }
+      ]
+    },
+    "expect": {
+      "tops": [0, 850, 1700],
+      "contentHeight": 2542,
+      "visible": [0, 1],
+      "pageAt": 0,
+      "offsetOf": 1700,
+      "current": 0
+    }
+  },
+  {
+    "id": "reading.continuous.mixed-sizes",
+    "description": "中间夹一张横向页：每页按自己的宽高比算高度，不能拿第一页的高度乘页数",
+    "source": "legacy/egui-1.x:src/pdf/mod.rs:325-340（page_width/page_height 只做兜底）+ 逐页 PageSize",
+    "input": {
+      "kind": "continuous",
+      "pages": [{ "width": 600, "height": 800 }, { "width": 800, "height": 600 }, { "width": 600, "height": 800 }],
+      "displayWidth": 300,
+      "gap": 10,
+      "ops": [
+        { "op": "tops" },
+        { "op": "contentHeight" },
+        { "op": "visible", "scrollOffset": 380, "viewportHeight": 100 },
+        { "op": "pageAt", "y": 404 },
+        { "op": "offsetOf", "page": 1 },
+        { "op": "current", "scrollOffset": 380, "viewportHeight": 100 }
+      ]
+    },
+    "expect": {
+      "tops": [0, 410, 645],
+      "contentHeight": 1045,
+      "visible": [0, 1],
+      "pageAt": 0,
+      "offsetOf": 410,
+      "current": 1
+    }
+  },
+  {
+    "id": "reading.continuous.scroll-past-end",
+    "description": "滚过内容底部（回弹）仍要报最后一页，不能返回空范围——空范围会让视口白屏",
+    "source": "windows/AGENTS.md「连续视图滚动无白屏」（W2 通过标准）",
+    "input": {
+      "kind": "continuous",
+      "pages": [{ "width": 600, "height": 800 }],
+      "displayWidth": 300,
+      "gap": 10,
+      "ops": [{ "op": "visible", "scrollOffset": 1000, "viewportHeight": 500 }]
+    },
+    "expect": { "visible": [0, 0] }
+  },
+  {
+    "id": "reading.continuous.scroll-before-start",
+    "description": "橡皮筋回弹到负偏移时按 0 算，报第一页",
+    "source": "windows/AGENTS.md 阅读器表（可视区计算）",
+    "input": {
+      "kind": "continuous",
+      "pages": [{ "width": 600, "height": 800 }],
+      "displayWidth": 300,
+      "gap": 10,
+      "ops": [{ "op": "visible", "scrollOffset": -50, "viewportHeight": 100 }]
+    },
+    "expect": { "visible": [0, 0] }
+  },
+  {
+    "id": "reading.continuous.scroll-at-content-end",
+    "description": "偏移正好等于内容总高（末尾页底边）时仍报最后页，不返回空范围",
+    "source": "windows/AGENTS.md 阅读器表（可视区计算）",
+    "input": {
+      "kind": "continuous",
+      "pages": [{ "width": 600, "height": 800 }],
+      "displayWidth": 300,
+      "gap": 10,
+      "ops": [
+        { "op": "visible", "scrollOffset": 400, "viewportHeight": 100 },
+        { "op": "offsetOf", "page": 0 }
+      ]
+    },
+    "expect": { "visible": [0, 0], "offsetOf": 0 }
+  },
+  {
+    "id": "reading.continuous.page-at-before-start",
+    "description": "点落在内容之前：取第 0 页",
+    "source": "spec/fixtures/reading/README.md「continuous」",
+    "input": {
+      "kind": "continuous",
+      "pages": [{ "width": 600, "height": 800 }],
+      "displayWidth": 300,
+      "gap": 10,
+      "ops": [{ "op": "pageAt", "y": -5 }]
+    },
+    "expect": { "pageAt": 0 }
+  },
+  {
+    "id": "reading.continuous.page-at-past-end",
+    "description": "点落在内容之后：取最后一页",
+    "source": "spec/fixtures/reading/README.md「continuous」",
+    "input": {
+      "kind": "continuous",
+      "pages": [{ "width": 600, "height": 800 }, { "width": 600, "height": 800 }],
+      "displayWidth": 300,
+      "gap": 10,
+      "ops": [{ "op": "pageAt", "y": 5000 }]
+    },
+    "expect": { "pageAt": 1 }
+  },
+  {
+    "id": "reading.continuous.viewport-taller-than-content",
+    "description": "视口比整本还高时，可见范围就是全部页",
+    "source": "windows/AGENTS.md 阅读器表（可视区计算）",
+    "input": {
+      "kind": "continuous",
+      "pages": [{ "width": 600, "height": 800 }, { "width": 600, "height": 800 }],
+      "displayWidth": 300,
+      "gap": 10,
+      "ops": [
+        { "op": "contentHeight" },
+        { "op": "visible", "scrollOffset": 0, "viewportHeight": 2000 },
+        { "op": "current", "scrollOffset": 0, "viewportHeight": 2000 }
+      ]
+    },
+    "expect": {
+      "contentHeight": 810,
+      "visible": [0, 1],
+      "current": 0
+    }
+  },
+  {
+    "id": "reading.continuous.empty-document",
+    "description": "空文档：所有几何量为空，页码用 -1 表示「没有页」而不是 0",
+    "source": "windows/AGENTS.md 阅读器表（`PageCount == 0` 早退）",
+    "input": {
+      "kind": "continuous",
+      "pages": [],
+      "displayWidth": 300,
+      "gap": 10,
+      "ops": [
+        { "op": "tops" },
+        { "op": "contentHeight" },
+        { "op": "visible", "scrollOffset": 0, "viewportHeight": 500 },
+        { "op": "pageAt", "y": 0 },
+        { "op": "current", "scrollOffset": 0, "viewportHeight": 500 }
+      ]
+    },
+    "expect": {
+      "tops": [],
+      "contentHeight": 0,
+      "visible": [],
+      "pageAt": -1,
+      "current": -1
+    }
+  },
+  {
+    "id": "reading.overscan.clamp-low",
+    "description": "首屏可见 0~1 页：渲染窗口夹在下界，只有 0~3",
+    "source": "windows/AGENTS.md「只渲染可视区 ± 2 页」",
+    "input": { "kind": "overscan", "visible": [0, 1], "pageCount": 10 },
+    "expect": { "render": [0, 3] }
+  },
+  {
+    "id": "reading.overscan.clamp-high",
+    "description": "末尾可见 8~9 页：渲染窗口夹在上界",
+    "source": "windows/AGENTS.md「只渲染可视区 ± 2 页」",
+    "input": { "kind": "overscan", "visible": [8, 9], "pageCount": 10 },
+    "expect": { "render": [6, 9] }
+  },
+  {
+    "id": "reading.overscan.window-shift-not-slide",
+    "description": "夹下界时不要把窗口整体右移：预取只在有页的方向上发生",
+    "source": "spec/fixtures/reading/README.md「overscan」（egui 版按 next_render_idx 顺序预取，不回转）",
+    "input": { "kind": "overscan", "visible": [0, 0], "pageCount": 10 },
+    "expect": { "render": [0, 2] }
+  },
+  {
+    "id": "reading.overscan.single-page",
+    "description": "只有一页的文档：窗口就是这一页",
+    "source": "windows/AGENTS.md 阅读器表",
+    "input": { "kind": "overscan", "visible": [0, 0], "pageCount": 1 },
+    "expect": { "render": [0, 0] }
+  },
+  {
+    "id": "reading.overscan.no-document",
+    "description": "没有页时渲染窗口是空范围",
+    "source": "windows/AGENTS.md 阅读器表（`PageCount == 0` 早退）",
+    "input": { "kind": "overscan", "visible": [], "pageCount": 0 },
+    "expect": { "render": [] }
+  },
+  {
+    "id": "reading.overscan.custom",
+    "description": "overscan 可调：±1 页时必须只给 2~4",
+    "source": "spec/fixtures/reading/README.md「常量」（overscan 默认 2，按端可调）",
+    "input": { "kind": "overscan", "visible": [3, 3], "pageCount": 10, "overscan": 1 },
+    "expect": { "render": [2, 4] }
+  },
+  {
+    "id": "reading.render-order.visible-first",
+    "description": "先渲可视区（索引升序），再按离可视区边缘的距离由近及远",
+    "source": "legacy/egui-1.x:src/pdf/mod.rs:390-420（顺序预取）+ 本夹具的顺序规则",
+    "input": {
+      "kind": "renderOrder",
+      "visible": [5, 6],
+      "render": [3, 8],
+      "cached": []
+    },
+    "expect": { "order": [5, 6, 4, 7, 3, 8] }
+  },
+  {
+    "id": "reading.render-order.from-top-of-document",
+    "description": "视口在文档顶部，预取只往下；已缓存页跳过但保持其余顺序",
+    "source": "spec/fixtures/reading/README.md「renderOrder」",
+    "input": {
+      "kind": "renderOrder",
+      "visible": [0, 2],
+      "render": [0, 4],
+      "cached": [1]
+    },
+    "expect": { "order": [0, 2, 3, 4] }
+  },
+  {
+    "id": "reading.render-order.skips-cached-neighbours",
+    "description": "两侧最近的两页都已缓存：跳过它们直接取更远的",
+    "source": "spec/fixtures/reading/README.md「renderOrder」",
+    "input": {
+      "kind": "renderOrder",
+      "visible": [7, 7],
+      "render": [5, 9],
+      "cached": [6, 8]
+    },
+    "expect": { "order": [7, 5, 9] }
+  },
+  {
+    "id": "reading.render-order.nothing-left",
+    "description": "窗口内全部已缓存：没有要渲染的页，不能死循环重排",
+    "source": "spec/fixtures/reading/README.md「renderOrder」",
+    "input": {
+      "kind": "renderOrder",
+      "visible": [2, 3],
+      "render": [0, 5],
+      "cached": [0, 1, 2, 3, 4, 5]
+    },
+    "expect": { "order": [] }
+  },
+  {
+    "id": "reading.zoom.clamp-high",
+    "description": "超过 4 倍的缩放夹回 4 倍",
+    "source": "legacy/egui-1.x:src/pdf/mod.rs:50（MAX_SCALE）",
+    "input": { "kind": "zoom", "op": "clamp", "zoom": 9 },
+    "expect": { "zoom": 4 }
+  },
+  {
+    "id": "reading.zoom.clamp-low",
+    "description": "小于 0.5 倍的缩放夹回 0.5 倍；clamp 不吸附步进",
+    "source": "legacy/egui-1.x:src/pdf/mod.rs:49（MIN_SCALE）",
+    "input": { "kind": "zoom", "op": "clamp", "zoom": 0.1 },
+    "expect": { "zoom": 0.5 }
+  },
+  {
+    "id": "reading.zoom.clamp-keeps-off-grid",
+    "description": "已经在范围内的非格点值原样返回（读存档时不能擅自改写用户的缩放）",
+    "source": "spec/fixtures/reading/README.md「zoom」",
+    "input": { "kind": "zoom", "op": "clamp", "zoom": 2.37 },
+    "expect": { "zoom": 2.37 }
+  },
+  {
+    "id": "reading.zoom.step-up",
+    "description": "放大一档：1.00 → 1.25",
+    "source": "legacy/egui-1.x:src/pdf/mod.rs:48（ZOOM_STEP）",
+    "input": { "kind": "zoom", "op": "step", "zoom": 1, "direction": 1 },
+    "expect": { "zoom": 1.25 }
+  },
+  {
+    "id": "reading.zoom.step-up-from-off-grid",
+    "description": "放大时向上取第一个格点：1.13 → 1.25",
+    "source": "spec/fixtures/reading/README.md「zoom」",
+    "input": { "kind": "zoom", "op": "step", "zoom": 1.13, "direction": 1 },
+    "expect": { "zoom": 1.25 }
+  },
+  {
+    "id": "reading.zoom.step-up-to-max",
+    "description": "接近上限时停在 4 倍；已在上限时不动",
+    "source": "legacy/egui-1.x:src/pdf/mod.rs:48-50",
+    "input": { "kind": "zoom", "op": "step", "zoom": 3.9, "direction": 1 },
+    "expect": { "zoom": 4 }
+  },
+  {
+    "id": "reading.zoom.step-up-at-max",
+    "description": "已在上限再放大：仍是 4 倍（不要越过上限再夹回来留下越界状态）",
+    "source": "legacy/egui-1.x:src/pdf/mod.rs:48-50",
+    "input": { "kind": "zoom", "op": "step", "zoom": 4, "direction": 1 },
+    "expect": { "zoom": 4 }
+  },
+  {
+    "id": "reading.zoom.step-down",
+    "description": "缩小一档：1.00 → 0.75",
+    "source": "legacy/egui-1.x:src/pdf/mod.rs:48（ZOOM_STEP）",
+    "input": { "kind": "zoom", "op": "step", "zoom": 1, "direction": -1 },
+    "expect": { "zoom": 0.75 }
+  },
+  {
+    "id": "reading.zoom.step-down-from-off-grid",
+    "description": "缩小时向下取第一个格点：0.6 → 0.5",
+    "source": "spec/fixtures/reading/README.md「zoom」",
+    "input": { "kind": "zoom", "op": "step", "zoom": 0.6, "direction": -1 },
+    "expect": { "zoom": 0.5 }
+  },
+  {
+    "id": "reading.zoom.step-down-at-min",
+    "description": "已在下限再缩小：仍是 0.5 倍",
+    "source": "legacy/egui-1.x:src/pdf/mod.rs:49（MIN_SCALE）",
+    "input": { "kind": "zoom", "op": "step", "zoom": 0.5, "direction": -1 },
+    "expect": { "zoom": 0.5 }
+  },
+  {
+    "id": "reading.zoom.step-down-from-max",
+    "description": "从 4 倍缩一档落在 3.75，而不是跳过 3.75 直接到 3.5",
+    "source": "spec/fixtures/reading/README.md「zoom」",
+    "input": { "kind": "zoom", "op": "step", "zoom": 4, "direction": -1 },
+    "expect": { "zoom": 3.75 }
+  },
+  {
+    "id": "reading.zoom.fit-width",
+    "description": "适应宽度 = 可用宽度 / 页宽，不吸附步进（吸附会留出横向滚动条）",
+    "source": "legacy/egui-1.x:src/pdf/mod.rs（zoom_to_fit）",
+    "input": { "kind": "zoom", "op": "fit", "pageWidth": 595, "availableWidth": 476 },
+    "expect": { "zoom": 0.8 }
+  },
+  {
+    "id": "reading.zoom.fit-clamped-high",
+    "description": "窗口很宽时适应宽度也不能超过 4 倍",
+    "source": "legacy/egui-1.x:src/pdf/mod.rs:50（MAX_SCALE）",
+    "input": { "kind": "zoom", "op": "fit", "pageWidth": 595, "availableWidth": 5000 },
+    "expect": { "zoom": 4 }
+  },
+  {
+    "id": "reading.zoom.fit-clamped-low",
+    "description": "窄窗口里适应宽度不小于 0.5 倍，否则字小到不可读",
+    "source": "legacy/egui-1.x:src/pdf/mod.rs:49（MIN_SCALE）",
+    "input": { "kind": "zoom", "op": "fit", "pageWidth": 595, "availableWidth": 100 },
+    "expect": { "zoom": 0.5 }
+  },
+  {
+    "id": "reading.zoom.fit-degenerate",
+    "description": "页宽读不出来（0）时按 1 倍处理，不能除零",
+    "source": "spec/fixtures/reading/README.md「形状」（尺寸兜底）",
+    "input": { "kind": "zoom", "op": "fit", "pageWidth": 0, "availableWidth": 800 },
+    "expect": { "zoom": 1 }
+  },
+  {
+    "id": "reading.cache-key.rounds-scale",
+    "description": "200 DPI 的渲染缩放 2.7778 四舍五入成 s0278；截断会得到 277 并随浮点尾数漂移",
+    "source": "legacy/egui-1.x:src/cache.rs pdf_page_cache_path（p{idx:04}_s{scale×100}）+ 本夹具改为四舍五入",
+    "input": { "kind": "cacheKey", "pageIndex": 7, "scale": 2.7777778 },
+    "expect": { "key": "p0007_s0278" }
+  },
+  {
+    "id": "reading.cache-key.min-scale",
+    "description": "最小缩放 0.5 → s0050，页码不足 4 位补零",
+    "source": "legacy/egui-1.x:src/cache.rs pdf_page_cache_path",
+    "input": { "kind": "cacheKey", "pageIndex": 0, "scale": 0.5 },
+    "expect": { "key": "p0000_s0050" }
+  },
+  {
+    "id": "reading.cache-key.max-scale",
+    "description": "最大缩放 4 → s0400",
+    "source": "legacy/egui-1.x:src/cache.rs pdf_page_cache_path",
+    "input": { "kind": "cacheKey", "pageIndex": 123, "scale": 4 },
+    "expect": { "key": "p0123_s0400" }
+  },
+  {
+    "id": "reading.cache-key.float-noise",
+    "description": "同一缩放的浮点噪声必须落到同一个键，否则缓存永远不命中",
+    "source": "spec/fixtures/reading/README.md「cacheKey」",
+    "input": { "kind": "cacheKey", "pageIndex": 1234, "scale": 1.2500000001 },
+    "expect": { "key": "p1234_s0125" }
+  },
+  {
+    "id": "reading.grid.columns",
+    "description": "可用宽度 1000、最小格宽 180、间距 12 → 5 列",
+    "source": "windows/AGENTS.md 阅读器表（网格视图）",
+    "input": { "kind": "grid", "op": "columns", "availableWidth": 1000 },
+    "expect": { "columns": 5 }
+  },
+  {
+    "id": "reading.grid.columns-min-one",
+    "description": "极窄窗口至少 1 列：出现 0 列就是布局崩溃",
+    "source": "windows/AGENTS.md 阅读器表（窄窗口退化）",
+    "input": { "kind": "grid", "op": "columns", "availableWidth": 100 },
+    "expect": { "columns": 1 }
+  },
+  {
+    "id": "reading.grid.columns-two",
+    "description": "383 宽刚好放 2 列、放不了 3 列",
+    "source": "windows/AGENTS.md 阅读器表（网格视图）",
+    "input": { "kind": "grid", "op": "columns", "availableWidth": 383 },
+    "expect": { "columns": 2 }
+  },
+  {
+    "id": "reading.grid.tile-width",
+    "description": "格宽 =（可用宽度 − 间距×(列数−1)）/ 列数，去掉的间距要平分给各列",
+    "source": "windows/AGENTS.md 阅读器表（网格视图）",
+    "input": { "kind": "grid", "op": "tileWidth", "availableWidth": 1000, "columns": 5 },
+    "expect": { "tileWidth": 190.4 }
+  },
+  {
+    "id": "reading.grid.rows",
+    "description": "10 页 5 列 = 2 行；11 页 = 3 行（末行不满也要占位）",
+    "source": "windows/AGENTS.md 阅读器表（网格视图）",
+    "input": { "kind": "grid", "op": "rows", "pageCount": 11, "columns": 5 },
+    "expect": { "rows": 3 }
+  },
+  {
+    "id": "reading.grid.rows-empty",
+    "description": "没有页时行数是 0，不是 1",
+    "source": "windows/AGENTS.md 阅读器表（网格视图）",
+    "input": { "kind": "grid", "op": "rows", "pageCount": 0, "columns": 5 },
+    "expect": { "rows": 0 }
+  },
+  {
+    "id": "reading.evict.outside-window",
+    "description": "窗口外的缓存按离窗口距离由远及近释放，同距离索引升序",
+    "source": "windows/AGENTS.md 阅读器表（内存稳定）+ spec/fixtures/reading/README.md「evict」",
+    "input": {
+      "kind": "evict",
+      "cached": [1, 2, 3, 4, 5, 6],
+      "keep": [3, 4]
+    },
+    "expect": { "release": [1, 6, 2, 5] }
+  },
+  {
+    "id": "reading.evict.keeps-window",
+    "description": "窗口内的页一个都不释放，中间那些也在窗口里",
+    "source": "spec/fixtures/reading/README.md「evict」",
+    "input": {
+      "kind": "evict",
+      "cached": [0, 1, 2],
+      "keep": [0, 2]
+    },
+    "expect": { "release": [] }
+  },
+  {
+    "id": "reading.evict.nothing-cached",
+    "description": "缓存为空时没有可释放的页（不要返回空数组以外的哨兵值）",
+    "source": "spec/fixtures/reading/README.md「evict」",
+    "input": {
+      "kind": "evict",
+      "cached": [],
+      "keep": [0, 1]
+    },
+    "expect": { "release": [] }
+  },
+  {
+    "id": "reading.evict.single-outside",
+    "description": "只剩一页在窗口外也要释放",
+    "source": "spec/fixtures/reading/README.md「evict」",
+    "input": {
+      "kind": "evict",
+      "cached": [5],
+      "keep": [0, 1]
+    },
+    "expect": { "release": [5] }
+  }
+]
