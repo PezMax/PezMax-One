@@ -66,8 +66,6 @@
                                 Background="{ThemeResource PezSurfaceAltBrush}"
                                 BorderBrush="{ThemeResource PezBorderBrush}"
                                 BorderThickness="1"
-                                Width="120"
-                                Height="44"
                                 Tapped="CaptchaTapped">
                                 <Image x:Name="CaptchaImage" Stretch="Uniform" />
                             </Border>
