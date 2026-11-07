@@ -168,7 +168,11 @@
                             Text="强调色跟随 Windows 系统设置（设置 → 个性化 → 颜色）。" />
 
                         <TextBlock Style="{StaticResource PezSectionTitleStyle}" Text="下载" Margin="0,8,0,0" />
-                        <TextBox x:Name="DownloadDirBox" Header="下载目录（留空使用「下载\PezMax」）" Width="480" CornerRadius="0" />
+                        <TextBlock x:Name="DownloadDirText" Style="{StaticResource PezCaptionStyle}" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Click="PickDownloadDirClick" Content="选择目录…" />
+                            <Button Click="ResetDownloadDirClick" Content="恢复默认" />
+                        </StackPanel>
                         <ToggleSwitch x:Name="SilentDownloadSwitch" Header="静默下载（完成时不弹系统通知）" />
 
                         <TextBlock Style="{StaticResource PezSectionTitleStyle}" Text="启动与更新" Margin="0,8,0,0" />

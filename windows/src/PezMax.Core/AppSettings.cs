@@ -17,6 +17,8 @@ public sealed class AppSettings
     public bool SilentDownload { get; set; }
     public double PdfScale { get; set; } = 1.0;
     public string? DownloadDirectory { get; set; }
+    /// <summary>下载目录的 FutureAccessList token；UWP 靠它跨启动访问用户选的目录。</summary>
+    public string? DownloadFolderToken { get; set; }
     public string ServerUrl { get; set; } = Net.DatumHttp.DefaultBaseUrl;
     public bool AutoCheckUpdate { get; set; } = true;
     /// <summary>更新下载的镜像前缀（D12，默认关闭）；空表示直连 GitHub。</summary>
@@ -44,6 +46,8 @@ public sealed class AppSettings
             settings.SilentDownload = root.GetBool("silentDownload");
             settings.PdfScale = root.GetDouble("pdfScale", 1.0);
             settings.DownloadDirectory = root.GetString("downloadDirectory");
+            var folderToken = root.GetString("downloadFolderToken");
+            if (!string.IsNullOrWhiteSpace(folderToken)) settings.DownloadFolderToken = folderToken;
             var server = root.GetString("serverUrl");
             if (!string.IsNullOrWhiteSpace(server)) settings.ServerUrl = server!;
             settings.AutoCheckUpdate = root.GetBool("autoCheckUpdate", true);
@@ -78,6 +82,9 @@ public sealed class AppSettings
         else builder.String("updateMirrorBase", UpdateMirrorBase);
 
         builder.Number("updateCheckedAt", UpdateCheckedAtSeconds);
+
+        if (DownloadFolderToken == null) builder.Null("downloadFolderToken");
+        else builder.String("downloadFolderToken", DownloadFolderToken);
 
         if (DownloadDirectory == null) builder.Null("downloadDirectory");
         else builder.String("downloadDirectory", DownloadDirectory);

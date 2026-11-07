@@ -457,7 +457,7 @@ namespace PezMax.Pages
                 ThemeMode.Dark => 2,
                 _ => 0,
             };
-            DownloadDirBox.Text = settings.DownloadDirectory ?? "";
+            DownloadDirText.Text = "下载目录：" + DownloadStorage.Describe();
             SilentDownloadSwitch.IsOn = settings.SilentDownload;
             AutoUpdateSwitch.IsOn = settings.AutoCheckUpdate;
             MirrorBox.Text = settings.UpdateMirrorBase ?? "";
@@ -484,9 +484,8 @@ namespace PezMax.Pages
                 2 => ThemeMode.Dark,
                 _ => ThemeMode.System,
             };
-            settings.DownloadDirectory = string.IsNullOrWhiteSpace(DownloadDirBox.Text) ? null : DownloadDirBox.Text.Trim();
-            settings.SilentDownload = SilentDownloadSwitch.IsOn;
-            settings.AutoCheckUpdate = AutoUpdateSwitch.IsOn;
+            // 目录本身由「选择目录…」负责授权与保存，保存设置时不再读输入框。
+            settings.SilentDownload = SilentDownloadSwitch.IsOn;            settings.AutoCheckUpdate = AutoUpdateSwitch.IsOn;
             settings.UpdateMirrorBase = string.IsNullOrWhiteSpace(MirrorBox.Text) ? null : MirrorBox.Text.Trim();
             settings.ServerUrl = DatumHttp.NormalizeBaseUrl(server);
             await AppServices.SaveSettingsAsync();
@@ -504,6 +503,44 @@ namespace PezMax.Pages
             SettingsBar.Severity = muxc.InfoBarSeverity.Success;
             SettingsBar.Message = "设置已保存";
             SettingsBar.IsOpen = true;
+        }
+
+        private async void PickDownloadDirClick(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var folder = await DownloadStorage.PickAsync();
+                if (folder == null) return;
+
+                DownloadDirText.Text = "下载目录：" + folder.Path;
+                SettingsBar.Severity = muxc.InfoBarSeverity.Success;
+                SettingsBar.Message = "下载目录已改为 " + folder.Path + "（授权已记住，下次启动不再询问）";
+                SettingsBar.IsOpen = true;
+            }
+            catch (Exception ex)
+            {
+                SettingsBar.Severity = muxc.InfoBarSeverity.Error;
+                SettingsBar.Message = "选择目录失败：" + ex.Message;
+                SettingsBar.IsOpen = true;
+            }
+        }
+
+        private async void ResetDownloadDirClick(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                await DownloadStorage.ResetAsync();
+                DownloadDirText.Text = "下载目录：" + DownloadStorage.Describe();
+                SettingsBar.Severity = muxc.InfoBarSeverity.Success;
+                SettingsBar.Message = "已恢复默认下载目录（下载\\" + DownloadStorage.DefaultFolderName + "）";
+                SettingsBar.IsOpen = true;
+            }
+            catch (Exception ex)
+            {
+                SettingsBar.Severity = muxc.InfoBarSeverity.Error;
+                SettingsBar.Message = "恢复默认失败：" + ex.Message;
+                SettingsBar.IsOpen = true;
+            }
         }
 
         private async void CheckUpdateClick(object sender, RoutedEventArgs e)

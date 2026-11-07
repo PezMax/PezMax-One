@@ -81,6 +81,7 @@
     </Compile>
     <Compile Include="Update\UpdateService.cs" />
     <Compile Include="Transfer\DownloadCenter.cs" />
+    <Compile Include="Transfer\DownloadStorage.cs" />
     <Compile Include="Transfer\DownloadService.cs" />
     <Compile Include="Transfer\DownloadItemView.cs" />
     <Compile Include="Pages\CommunityPage.xaml.cs">

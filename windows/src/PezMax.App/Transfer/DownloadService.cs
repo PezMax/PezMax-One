@@ -175,7 +175,8 @@ namespace PezMax.Transfer
             IProgress<DownloadProgress>? progress,
             CancellationToken cancellationToken)
         {
-            var folder = ApplicationData.Current.LocalCacheFolder;
+            // 落到用户选的目录（默认「下载\PezMax」）；半成品与成品同目录，改名才是原子的。
+            var folder = await DownloadStorage.ResolveAsync().ConfigureAwait(false);
             var partFile = await folder.CreateFileAsync(fileName + ".part", CreationCollisionOption.OpenIfExists)
                 .AsTask().ConfigureAwait(false);
             var record = FindRecord(kind, id);
