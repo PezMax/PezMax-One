@@ -1,4 +1,4 @@
-<UserControl
+﻿<UserControl
     x:Class="PezMax.Pages.Browse.PapersView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -6,13 +6,16 @@
     xmlns:reader="using:PezMax.Reader"
     xmlns:models="using:PezMax.Core.Models">
 
+    <!-- 找试卷的流程按旧 egui 版：先选条件（科目 / 学校 / 年份 / 类型）再出列表，
+         不做文件树。用户是来找某一份卷子的，不是来逛目录的。 -->
     <Grid>
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <Grid Grid.Row="0" Margin="0,0,0,12" ColumnSpacing="8">
+        <Grid Grid.Row="0" Margin="0,0,0,10" ColumnSpacing="8">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -22,39 +25,55 @@
                 x:Name="SearchBox"
                 Grid.Column="0"
                 KeyDown="SearchKeyDown"
-                PlaceholderText="搜索文件名、科目、学校"
-                CornerRadius="0" />
+                CornerRadius="0"
+                PlaceholderText="搜索文件名、科目、学校" />
             <Button Grid.Column="1" Click="SearchClick" Content="搜索" />
             <Button Grid.Column="2" Click="RefreshClick" Content="刷新" />
         </Grid>
 
-        <Grid Grid.Row="1">
-            <!-- 三栏在 1000 级窗口里要能站住：树与详情给固定宽，列表吃剩下的。
-                 原来列表也固定 340，窗口一窄详情栏被压到几十像素，标题逐字换行、
-                 按钮被切掉——详情面板等于不可用。 -->
+        <StackPanel
+            Grid.Row="1"
+            Margin="0,0,0,12"
+            Orientation="Horizontal"
+            Spacing="8">
+            <ComboBox
+                x:Name="SubjectFilter"
+                Width="150"
+                Header="科目"
+                PlaceholderText="全部科目"
+                SelectionChanged="FilterChanged" />
+            <ComboBox
+                x:Name="SchoolFilter"
+                Width="170"
+                Header="学校"
+                PlaceholderText="全部学校"
+                SelectionChanged="FilterChanged" />
+            <ComboBox
+                x:Name="YearFilter"
+                Width="110"
+                Header="年份"
+                PlaceholderText="全部年份"
+                SelectionChanged="FilterChanged" />
+            <ComboBox
+                x:Name="TypeFilter"
+                Width="120"
+                Header="类型"
+                PlaceholderText="全部类型"
+                SelectionChanged="FilterChanged" />
+            <Button
+                Margin="0,24,0,0"
+                VerticalAlignment="Top"
+                Click="ClearFiltersClick"
+                Content="清除筛选" />
+        </StackPanel>
+
+        <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="220" />
-                <ColumnDefinition Width="*" MinWidth="260" />
-                <ColumnDefinition Width="260" />
+                <ColumnDefinition Width="*" MinWidth="320" />
+                <ColumnDefinition Width="300" />
             </Grid.ColumnDefinitions>
 
             <Grid Grid.Column="0" Margin="0,0,12,0">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
-                <TextBlock
-                    Grid.Row="0"
-                    Margin="4,0,0,6"
-                    Style="{StaticResource PezCaptionStyle}"
-                    Text="文件树" />
-                <muxc:TreeView
-                    x:Name="Tree"
-                    Grid.Row="1"
-                    ItemInvoked="TreeItemInvoked" />
-            </Grid>
-
-            <Grid Grid.Column="1" Margin="0,0,12,0">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
@@ -93,7 +112,7 @@
                         </DataTemplate>
                     </ListView.ItemTemplate>
                 </ListView>
-                <!-- 空态：没选分类、选了但这类没资料，都要有话说。
+                <!-- 空态：没选条件、选了但没结果，都要有话说。
                      这块占着列表那一行，不抢点击（IsHitTestVisible=False）。 -->
                 <TextBlock
                     x:Name="ListEmpty"
@@ -103,14 +122,14 @@
                     VerticalAlignment="Top"
                     IsHitTestVisible="False"
                     Style="{StaticResource PezCaptionStyle}"
-                    Text="点左边任一节点，这里会列出该分类下的资料"
+                    Text="挑一两个条件，或者直接搜文件名"
                     TextWrapping="Wrap" />
             </Grid>
 
             <!-- 详情栏的 ScrollViewer 必须关掉横向滚动：默认允许横滚时内容是按无限宽测量的，
                  TextWrapping 形同虚设，信息行会被右边缘切掉。 -->
             <ScrollViewer
-                Grid.Column="2"
+                Grid.Column="1"
                 HorizontalScrollMode="Disabled"
                 HorizontalScrollBarVisibility="Disabled"
                 VerticalScrollBarVisibility="Auto">
@@ -119,7 +138,7 @@
                     <TextBlock x:Name="DetailMeta" Style="{StaticResource PezCaptionStyle}" TextWrapping="Wrap" />
                     <TextBlock x:Name="DetailStatus" Style="{StaticResource PezCaptionStyle}" TextWrapping="Wrap" />
 
-                    <!-- 五个按钮排一行在 260 宽里放不下，「复制链接」会被切掉；两列铺开。 -->
+                    <!-- 五个按钮排一行在 300 宽里放不下，「复制链接」会被切掉；两列铺开。 -->
                     <Grid ColumnSpacing="8" RowSpacing="8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -200,7 +219,7 @@
 
         <Grid
             x:Name="ReaderOverlay"
-            Grid.RowSpan="2"
+            Grid.RowSpan="3"
             Background="{ThemeResource PezBackgroundBrush}"
             Visibility="Collapsed">
             <reader:PdfReader x:Name="PdfHost" />

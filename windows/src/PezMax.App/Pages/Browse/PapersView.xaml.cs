@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.IO;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using PezMax.Core.Api;
 using PezMax.Core.Models;
@@ -12,8 +10,6 @@ using PezMax.Core.Urls;
 using PezMax.Reader;
 using PezMax.Transfer;
 using Windows.ApplicationModel.DataTransfer;
-using Windows.Storage.Streams;
-using Windows.System;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Input;
@@ -22,24 +18,25 @@ using muxc = Microsoft.UI.Xaml.Controls;
 
 namespace PezMax.Pages.Browse
 {
+    /// <summary>
+    /// 资料页：按旧 egui 版的流程走——先选条件（科目 / 学校 / 年份 / 类型）再出列表。
+    /// 这里没有文件树：用户是来找某一份卷子的，不是来逛目录。
+    /// </summary>
     public sealed partial class PapersView : UserControl
     {
         private readonly ObservableCollection<FileItem> _files = new();
-        private readonly Dictionary<FileTreeNode, muxc.TreeViewNode> _nodeMap = new();
         private FileItem? _selected;
-        private string? _treeHash;
         private string _listEmptyText = "";
+
+        /// <summary>填下拉项时不要把 SelectionChanged 当成用户在筛选。</summary>
+        private bool _fillingFilters;
 
         public PapersView()
         {
             InitializeComponent();
             FileList.ItemsSource = _files;
             PdfHost.CloseRequested += (_, __) => CloseReader();
-            Loaded += async (_, __) =>
-            {
-                if (AppServices.PreviewMode) await LoadPreviewAsync();
-                else await LoadTreeAsync();
-            };
+            Loaded += async (_, __) => await LoadAllAsync();
         }
 
         public void ApplySearch(string keyword)
@@ -48,114 +45,97 @@ namespace PezMax.Pages.Browse
             _ = SearchAsync(keyword);
         }
 
-        private sealed class TreeEntry
+        // ---------------------------------------------------------------- 取数
+
+        private async Task LoadAllAsync()
         {
-            public TreeEntry(string label, FileTreeNode data, muxc.TreeViewNode view)
+            await LoadFilterOptionsAsync();
+            await ApplyFiltersAsync();
+        }
+
+        /// <summary>下拉项来自一次不带条件的拉取：科目 / 学校 / 年份都从结果里认，不另外猜字典。</summary>
+        private async Task LoadFilterOptionsAsync()
+        {
+            IReadOnlyList<FileItem> sample;
+            if (AppServices.PreviewMode)
             {
-                Label = label;
-                Data = data;
-                View = view;
+                sample = PreviewData.Files;
+            }
+            else
+            {
+                try
+                {
+                    var page = await AppServices.FilesApi.ListAsync(new FileQuery { PageNum = 1, PageSize = 100 });
+                    sample = page.Rows;
+                }
+                catch (Exception ex)
+                {
+                    ShowListError(ex is DatumException datum ? datum.Message : "筛选条件加载失败");
+                    return;
+                }
             }
 
-            public string Label { get; }
-            public FileTreeNode Data { get; }
-            public muxc.TreeViewNode View { get; }
-            public override string ToString() => Label;
-        }
-
-        private async Task LoadPreviewAsync()
-        {
-            _treeHash = null;
-            Tree.RootNodes.Clear();
-            _nodeMap.Clear();
-            foreach (var node in PreviewData.Tree) Tree.RootNodes.Add(BuildNode(node));
-            await LoadListAsync(new FileQuery { PageNum = 1, PageSize = 100 }, "演示资料");
-        }
-
-        private async Task LoadTreeAsync()
-        {
+            _fillingFilters = true;
             try
             {
-                var result = await AppServices.FilesApi.GetTreeAsync(_treeHash);
-                if (result.Unchanged) return;
-                _treeHash = result.Hash;
-                Tree.RootNodes.Clear();
-                _nodeMap.Clear();
-                foreach (var node in result.Nodes) Tree.RootNodes.Add(BuildNode(node));
+                Fill(SubjectFilter, sample.Select(item => item.FileSubject)
+                    .Where(value => !string.IsNullOrWhiteSpace(value)).Distinct().OrderBy(value => value));
+
+                Fill(SchoolFilter, sample.Select(item => item.FileSchool)
+                    .Where(value => !string.IsNullOrWhiteSpace(value)).Distinct().OrderBy(value => value));
+
+                Fill(YearFilter, sample.Select(item => item.FileYear)
+                    .Where(year => year > 0).Distinct().OrderByDescending(year => year)
+                    .Select(year => year.ToString()));
+
+                Fill(TypeFilter, FileTypes.Names);
             }
-            catch (Exception ex)
+            finally
             {
-                ShowListError(ex is DatumException datum ? datum.Message : "文件树加载失败");
+                _fillingFilters = false;
             }
         }
 
-        private muxc.TreeViewNode BuildNode(FileTreeNode node)
+        private static void Fill(ComboBox box, IEnumerable<string> values)
         {
-            var viewNode = new muxc.TreeViewNode { IsExpanded = false };
-            viewNode.Content = new TreeEntry(node.Label, node, viewNode);
-            _nodeMap[node] = viewNode;
-            foreach (var child in node.Children) viewNode.Children.Add(BuildNode(child));
-            return viewNode;
+            var keep = box.SelectedItem as string;
+            box.ItemsSource = values.ToList();
+            if (keep != null && box.Items.Contains(keep)) box.SelectedItem = keep;
         }
 
-        private async void TreeItemInvoked(muxc.TreeView sender, muxc.TreeViewItemInvokedEventArgs args)
+        private FileQuery BuildQuery()
         {
-            // node 模式的 TreeView 里，InvokedItem 是 TreeViewNode（不是节点的 Content）；
-            // 原来直接拿 TreeEntry 去判类型，永远不成立，点树等于没反应。两种都给过。
-            var entry = args.InvokedItem as TreeEntry
-                        ?? (args.InvokedItem as muxc.TreeViewNode)?.Content as TreeEntry;
-            if (entry == null) return;
-            var data = entry.Data;
-            var node = entry.View;
-
-            if (!data.IsFolder && data.File != null)
-            {
-                ShowDetail(data.File);
-                await SelectInListAsync(data.File);
-                return;
-            }
-
-            node.IsExpanded = !node.IsExpanded;
-            var query = BuildQuery(node);
-            await LoadListAsync(query, data.Label);
-        }
-
-        private static FileQuery BuildQuery(muxc.TreeViewNode node)
-        {
-            var labels = new List<string>();
-            var current = node;
-            // 节点的 Content 是 TreeEntry，不是 FileTreeNode：原来判 Content is FileTreeNode，
-            // 循环一次都不进，query 一条过滤条件都没有，点哪个节点都是全表。
-            while (current != null)
-            {
-                if (current.Content is TreeEntry entry) labels.Add(entry.Label);
-                else if (current.Content is FileTreeNode raw) labels.Add(raw.Label);
-                else break;
-                current = current.Parent;
-            }
-            labels.Reverse();
-
-            // 层级：科目 → 学校 → 类型 → 年份（spec/fixtures/file-tree/）。
-            // 类型与年份都按内容认，不按位置：树里缺某一层时不会把年份当类型用。
             var query = new FileQuery { PageNum = 1, PageSize = 100 };
-            if (labels.Count > 0) query.FileSubject = labels[0];
-            if (labels.Count > 1) query.FileSchool = labels[1];
-            foreach (var label in labels.Skip(2))
+            if (SubjectFilter.SelectedItem is string subject) query.FileSubject = subject;
+            if (SchoolFilter.SelectedItem is string school) query.FileSchool = school;
+            if (YearFilter.SelectedItem is string year && long.TryParse(year, out var parsedYear)) query.FileYear = parsedYear;
+            if (TypeFilter.SelectedItem is string type)
             {
-                if (query.FileYear == null && int.TryParse(label, out var year) && year >= 1900 && year <= 2100)
-                {
-                    query.FileYear = year;
-                    continue;
-                }
-                var type = FileTypes.IdFromName(label);
-                if (query.FileType == null && type > 0) query.FileType = type;
+                var typeId = FileTypes.IdFromName(type);
+                if (typeId > 0) query.FileType = typeId;
             }
             return query;
         }
 
+        /// <summary>「化学 · 第二中学 · 2024 · 期中」这种，让列表标题说清现在筛的是什么。</summary>
+        private string BuildCaption()
+        {
+            var parts = new List<string>();
+            if (SubjectFilter.SelectedItem is string subject) parts.Add(subject);
+            if (SchoolFilter.SelectedItem is string school) parts.Add(school);
+            if (YearFilter.SelectedItem is string year) parts.Add(year);
+            if (TypeFilter.SelectedItem is string type) parts.Add(type);
+            return parts.Count == 0 ? "全部资料" : string.Join(" · ", parts);
+        }
+
+        private async Task ApplyFiltersAsync()
+        {
+            _listEmptyText = "";
+            await LoadListAsync(BuildQuery(), BuildCaption());
+        }
+
         private async Task LoadListAsync(FileQuery query, string caption)
         {
-            _listEmptyText = $"「{caption}」下还没有资料";
             SetListBusy(true);
             try
             {
@@ -166,15 +146,13 @@ namespace PezMax.Pages.Browse
                         (query.FileSchool == null || item.FileSchool == query.FileSchool) &&
                         (query.FileYear == null || item.FileYear == query.FileYear) &&
                         (query.FileType == null || item.FileType == query.FileType)).ToList();
-                    _files.Clear();
-                    foreach (var item in rows) _files.Add(item);
+                    Replace(rows);
                     ListCaption.Text = $"{caption} · {rows.Count} 条（演示）";
                     return;
                 }
 
                 var page = await AppServices.FilesApi.ListAsync(query);
-                _files.Clear();
-                foreach (var item in page.Rows) _files.Add(item);
+                Replace(page.Rows);
                 ListCaption.Text = $"{caption} · {page.Total} 条";
             }
             catch (Exception ex)
@@ -189,33 +167,31 @@ namespace PezMax.Pages.Browse
 
         private async Task SearchAsync(string keyword)
         {
-            if (string.IsNullOrWhiteSpace(keyword))
+            var text = (keyword ?? "").Trim();
+            if (text.Length == 0)
             {
-                await LoadListAsync(new FileQuery { PageNum = 1, PageSize = 100 }, "全部资料");
+                await ApplyFiltersAsync();
                 return;
             }
 
+            _listEmptyText = $"没有匹配「{text}」的资料";
             SetListBusy(true);
-            _listEmptyText = $"没有匹配「{keyword.Trim()}」的资料";
             try
             {
                 if (AppServices.PreviewMode)
                 {
-                    var text = keyword.Trim();
-                    var previewRows = PreviewData.Files.Where(item =>
+                    var matched = PreviewData.Files.Where(item =>
                         item.DisplayName.Contains(text, StringComparison.OrdinalIgnoreCase) ||
                         item.FileSubject.Contains(text, StringComparison.OrdinalIgnoreCase) ||
                         item.FileSchool.Contains(text, StringComparison.OrdinalIgnoreCase)).ToList();
-                    _files.Clear();
-                    foreach (var item in previewRows) _files.Add(item);
-                    ListCaption.Text = $"搜索「{text}」· {previewRows.Count} 条（演示）";
+                    Replace(matched);
+                    ListCaption.Text = $"搜索「{text}」· {matched.Count} 条（演示）";
                     return;
                 }
 
-                var rows = await AppServices.FilesApi.SearchAsync(keyword.Trim());
-                _files.Clear();
-                foreach (var item in rows) _files.Add(item);
-                ListCaption.Text = $"搜索「{keyword.Trim()}」· {rows.Count} 条";
+                var rows = await AppServices.FilesApi.SearchAsync(text);
+                Replace(rows);
+                ListCaption.Text = $"搜索「{text}」· {rows.Count} 条";
             }
             catch (Exception ex)
             {
@@ -227,19 +203,47 @@ namespace PezMax.Pages.Browse
             }
         }
 
-        private async Task SelectInListAsync(FileItem file)
+        private void Replace(IEnumerable<FileItem> rows)
         {
-            var match = _files.FirstOrDefault(item => item.FileId == file.FileId);
-            if (match != null)
+            _files.Clear();
+            foreach (var item in rows) _files.Add(item);
+        }
+
+        // ---------------------------------------------------------------- 交互
+
+        private async void FilterChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_fillingFilters) return;
+            await ApplyFiltersAsync();
+        }
+
+        private async void ClearFiltersClick(object sender, RoutedEventArgs e)
+        {
+            _fillingFilters = true;
+            try
             {
-                FileList.SelectedItem = match;
-                return;
+                SubjectFilter.SelectedItem = null;
+                SchoolFilter.SelectedItem = null;
+                YearFilter.SelectedItem = null;
+                TypeFilter.SelectedItem = null;
+                SearchBox.Text = "";
+            }
+            finally
+            {
+                _fillingFilters = false;
             }
 
-            _files.Insert(0, file);
-            FileList.SelectedItem = file;
-            await Task.CompletedTask;
+            await ApplyFiltersAsync();
         }
+
+        private async void SearchClick(object sender, RoutedEventArgs e) => await SearchAsync(SearchBox.Text);
+
+        private async void SearchKeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            if (e.Key == Windows.System.VirtualKey.Enter) await SearchAsync(SearchBox.Text);
+        }
+
+        private async void RefreshClick(object sender, RoutedEventArgs e) => await LoadAllAsync();
 
         private void FileSelectionChanged(object sender, SelectionChangedEventArgs e)
         {
@@ -251,8 +255,7 @@ namespace PezMax.Pages.Browse
             _selected = file;
             DetailPanel.Visibility = Visibility.Visible;
             DetailTitle.Text = file.DisplayName;
-            // 一行铺不下：详情栏只有 260，硬塞会把「格式」整段切在边缘外。
-            // 主动断成两行，比让 TextBlock 在无限宽里量出超长行更可控。
+            // 一行铺不下：详情栏只有 300，硬塞会把「格式」整段切在边缘外。
             DetailMeta.Text = $"{file.TypeName} · {file.SubjectSchoolText}\n" +
                               $"{file.FileYear} · {file.SizeText} · {file.FileFormat.ToUpperInvariant()}";
             DetailStatus.Text = $"状态：{file.StatusText} · 上传者 ID {file.UserId} · {file.CreateTime}";
@@ -318,26 +321,6 @@ namespace PezMax.Pages.Browse
         {
             PdfHost.Unload();
             ReaderOverlay.Visibility = Visibility.Collapsed;
-        }
-
-        private async void SearchClick(object sender, RoutedEventArgs e) => await SearchAsync(SearchBox.Text);
-
-        private async void SearchKeyDown(object sender, KeyRoutedEventArgs e)
-        {
-            if (e.Key == VirtualKey.Enter) await SearchAsync(SearchBox.Text);
-        }
-
-        private async void RefreshClick(object sender, RoutedEventArgs e)
-        {
-            _treeHash = null;
-            if (AppServices.PreviewMode)
-            {
-                await LoadPreviewAsync();
-                return;
-            }
-
-            await LoadTreeAsync();
-            await LoadListAsync(new FileQuery { PageNum = 1, PageSize = 100 }, "全部资料");
         }
 
         private async void PreviewClick(object sender, RoutedEventArgs e)
@@ -458,13 +441,13 @@ namespace PezMax.Pages.Browse
             try
             {
                 await AppServices.Reports.CreateFileReportAsync(_selected.FileId, input.Text);
-                PreviewError.Severity = Microsoft.UI.Xaml.Controls.InfoBarSeverity.Success;
+                PreviewError.Severity = muxc.InfoBarSeverity.Success;
                 PreviewError.Message = "举报已提交，等待管理员处理";
                 PreviewError.IsOpen = true;
             }
             catch (Exception ex)
             {
-                PreviewError.Severity = Microsoft.UI.Xaml.Controls.InfoBarSeverity.Error;
+                PreviewError.Severity = muxc.InfoBarSeverity.Error;
                 PreviewError.Message = ex is DatumException datum ? datum.Message : "举报提交失败";
                 PreviewError.IsOpen = true;
             }
@@ -487,7 +470,7 @@ namespace PezMax.Pages.Browse
             else UpdateListEmpty();
         }
 
-        /// <summary>列表空着时给一句为什么空：没选分类 / 这一类还没有资料 / 搜不到。</summary>
+        /// <summary>列表空着时给一句为什么空：还没筛 / 这组条件下没有 / 搜不到。</summary>
         private void UpdateListEmpty()
         {
             if (_files.Count > 0)
@@ -498,7 +481,7 @@ namespace PezMax.Pages.Browse
 
             ListEmpty.Visibility = Visibility.Visible;
             ListEmpty.Text = string.IsNullOrEmpty(_listEmptyText)
-                ? "点左边任一节点，这里会列出该分类下的资料"
+                ? "这组条件下没有资料，换一个条件试试"
                 : _listEmptyText;
         }
 
@@ -510,7 +493,7 @@ namespace PezMax.Pages.Browse
 
         private void ShowListError(string message)
         {
-            PreviewError.Severity = Microsoft.UI.Xaml.Controls.InfoBarSeverity.Error;
+            PreviewError.Severity = muxc.InfoBarSeverity.Error;
             PreviewError.Message = message;
             PreviewError.IsOpen = true;
             DetailPanel.Visibility = Visibility.Visible;
