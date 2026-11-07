@@ -167,12 +167,16 @@
                     <ItemsControl x:Name="PageItemsControl" HorizontalAlignment="Center">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
-                                <Canvas />
+                                <!-- 用 StackPanel 而不是 Canvas：Canvas.Top 要靠 Style 里的
+                                     {Binding Top} 贴上去，实测没生效，所有页都叠在 (0,0)，
+                                     看着像两张页拼在一起。页高已经由 HostHeight 给定，
+                                     StackPanel + Spacing 出来的偏移与 PdfContinuousLayout 的
+                                     Tops 完全一致，不需要再绑一次。 -->
+                                <StackPanel Spacing="12" />
                             </ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemContainerStyle>
                             <Style TargetType="ContentPresenter">
-                                <Setter Property="Canvas.Top" Value="{Binding Top}" />
                                 <Setter Property="Width" Value="{Binding HostWidth}" />
                                 <Setter Property="Height" Value="{Binding HostHeight}" />
                             </Style>
