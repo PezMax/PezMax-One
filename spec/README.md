@@ -54,6 +54,7 @@ PezMax-One 的三个端（Windows `windows/`、Linux `linux/`、Android `android
 | `fixtures/notification/` | 通道判定、弹窗队列与一次性语义、本地已读按用户隔离、`hash` + `unchanged` 缓存 | ✅ 初版 25 例 |
 | `fixtures/update/` | CrateStack 资产解析与版本比较（前缀 `pezmax-one-`，多段扩展名，`amd64` 不算 `x86_64`，镜像前缀） | ✅ 初版 23 例 |
 | `fixtures/reading/` | PDF 阅读器的视图几何与渲染调度：连续视图的页顶偏移 / 可见范围 / 当前页，±2 页渲染窗口与渲染顺序，缩放步进与适应宽度，页缓存键，网格列数，缓存释放顺序 | ✅ 初版 48 例 |
+| `fixtures/epub/` | EPUB 包解析：container.xml 定位 OPF、元信息、spine 章节顺序、nav / NCX 目录、href 归一（百分号、`../`、fragment）、坏包的失败语义 | ✅ 初版 13 例 |
 | `design/tokens.json` | 颜色（深 / 浅 / 高对比三档）、圆角、字号、布局不变量；只收已落地的值 | ✅ 首版（来源：Windows `Themes/PezMax.xaml`） |
 | `tools/` | 零依赖的契约探针脚本（只读请求；写操作的脚本必须在文件头注明「会改账号数据」） | 待写 |
 

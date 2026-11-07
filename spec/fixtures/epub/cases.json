@@ -1,0 +1,382 @@
+[
+  {
+    "id": "epub.package.epub3-nav",
+    "description": "EPUB 3：container 指到 OPF，spine 顺序就是章节顺序，目录取 nav.xhtml 的 epub:type=\"toc\"",
+    "source": "EPUB 3.2 §3.3 container.xml、§3.4.1 OPF metadata、§3.4.6 spine、§5.1 navigation document",
+    "input": {
+      "kind": "package",
+      "files": {
+        "META-INF/container.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<container version=\"1.0\" xmlns=\"urn:oasis:names:tc:opendocument:xmlns:container\">\n  <rootfiles>\n    <rootfile full-path=\"OEBPS/content.opf\" media-type=\"application/oebps-package+xml\"/>\n  </rootfiles>\n</container>",
+        "OEBPS/content.opf": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<package xmlns=\"http://www.idpf.org/2007/opf\" version=\"3.0\" unique-identifier=\"id\">\n  <metadata xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n    <dc:title>高等数学（上册）</dc:title>\n    <dc:creator>同济大学数学系</dc:creator>\n  </metadata>\n  <manifest>\n    <item id=\"nav\" href=\"nav.xhtml\" media-type=\"application/xhtml+xml\" properties=\"nav\"/>\n    <item id=\"c1\" href=\"ch1.xhtml\" media-type=\"application/xhtml+xml\"/>\n    <item id=\"c2\" href=\"ch2.xhtml\" media-type=\"application/xhtml+xml\"/>\n    <item id=\"css\" href=\"style.css\" media-type=\"text/css\"/>\n  </manifest>\n  <spine>\n    <itemref idref=\"c1\"/>\n    <itemref idref=\"c2\"/>\n  </spine>\n</package>",
+        "OEBPS/nav.xhtml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<html xmlns=\"http://www.w3.org/1999/xhtml\" xmlns:epub=\"http://www.idpf.org/2007/ops\">\n  <head><title>目录</title></head>\n  <body>\n    <nav epub:type=\"toc\">\n      <ol>\n        <li><a href=\"ch1.xhtml\">第一章 函数</a></li>\n        <li><a href=\"ch2.xhtml\">第二章 极限</a></li>\n      </ol>\n    </nav>\n  </body>\n</html>",
+        "OEBPS/ch1.xhtml": "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><p>一</p></body></html>",
+        "OEBPS/ch2.xhtml": "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><p>二</p></body></html>"
+      }
+    },
+    "expect": {
+      "title": "高等数学（上册）",
+      "author": "同济大学数学系",
+      "rootDirectory": "OEBPS",
+      "chapters": [
+        {
+          "href": "ch1.xhtml",
+          "path": "OEBPS/ch1.xhtml",
+          "title": "第一章 函数"
+        },
+        {
+          "href": "ch2.xhtml",
+          "path": "OEBPS/ch2.xhtml",
+          "title": "第二章 极限"
+        }
+      ]
+    }
+  },
+  {
+    "id": "epub.package.epub2-ncx",
+    "description": "EPUB 2：目录在 NCX 里（spine 的 toc 属性指向 manifest 的 ncx 项），navMap 的 navLabel/text 就是章标题",
+    "source": "EPUB 2.0.1 OPF §2.4 spine toc、NCX 2005-1 navMap",
+    "input": {
+      "kind": "package",
+      "files": {
+        "META-INF/container.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<container version=\"1.0\" xmlns=\"urn:oasis:names:tc:opendocument:xmlns:container\">\n  <rootfiles>\n    <rootfile full-path=\"OEBPS/content.opf\" media-type=\"application/oebps-package+xml\"/>\n  </rootfiles>\n</container>",
+        "OEBPS/content.opf": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<package xmlns=\"http://www.idpf.org/2007/opf\" version=\"2.0\" unique-identifier=\"id\">\n  <metadata xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n    <dc:title>高等数学（上册）</dc:title>\n    <dc:creator>同济大学数学系</dc:creator>\n  </metadata>\n  <manifest>\n    <item id=\"ncx\" href=\"toc.ncx\" media-type=\"application/x-dtbncx+xml\"/>\n    <item id=\"c1\" href=\"ch1.xhtml\" media-type=\"application/xhtml+xml\"/>\n    <item id=\"c2\" href=\"ch2.xhtml\" media-type=\"application/xhtml+xml\"/>\n  </manifest>\n  <spine toc=\"ncx\">\n    <itemref idref=\"c1\"/>\n    <itemref idref=\"c2\"/>\n  </spine>\n</package>",
+        "OEBPS/toc.ncx": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ncx xmlns=\"http://www.daisy.org/z3986/2005/ncx/\" version=\"2005-1\">\n  <navMap>\n    <navPoint id=\"n1\" playOrder=\"1\">\n      <navLabel><text>第一章 函数</text></navLabel>\n      <content src=\"ch1.xhtml\"/>\n    </navPoint>\n    <navPoint id=\"n2\" playOrder=\"2\">\n      <navLabel><text>第二章 极限</text></navLabel>\n      <content src=\"ch2.xhtml\"/>\n    </navPoint>\n  </navMap>\n</ncx>",
+        "OEBPS/ch1.xhtml": "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><p>一</p></body></html>",
+        "OEBPS/ch2.xhtml": "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><p>二</p></body></html>"
+      }
+    },
+    "expect": {
+      "title": "高等数学（上册）",
+      "author": "同济大学数学系",
+      "rootDirectory": "OEBPS",
+      "chapters": [
+        {
+          "href": "ch1.xhtml",
+          "path": "OEBPS/ch1.xhtml",
+          "title": "第一章 函数"
+        },
+        {
+          "href": "ch2.xhtml",
+          "path": "OEBPS/ch2.xhtml",
+          "title": "第二章 极限"
+        }
+      ]
+    }
+  },
+  {
+    "id": "epub.package.missing-container",
+    "description": "没有 META-INF/container.xml 的包（手工拼的、或者打包工具偷懒）：退回「找一个 .opf」的兜底",
+    "source": "实测：不少网上流传的 epub 就缺 container.xml；严格解析会让整本打不开",
+    "input": {
+      "kind": "package",
+      "files": {
+        "content.opf": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<package xmlns=\"http://www.idpf.org/2007/opf\" version=\"3.0\" unique-identifier=\"id\">\n  <metadata xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n    <dc:title>高等数学（上册）</dc:title>\n    <dc:creator>同济大学数学系</dc:creator>\n  </metadata>\n  <manifest>\n    <item id=\"nav\" href=\"nav.xhtml\" media-type=\"application/xhtml+xml\" properties=\"nav\"/>\n    <item id=\"c1\" href=\"ch1.xhtml\" media-type=\"application/xhtml+xml\"/>\n    <item id=\"c2\" href=\"ch2.xhtml\" media-type=\"application/xhtml+xml\"/>\n    <item id=\"css\" href=\"style.css\" media-type=\"text/css\"/>\n  </manifest>\n  <spine>\n    <itemref idref=\"c1\"/>\n    <itemref idref=\"c2\"/>\n  </spine>\n</package>",
+        "nav.xhtml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<html xmlns=\"http://www.w3.org/1999/xhtml\" xmlns:epub=\"http://www.idpf.org/2007/ops\">\n  <head><title>目录</title></head>\n  <body>\n    <nav epub:type=\"toc\">\n      <ol>\n        <li><a href=\"ch1.xhtml\">第一章 函数</a></li>\n        <li><a href=\"ch2.xhtml\">第二章 极限</a></li>\n      </ol>\n    </nav>\n  </body>\n</html>",
+        "ch1.xhtml": "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><p>一</p></body></html>",
+        "ch2.xhtml": "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><p>二</p></body></html>"
+      }
+    },
+    "expect": {
+      "title": "高等数学（上册）",
+      "author": "同济大学数学系",
+      "rootDirectory": "",
+      "chapters": [
+        {
+          "href": "ch1.xhtml",
+          "path": "ch1.xhtml",
+          "title": "第一章 函数"
+        },
+        {
+          "href": "ch2.xhtml",
+          "path": "ch2.xhtml",
+          "title": "第二章 极限"
+        }
+      ]
+    }
+  },
+  {
+    "id": "epub.package.encoded-href",
+    "description": "href 里有 %20：要解码成空格再去 zip 里找，不然文件明明在却报「章节不存在」",
+    "source": "EPUB 3.2 §3.4.1（href 是 URI，按 URI 规则百分号编码）",
+    "input": {
+      "kind": "package",
+      "files": {
+        "META-INF/container.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<container version=\"1.0\" xmlns=\"urn:oasis:names:tc:opendocument:xmlns:container\">\n  <rootfiles>\n    <rootfile full-path=\"OEBPS/content.opf\" media-type=\"application/oebps-package+xml\"/>\n  </rootfiles>\n</container>",
+        "OEBPS/content.opf": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<package xmlns=\"http://www.idpf.org/2007/opf\" version=\"3.0\" unique-identifier=\"id\">\n  <metadata xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n    <dc:title>高等数学（上册）</dc:title>\n    <dc:creator>同济大学数学系</dc:creator>\n  </metadata>\n  <manifest>\n    <item id=\"c1\" href=\"chapter%201.xhtml\" media-type=\"application/xhtml+xml\"/>\n  </manifest>\n  <spine>\n    <itemref idref=\"c1\"/>\n  </spine>\n</package>",
+        "OEBPS/chapter 1.xhtml": "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><p>一</p></body></html>"
+      }
+    },
+    "expect": {
+      "title": "高等数学（上册）",
+      "author": "同济大学数学系",
+      "rootDirectory": "OEBPS",
+      "chapters": [
+        {
+          "href": "chapter%201.xhtml",
+          "path": "OEBPS/chapter 1.xhtml",
+          "title": ""
+        }
+      ]
+    }
+  },
+  {
+    "id": "epub.package.parent-href",
+    "description": "href 带 ../：按 OPF 所在目录解析，不能简单地把 OPF 目录拼在前面",
+    "source": "EPUB 3.2 §3.4.1（relative-URL 以 OPF 所在目录为基准）",
+    "input": {
+      "kind": "package",
+      "files": {
+        "META-INF/container.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<container version=\"1.0\" xmlns=\"urn:oasis:names:tc:opendocument:xmlns:container\">\n  <rootfiles>\n    <rootfile full-path=\"OEBPS/content.opf\" media-type=\"application/oebps-package+xml\"/>\n  </rootfiles>\n</container>",
+        "OEBPS/content.opf": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<package xmlns=\"http://www.idpf.org/2007/opf\" version=\"3.0\" unique-identifier=\"id\">\n  <metadata xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n    <dc:title>高等数学（上册）</dc:title>\n    <dc:creator>同济大学数学系</dc:creator>\n  </metadata>\n  <manifest>\n    <item id=\"c1\" href=\"../Text/ch1.xhtml\" media-type=\"application/xhtml+xml\"/>\n  </manifest>\n  <spine>\n    <itemref idref=\"c1\"/>\n  </spine>\n</package>",
+        "Text/ch1.xhtml": "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><p>一</p></body></html>"
+      }
+    },
+    "expect": {
+      "title": "高等数学（上册）",
+      "author": "同济大学数学系",
+      "rootDirectory": "OEBPS",
+      "chapters": [
+        {
+          "href": "../Text/ch1.xhtml",
+          "path": "Text/ch1.xhtml",
+          "title": ""
+        }
+      ]
+    }
+  },
+  {
+    "id": "epub.package.nested-toc",
+    "description": "目录是嵌套的（章下面还有节）：按文档顺序拍平，缩进由界面决定，解析层不丢条目",
+    "source": "EPUB 3.2 §5.1（nav 的 ol 可以嵌套任意层）",
+    "input": {
+      "kind": "package",
+      "files": {
+        "META-INF/container.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<container version=\"1.0\" xmlns=\"urn:oasis:names:tc:opendocument:xmlns:container\">\n  <rootfiles>\n    <rootfile full-path=\"OEBPS/content.opf\" media-type=\"application/oebps-package+xml\"/>\n  </rootfiles>\n</container>",
+        "OEBPS/content.opf": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<package xmlns=\"http://www.idpf.org/2007/opf\" version=\"3.0\" unique-identifier=\"id\">\n  <metadata xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n    <dc:title>高等数学（上册）</dc:title>\n    <dc:creator>同济大学数学系</dc:creator>\n  </metadata>\n  <manifest>\n    <item id=\"nav\" href=\"nav.xhtml\" media-type=\"application/xhtml+xml\" properties=\"nav\"/>\n    <item id=\"c1\" href=\"ch1.xhtml\" media-type=\"application/xhtml+xml\"/>\n    <item id=\"c2\" href=\"ch2.xhtml\" media-type=\"application/xhtml+xml\"/>\n    <item id=\"c3\" href=\"ch3.xhtml\" media-type=\"application/xhtml+xml\"/>\n  </manifest>\n  <spine>\n    <itemref idref=\"c1\"/>\n    <itemref idref=\"c2\"/>\n    <itemref idref=\"c3\"/>\n  </spine>\n</package>",
+        "OEBPS/nav.xhtml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<html xmlns=\"http://www.w3.org/1999/xhtml\" xmlns:epub=\"http://www.idpf.org/2007/ops\">\n  <body>\n    <nav epub:type=\"toc\">\n      <ol>\n        <li><a href=\"ch1.xhtml\">第一章 函数</a>\n          <ol>\n            <li><a href=\"ch2.xhtml\">1.1 集合</a></li>\n          </ol>\n        </li>\n        <li><a href=\"ch3.xhtml\">第二章 极限</a></li>\n      </ol>\n    </nav>\n  </body>\n</html>",
+        "OEBPS/ch1.xhtml": "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><p>一</p></body></html>",
+        "OEBPS/ch2.xhtml": "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><p>二</p></body></html>",
+        "OEBPS/ch3.xhtml": "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><p>三</p></body></html>"
+      }
+    },
+    "expect": {
+      "title": "高等数学（上册）",
+      "author": "同济大学数学系",
+      "rootDirectory": "OEBPS",
+      "chapters": [
+        {
+          "href": "ch1.xhtml",
+          "path": "OEBPS/ch1.xhtml",
+          "title": "第一章 函数"
+        },
+        {
+          "href": "ch2.xhtml",
+          "path": "OEBPS/ch2.xhtml",
+          "title": "1.1 集合"
+        },
+        {
+          "href": "ch3.xhtml",
+          "path": "OEBPS/ch3.xhtml",
+          "title": "第二章 极限"
+        }
+      ]
+    }
+  },
+  {
+    "id": "epub.package.toc-fragment",
+    "description": "目录链接带锚点（ch1.xhtml#top）：匹配章节时要去掉 fragment，否则标题对不上任何一章",
+    "source": "EPUB 3.2 §5.1（nav 的 a 可以指向文档内片段）",
+    "input": {
+      "kind": "package",
+      "files": {
+        "META-INF/container.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<container version=\"1.0\" xmlns=\"urn:oasis:names:tc:opendocument:xmlns:container\">\n  <rootfiles>\n    <rootfile full-path=\"OEBPS/content.opf\" media-type=\"application/oebps-package+xml\"/>\n  </rootfiles>\n</container>",
+        "OEBPS/content.opf": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<package xmlns=\"http://www.idpf.org/2007/opf\" version=\"3.0\" unique-identifier=\"id\">\n  <metadata xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n    <dc:title>高等数学（上册）</dc:title>\n    <dc:creator>同济大学数学系</dc:creator>\n  </metadata>\n  <manifest>\n    <item id=\"nav\" href=\"nav.xhtml\" media-type=\"application/xhtml+xml\" properties=\"nav\"/>\n    <item id=\"c1\" href=\"ch1.xhtml\" media-type=\"application/xhtml+xml\"/>\n    <item id=\"c2\" href=\"ch2.xhtml\" media-type=\"application/xhtml+xml\"/>\n    <item id=\"css\" href=\"style.css\" media-type=\"text/css\"/>\n  </manifest>\n  <spine>\n    <itemref idref=\"c1\"/>\n    <itemref idref=\"c2\"/>\n  </spine>\n</package>",
+        "OEBPS/nav.xhtml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<html xmlns=\"http://www.w3.org/1999/xhtml\" xmlns:epub=\"http://www.idpf.org/2007/ops\">\n  <body>\n    <nav epub:type=\"toc\">\n      <ol>\n        <li><a href=\"ch1.xhtml#top\">第一章 函数</a></li>\n        <li><a href=\"ch2.xhtml#start\">第二章 极限</a></li>\n      </ol>\n    </nav>\n  </body>\n</html>",
+        "OEBPS/ch1.xhtml": "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><p>一</p></body></html>",
+        "OEBPS/ch2.xhtml": "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><p>二</p></body></html>"
+      }
+    },
+    "expect": {
+      "title": "高等数学（上册）",
+      "author": "同济大学数学系",
+      "rootDirectory": "OEBPS",
+      "chapters": [
+        {
+          "href": "ch1.xhtml",
+          "path": "OEBPS/ch1.xhtml",
+          "title": "第一章 函数"
+        },
+        {
+          "href": "ch2.xhtml",
+          "path": "OEBPS/ch2.xhtml",
+          "title": "第二章 极限"
+        }
+      ]
+    }
+  },
+  {
+    "id": "epub.package.chapter-missing-from-toc",
+    "description": "spine 里有一章目录里没列：这一章照样要能翻到，标题留空（界面自己编号）",
+    "source": "实测：正文有附录、目录没更新是常态；按目录建章节会直接丢内容",
+    "input": {
+      "kind": "package",
+      "files": {
+        "META-INF/container.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<container version=\"1.0\" xmlns=\"urn:oasis:names:tc:opendocument:xmlns:container\">\n  <rootfiles>\n    <rootfile full-path=\"OEBPS/content.opf\" media-type=\"application/oebps-package+xml\"/>\n  </rootfiles>\n</container>",
+        "OEBPS/content.opf": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<package xmlns=\"http://www.idpf.org/2007/opf\" version=\"3.0\" unique-identifier=\"id\">\n  <metadata xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n    <dc:title>高等数学（上册）</dc:title>\n    <dc:creator>同济大学数学系</dc:creator>\n  </metadata>\n  <manifest>\n    <item id=\"nav\" href=\"nav.xhtml\" media-type=\"application/xhtml+xml\" properties=\"nav\"/>\n    <item id=\"c1\" href=\"ch1.xhtml\" media-type=\"application/xhtml+xml\"/>\n    <item id=\"c2\" href=\"ch2.xhtml\" media-type=\"application/xhtml+xml\"/>\n    <item id=\"c3\" href=\"ch3.xhtml\" media-type=\"application/xhtml+xml\"/>\n  </manifest>\n  <spine>\n    <itemref idref=\"c1\"/>\n    <itemref idref=\"c2\"/>\n    <itemref idref=\"c3\"/>\n  </spine>\n</package>",
+        "OEBPS/nav.xhtml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<html xmlns=\"http://www.w3.org/1999/xhtml\" xmlns:epub=\"http://www.idpf.org/2007/ops\">\n  <body>\n    <nav epub:type=\"toc\">\n      <ol>\n        <li><a href=\"ch1.xhtml\">第一章 函数</a></li>\n      </ol>\n    </nav>\n  </body>\n</html>",
+        "OEBPS/ch1.xhtml": "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><p>一</p></body></html>",
+        "OEBPS/ch2.xhtml": "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><p>二</p></body></html>",
+        "OEBPS/ch3.xhtml": "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><p>附录</p></body></html>"
+      }
+    },
+    "expect": {
+      "title": "高等数学（上册）",
+      "author": "同济大学数学系",
+      "rootDirectory": "OEBPS",
+      "chapters": [
+        {
+          "href": "ch1.xhtml",
+          "path": "OEBPS/ch1.xhtml",
+          "title": "第一章 函数"
+        },
+        {
+          "href": "ch2.xhtml",
+          "path": "OEBPS/ch2.xhtml",
+          "title": ""
+        },
+        {
+          "href": "ch3.xhtml",
+          "path": "OEBPS/ch3.xhtml",
+          "title": ""
+        }
+      ]
+    }
+  },
+  {
+    "id": "epub.package.non-xhtml-spine-skipped",
+    "description": "spine 里混了非 XHTML（有的包会把封面图或 CSS 塞进 spine）：跳过，不然阅读器会把它当章节打开",
+    "source": "EPUB 3.2 §3.4.6（spine 的 itemref 应指向 XHTML 内容文档，但现实中并非总是）",
+    "input": {
+      "kind": "package",
+      "files": {
+        "META-INF/container.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<container version=\"1.0\" xmlns=\"urn:oasis:names:tc:opendocument:xmlns:container\">\n  <rootfiles>\n    <rootfile full-path=\"OEBPS/content.opf\" media-type=\"application/oebps-package+xml\"/>\n  </rootfiles>\n</container>",
+        "OEBPS/content.opf": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<package xmlns=\"http://www.idpf.org/2007/opf\" version=\"3.0\" unique-identifier=\"id\">\n  <metadata xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n    <dc:title>高等数学（上册）</dc:title>\n    <dc:creator>同济大学数学系</dc:creator>\n  </metadata>\n  <manifest>\n    <item id=\"cover\" href=\"cover.png\" media-type=\"image/png\"/>\n    <item id=\"c1\" href=\"ch1.xhtml\" media-type=\"application/xhtml+xml\"/>\n  </manifest>\n  <spine>\n    <itemref idref=\"cover\"/>\n    <itemref idref=\"c1\"/>\n  </spine>\n</package>",
+        "OEBPS/ch1.xhtml": "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><p>一</p></body></html>"
+      }
+    },
+    "expect": {
+      "title": "高等数学（上册）",
+      "author": "同济大学数学系",
+      "rootDirectory": "OEBPS",
+      "chapters": [
+        {
+          "href": "ch1.xhtml",
+          "path": "OEBPS/ch1.xhtml",
+          "title": ""
+        }
+      ]
+    }
+  },
+  {
+    "id": "epub.package.duplicate-toc",
+    "description": "同一章在目录里出现两次（卷首、卷末各列一遍）：第一次的标题为准，不要来回覆盖",
+    "source": "spec/fixtures/epub/README.md「目录匹配」",
+    "input": {
+      "kind": "package",
+      "files": {
+        "META-INF/container.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<container version=\"1.0\" xmlns=\"urn:oasis:names:tc:opendocument:xmlns:container\">\n  <rootfiles>\n    <rootfile full-path=\"OEBPS/content.opf\" media-type=\"application/oebps-package+xml\"/>\n  </rootfiles>\n</container>",
+        "OEBPS/content.opf": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<package xmlns=\"http://www.idpf.org/2007/opf\" version=\"3.0\" unique-identifier=\"id\">\n  <metadata xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n    <dc:title>高等数学（上册）</dc:title>\n    <dc:creator>同济大学数学系</dc:creator>\n  </metadata>\n  <manifest>\n    <item id=\"nav\" href=\"nav.xhtml\" media-type=\"application/xhtml+xml\" properties=\"nav\"/>\n    <item id=\"c1\" href=\"ch1.xhtml\" media-type=\"application/xhtml+xml\"/>\n    <item id=\"c2\" href=\"ch2.xhtml\" media-type=\"application/xhtml+xml\"/>\n  </manifest>\n  <spine>\n    <itemref idref=\"c1\"/>\n    <itemref idref=\"c2\"/>\n  </spine>\n</package>",
+        "OEBPS/nav.xhtml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<html xmlns=\"http://www.w3.org/1999/xhtml\" xmlns:epub=\"http://www.idpf.org/2007/ops\">\n  <body>\n    <nav epub:type=\"toc\">\n      <ol>\n        <li><a href=\"ch1.xhtml\">第一章 函数</a></li>\n        <li><a href=\"ch2.xhtml\">第二章 极限</a></li>\n        <li><a href=\"ch1.xhtml\">函数（重复条目）</a></li>\n      </ol>\n    </nav>\n  </body>\n</html>",
+        "OEBPS/ch1.xhtml": "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><p>一</p></body></html>",
+        "OEBPS/ch2.xhtml": "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><p>二</p></body></html>"
+      }
+    },
+    "expect": {
+      "title": "高等数学（上册）",
+      "author": "同济大学数学系",
+      "rootDirectory": "OEBPS",
+      "chapters": [
+        {
+          "href": "ch1.xhtml",
+          "path": "OEBPS/ch1.xhtml",
+          "title": "第一章 函数"
+        },
+        {
+          "href": "ch2.xhtml",
+          "path": "OEBPS/ch2.xhtml",
+          "title": "第二章 极限"
+        }
+      ]
+    }
+  },
+  {
+    "id": "epub.package.no-metadata",
+    "description": "OPF 里没有 dc:title / dc:creator：书名与作者留空，由界面用文件名兜底",
+    "source": "EPUB 3.2 §3.4.1（metadata 里 title 是必需元素，但现实里会缺）",
+    "input": {
+      "kind": "package",
+      "files": {
+        "META-INF/container.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<container version=\"1.0\" xmlns=\"urn:oasis:names:tc:opendocument:xmlns:container\">\n  <rootfiles>\n    <rootfile full-path=\"OEBPS/content.opf\" media-type=\"application/oebps-package+xml\"/>\n  </rootfiles>\n</container>",
+        "OEBPS/content.opf": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<package xmlns=\"http://www.idpf.org/2007/opf\" version=\"3.0\" unique-identifier=\"id\">\n  <metadata xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n\n  </metadata>\n  <manifest>\n    <item id=\"c1\" href=\"ch1.xhtml\" media-type=\"application/xhtml+xml\"/>\n  </manifest>\n  <spine>\n    <itemref idref=\"c1\"/>\n  </spine>\n</package>",
+        "OEBPS/ch1.xhtml": "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><p>一</p></body></html>"
+      }
+    },
+    "expect": {
+      "title": "",
+      "author": "",
+      "rootDirectory": "OEBPS",
+      "chapters": [
+        {
+          "href": "ch1.xhtml",
+          "path": "OEBPS/ch1.xhtml",
+          "title": ""
+        }
+      ]
+    }
+  },
+  {
+    "id": "epub.package.nav-in-subdirectory",
+    "description": "nav 不在 OPF 同目录（OEBPS/nav/nav.xhtml）：nav 里的链接相对 nav 自己解析，不是相对 OPF",
+    "source": "EPUB 3.2 §5.1（导航文档里的链接相对于导航文档）；相对 OPF 解析会把 ../ch1.xhtml 解到包根",
+    "input": {
+      "kind": "package",
+      "files": {
+        "META-INF/container.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<container version=\"1.0\" xmlns=\"urn:oasis:names:tc:opendocument:xmlns:container\">\n  <rootfiles>\n    <rootfile full-path=\"OEBPS/content.opf\" media-type=\"application/oebps-package+xml\"/>\n  </rootfiles>\n</container>",
+        "OEBPS/content.opf": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<package xmlns=\"http://www.idpf.org/2007/opf\" version=\"3.0\" unique-identifier=\"id\">\n  <metadata xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n    <dc:title>高等数学（上册）</dc:title>\n    <dc:creator>同济大学数学系</dc:creator>\n  </metadata>\n  <manifest>\n    <item id=\"nav\" href=\"nav/nav.xhtml\" media-type=\"application/xhtml+xml\" properties=\"nav\"/>\n    <item id=\"c1\" href=\"ch1.xhtml\" media-type=\"application/xhtml+xml\"/>\n  </manifest>\n  <spine>\n    <itemref idref=\"c1\"/>\n  </spine>\n</package>",
+        "OEBPS/nav/nav.xhtml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<html xmlns=\"http://www.w3.org/1999/xhtml\" xmlns:epub=\"http://www.idpf.org/2007/ops\">\n  <body>\n    <nav epub:type=\"toc\">\n      <ol>\n        <li><a href=\"../ch1.xhtml\">第一章 函数</a></li>\n      </ol>\n    </nav>\n  </body>\n</html>",
+        "OEBPS/ch1.xhtml": "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><p>一</p></body></html>"
+      }
+    },
+    "expect": {
+      "title": "高等数学（上册）",
+      "author": "同济大学数学系",
+      "rootDirectory": "OEBPS",
+      "chapters": [
+        {
+          "href": "ch1.xhtml",
+          "path": "OEBPS/ch1.xhtml",
+          "title": "第一章 函数"
+        }
+      ]
+    }
+  },
+  {
+    "id": "epub.package.broken-opf",
+    "description": "OPF 是坏 XML（下载不完整）：报失败原因，不抛异常也不返回半本书",
+    "source": "spec/fixtures/epub/README.md「失败处理」",
+    "input": {
+      "kind": "package",
+      "files": {
+        "META-INF/container.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<container version=\"1.0\" xmlns=\"urn:oasis:names:tc:opendocument:xmlns:container\">\n  <rootfiles>\n    <rootfile full-path=\"OEBPS/content.opf\" media-type=\"application/oebps-package+xml\"/>\n  </rootfiles>\n</container>",
+        "OEBPS/content.opf": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<package xmlns=\"http://www.idpf.org/2007/opf\" version=\"3.0\">\n  <manifest>\n    <item id=\"c1\" href=\"ch1.xhtml\" media-type=\"application/xhtml+xml\">"
+      }
+    },
+    "expect": {
+      "title": "",
+      "author": "",
+      "rootDirectory": "",
+      "failure": "content.opf",
+      "chapters": []
+    }
+  }
+]
