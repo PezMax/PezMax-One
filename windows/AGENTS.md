@@ -2,13 +2,15 @@
 
 本文件是 `windows/` 目录的权威指南。仓库级约定见仓根 `AGENTS.md`，跨端架构见 `docs/ARCHITECTURE.md`。
 
-**状态**（2026-11-05）：已建立 `PezMax.Windows.sln` / `PezMax.Core` / `PezMax.Core.Tests` / `PezMax.App`，
+**状态**（2026-11-06）：已建立 `PezMax.Windows.sln` / `PezMax.Core` / `PezMax.Core.Tests` / `PezMax.App`，
 Release|x64 用 .NET Native 构建通过。已接入登录、注册（三步）、找回密码（两步：验证码换密保 → 答案 + 新密码）、
 外壳、首页、资料（树 / 列表 / 搜索 / 详情 / PDF / 图片 / 文本预览）、电子书、书签、收藏、
-社区排行 / 上传 / 举报、个人中心 / 通知 / 下载记录 / 设置。账户校验由 `PezMax.Core` 的 `FormValidation`
-负责，文案与判定顺序对齐 `spec/fixtures/auth/`（25 例）。视觉使用 WinUI 2 平台控件 +
-`Themes/PezMax.xaml`（`ControlsResourcesVersion="Version1"`）；Kanesumi.Xaml 尚未抽仓，暂未引用。
-下一步：本地通知已读、下载记录与续传、PDF 网格 / 连续、EPUB、更新检查与发布工具。
+社区排行 / 上传 / 举报、个人中心 / 通知 / 下载记录 / 设置。
+Core 的判定表已按夹具落地：账户表单（`auth/` 25 例）、URL 归一（`url/` 21 例）、续传（`download/` 20 例）、
+通知（`notification/` 25 例）、树导航（`file-tree/` 15 例）、哈希缓存（`state-cache/` 17 例）、
+更新检查（`update/` 23 例）、上传校验（`upload/` 28 例）——Core 测试 30 个用例全绿。
+视觉使用 WinUI 2 平台控件 + `Themes/PezMax.xaml`（`ControlsResourcesVersion="Version1"`）；Kanesumi.Xaml 尚未抽仓，暂未引用。
+下一步：把 Core 判定接到界面上——通知已读与铃铛、下载续传与串行队列（`.part`）、检查更新入口、PDF 网格 / 连续、EPUB。
 
 > 样板是兄弟仓库 Ncrust 的 Windows 端（`../../Ncrust/windows/AGENTS.md`）：**凡本文没写的工程细节，按 Ncrust 的做法办**，
 > 尤其是它的「已知的坑」一节——那 40 条大多来自 arc-deck 与 Ncrust 的本机实测，在这里同样成立，不再复抄。
@@ -50,16 +52,17 @@ windows/
 | `Net/` | `DatumHttp`：Base URL、Bearer 注入、信封解析、HTTP 状态 → 错误类型、401 事件；`HttpClient` 设 `UseCookies = false` |
 | `Json/` | 只读 JSON DOM + 写入器 |
 | `Api/` | 按域划分的端点封装与响应模型：`Auth`、`Profile`、`Files`、`Ebooks`、`Bookmarks`、`Favorites`、`Downloads`、`Reports`、`Community`、`Notifications` |
-| `State/` | 哈希缓存 `StateCache<T>`（文件树、排行）、分页聚合 `PageFetcher` |
-| `Files/` | 文件树模型（学科 / 学校 / 类型 / 年份）、筛选与排序 |
-| `Transfer/` | 下载状态机（续传、ETag、取消、串行队列）、上传校验（白名单、大小、编码要求）；不含 I/O 实现 |
-| `Urls/` | 文件 URL 归一（过渡规则，见 `spec/fixtures/url`） |
-| `Notify/` | 通知可见性（发布窗口、维护 / 故障时间段）、本地已读集合 |
-| `Update/` | CrateStack 资产解析与版本比较 |
-| `Validation/` | 注册 / 改密 / 密保表单规则 |
+| `State/` | `HashStateCache<T>`（旧）、`FeedCache`（键 + 可用性 + 并发序号 + unchanged 决策，跑 `spec/fixtures/state-cache/`）、分页聚合 `PageFetcher` |
+| `Files/` | 文件树模型（学科 / 学校 / 类型 / 年份）与 `TreeNavigator`（行列表、面包屑、`fileId` 取法，跑 `spec/fixtures/file-tree/`） |
+| `Transfer/` | `DownloadPlanner` 续传决策表（跑 `spec/fixtures/download/`）；不含 I/O 实现 |
+| `Urls/` | 文件 URL 归一（过渡规则，见 `spec/fixtures/url/`） |
+| `Notify/` | `NotificationPolicy`：通道兜底、弹窗队列与一次性语义、关闭权、`(userId, notifyId)` 已读集合（跑 `spec/fixtures/notification/`） |
+| `Update/` | `UpdateChecker` + `ClientVersion`：CrateStack 资产解析、版本比较、班次挑选、镜像前缀（跑 `spec/fixtures/update/`） |
+| `Validation/` | 账户表单（`FormValidation`，跑 `fixtures/auth/`）与上传前校验（`UploadValidation`，跑 `fixtures/upload/`；字节 vs rune 别混） |
 | `Platform/` | 接口：`ISettingsStore`、`IFileStore`、`ICredentialStore`、`IClock` |
 
 规则：Core 里的 `await` 一律 `ConfigureAwait(false)`；由 App 负责切回 Dispatcher。
+每个模块的判定表都由 `spec/fixtures/` 的同名夹具锁住，**改行为先改夹具**。
 
 ### PezMax.App
 

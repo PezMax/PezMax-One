@@ -147,14 +147,14 @@
   },
   {
     "id": "upload.meta.file-name-255-runes",
-    "description": "文件名按 rune 算 255：255 个汉字也放行",
+    "description": "文件名按 rune 算 255（含扩展名）：251 个汉字 + .pdf 正好 255，放行",
     "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:745-752",
     "input": { "kind": "meta", "fileSubject": "数学", "fileYear": 2025, "fileType": 1, "fileName": "题", "fileNameRunes": 255, "fileNameExt": ".pdf" },
     "expect": { "accept": true }
   },
   {
     "id": "upload.meta.file-name-256-runes",
-    "description": "文件名 256 个字符：拒，文案是「文件名不能为空且不超过 255 个字符」",
+    "description": "文件名 256 个字符（含扩展名）：拒，文案是「文件名不能为空且不超过 255 个字符」",
     "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:745-752",
     "input": { "kind": "meta", "fileSubject": "数学", "fileYear": 2025, "fileType": 1, "fileName": "题", "fileNameRunes": 256, "fileNameExt": ".pdf" },
     "expect": { "accept": false, "reason": "文件名不能为空且不超过 255 个字符" }
