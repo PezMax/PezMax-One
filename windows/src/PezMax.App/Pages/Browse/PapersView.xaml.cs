@@ -9,9 +9,9 @@ using PezMax.Core.Api;
 using PezMax.Core.Models;
 using PezMax.Core.Net;
 using PezMax.Core.Urls;
+using PezMax.Reader;
 using PezMax.Transfer;
 using Windows.ApplicationModel.DataTransfer;
-using Windows.Data.Pdf;
 using Windows.Storage.Streams;
 using Windows.System;
 using Windows.UI.Xaml;
@@ -28,14 +28,12 @@ namespace PezMax.Pages.Browse
         private readonly Dictionary<FileTreeNode, muxc.TreeViewNode> _nodeMap = new();
         private FileItem? _selected;
         private string? _treeHash;
-        private PdfDocument? _pdf;
-        private InMemoryRandomAccessStream? _pdfStream;
-        private int _pdfPage;
 
         public PapersView()
         {
             InitializeComponent();
             FileList.ItemsSource = _files;
+            PdfHost.CloseRequested += (_, __) => CloseReader();
             Loaded += async (_, __) =>
             {
                 if (AppServices.PreviewMode) await LoadPreviewAsync();
@@ -267,12 +265,34 @@ namespace PezMax.Pages.Browse
             PreviewImage.Source = null;
             PreviewText.Text = "";
             PreviewTextHost.Visibility = Visibility.Collapsed;
-            PdfPager.Visibility = Visibility.Collapsed;
             PreviewError.IsOpen = false;
-            _pdf = null;
-            _pdfStream?.Dispose();
-            _pdfStream = null;
-            _pdfPage = 0;
+        }
+
+        private async Task OpenReaderAsync(FileItem file)
+        {
+            ReaderOverlay.Visibility = Visibility.Visible;
+            try
+            {
+                var stream = await DownloadService.ReadStreamAsync(
+                    ct => AppServices.Downloads.OpenFileStreamAsync(file.FileId, ct));
+                await PdfHost.OpenAsync(
+                    stream,
+                    file.FileId,
+                    file.DisplayName,
+                    AppServices.Settings.PdfView,
+                    AppServices.Settings.PdfScale > 0 ? AppServices.Settings.PdfScale : null);
+            }
+            catch (Exception ex)
+            {
+                CloseReader();
+                ShowListError(ex is DatumException datum ? datum.Message : "PDF 打开失败");
+            }
+        }
+
+        private void CloseReader()
+        {
+            PdfHost.Unload();
+            ReaderOverlay.Visibility = Visibility.Collapsed;
         }
 
         private async void SearchClick(object sender, RoutedEventArgs e) => await SearchAsync(SearchBox.Text);
@@ -323,12 +343,8 @@ namespace PezMax.Pages.Browse
                 }
                 else if (format == "pdf")
                 {
-                    _pdfStream = await DownloadService.ReadStreamAsync(
-                        ct => AppServices.Downloads.OpenFileStreamAsync(file.FileId, ct));
-                    _pdf = await PdfDocument.LoadFromStreamAsync(_pdfStream);
-                    PreviewHost.Visibility = Visibility.Visible;
-                    PdfPager.Visibility = Visibility.Visible;
-                    await RenderPdfPageAsync();
+                    // PDF 走独立阅读器（网格 / 连续两种视图），不再塞进详情面板的小图里。
+                    await OpenReaderAsync(file);
                 }
                 else
                 {
@@ -345,36 +361,6 @@ namespace PezMax.Pages.Browse
             {
                 SetPreviewBusy(false);
             }
-        }
-
-        private async Task RenderPdfPageAsync()
-        {
-            if (_pdf == null || _pdf.PageCount == 0) return;
-            _pdfPage = Math.Clamp(_pdfPage, 0, (int)_pdf.PageCount - 1);
-            using var page = _pdf.GetPage((uint)_pdfPage);
-            using var stream = new InMemoryRandomAccessStream();
-            await page.RenderToStreamAsync(stream);
-            stream.Seek(0);
-            var bitmap = new BitmapImage();
-            await bitmap.SetSourceAsync(stream);
-            PreviewImage.Source = bitmap;
-            PreviewTextHost.Visibility = Visibility.Collapsed;
-            PreviewHost.Visibility = Visibility.Visible;
-            PdfPageText.Text = $"{_pdfPage + 1} / {_pdf.PageCount}";
-        }
-
-        private async void PdfPrevClick(object sender, RoutedEventArgs e)
-        {
-            if (_pdf == null || _pdfPage <= 0) return;
-            _pdfPage--;
-            await RenderPdfPageAsync();
-        }
-
-        private async void PdfNextClick(object sender, RoutedEventArgs e)
-        {
-            if (_pdf == null || _pdfPage >= _pdf.PageCount - 1) return;
-            _pdfPage++;
-            await RenderPdfPageAsync();
         }
 
         private async void DownloadClick(object sender, RoutedEventArgs e)

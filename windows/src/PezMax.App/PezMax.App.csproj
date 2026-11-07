@@ -80,6 +80,10 @@
       <DependentUpon>FavoritesView.xaml</DependentUpon>
     </Compile>
     <Compile Include="Update\UpdateService.cs" />
+    <Compile Include="Reader\PdfPageCache.cs" />
+    <Compile Include="Reader\PdfReader.xaml.cs">
+      <DependentUpon>PdfReader.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Transfer\DownloadCenter.cs" />
     <Compile Include="Transfer\DownloadStorage.cs" />
     <Compile Include="Transfer\DownloadService.cs" />
@@ -146,6 +150,10 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="Pages\ProfilePage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Reader\PdfReader.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>

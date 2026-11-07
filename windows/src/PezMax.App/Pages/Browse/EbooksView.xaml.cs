@@ -8,8 +8,8 @@ using PezMax.Core.Api;
 using PezMax.Core.Models;
 using PezMax.Core.Net;
 using PezMax.Core.Urls;
+using PezMax.Reader;
 using PezMax.Transfer;
-using Windows.Data.Pdf;
 using Windows.Storage;
 using Windows.Storage.Pickers;
 using Windows.Storage.Streams;
@@ -27,14 +27,12 @@ namespace PezMax.Pages.Browse
         private readonly ObservableCollection<EbookItem> _items = new();
         private EbookItem? _selected;
         private string _keyword = "";
-        private PdfDocument? _pdf;
-        private InMemoryRandomAccessStream? _pdfStream;
-        private int _pdfPage;
 
         public EbooksView()
         {
             InitializeComponent();
             BookList.ItemsSource = _items;
+            PdfHost.CloseRequested += (_, __) => CloseReader();
             Loaded += async (_, __) => await LoadAsync();
         }
 
@@ -91,10 +89,7 @@ namespace PezMax.Pages.Browse
             PreviewHost.Visibility = Visibility.Collapsed;
             PreviewHint.Text = "";
             PreviewImage.Source = null;
-            _pdf = null;
-            _pdfStream?.Dispose();
-            _pdfStream = null;
-            _pdfPage = 0;
+            CloseReader();
 
             if (!string.IsNullOrWhiteSpace(item.CoverUrl))
             {
@@ -144,23 +139,12 @@ namespace PezMax.Pages.Browse
             {
                 if (string.Equals(_selected.EbookFormat, "pdf", StringComparison.OrdinalIgnoreCase))
                 {
-                    _pdfStream = await DownloadService.ReadStreamAsync(
-                        ct => AppServices.Ebooks.OpenContentAsync(_selected.EbookId, ct));
-                    _pdf = await PdfDocument.LoadFromStreamAsync(_pdfStream);
-                    if (_pdf.PageCount == 0)
-                    {
-                        PreviewHint.Text = "这本 PDF 没有可显示的页面";
-                        return;
-                    }
+                    await OpenReaderAsync(_selected);
+                    return;
+                }
 
-                    _pdfPage = 0;
-                    await RenderPdfPageAsync();
-                }
-                else
-                {
-                    PreviewHint.Text = "该格式暂不支持内置预览；请下载后使用系统阅读器打开。";
-                    PreviewHost.Visibility = Visibility.Collapsed;
-                }
+                PreviewHint.Text = "该格式暂不支持内置预览；请下载后使用系统阅读器打开。";
+                PreviewHost.Visibility = Visibility.Collapsed;
             }
             catch (Exception ex)
             {
@@ -172,19 +156,31 @@ namespace PezMax.Pages.Browse
             }
         }
 
-        private async Task RenderPdfPageAsync()
+        private async Task OpenReaderAsync(EbookItem item)
         {
-            if (_pdf == null || _pdf.PageCount == 0) return;
-            _pdfPage = Math.Clamp(_pdfPage, 0, (int)_pdf.PageCount - 1);
-            using var page = _pdf.GetPage((uint)_pdfPage);
-            using var stream = new InMemoryRandomAccessStream();
-            await page.RenderToStreamAsync(stream);
-            stream.Seek(0);
-            var bitmap = new BitmapImage();
-            await bitmap.SetSourceAsync(stream);
-            PreviewImage.Source = bitmap;
-            PreviewHost.Visibility = Visibility.Visible;
-            PreviewHint.Text = $"第 {_pdfPage + 1} / {_pdf.PageCount} 页";
+            ReaderOverlay.Visibility = Visibility.Visible;
+            try
+            {
+                var stream = await DownloadService.ReadStreamAsync(
+                    ct => AppServices.Ebooks.OpenContentAsync(item.EbookId, ct));
+                await PdfHost.OpenAsync(
+                    stream,
+                    item.EbookId,
+                    item.DisplayName,
+                    AppServices.Settings.PdfView,
+                    AppServices.Settings.PdfScale > 0 ? AppServices.Settings.PdfScale : null);
+            }
+            catch (Exception ex)
+            {
+                CloseReader();
+                ShowError(ex is DatumException datum ? datum.Message : "PDF 打开失败");
+            }
+        }
+
+        private void CloseReader()
+        {
+            PdfHost.Unload();
+            ReaderOverlay.Visibility = Visibility.Collapsed;
         }
 
         private async void DownloadClick(object sender, RoutedEventArgs e)

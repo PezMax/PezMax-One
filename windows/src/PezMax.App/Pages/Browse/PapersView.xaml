@@ -3,6 +3,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    xmlns:reader="using:PezMax.Reader"
     xmlns:models="using:PezMax.Core.Models">
 
     <Grid>
@@ -109,7 +110,6 @@
                         Visibility="Collapsed" />
 
                     <muxc:InfoBar x:Name="PreviewError" IsClosable="False" IsOpen="False" Severity="Error" />
-
                     <Border
                         x:Name="PreviewHost"
                         MinHeight="240"
@@ -130,13 +130,16 @@
                         </Grid>
                     </Border>
 
-                    <StackPanel x:Name="PdfPager" Orientation="Horizontal" Spacing="8" Visibility="Collapsed">
-                        <Button Click="PdfPrevClick" Content="上一页" />
-                        <TextBlock x:Name="PdfPageText" VerticalAlignment="Center" Style="{StaticResource PezCaptionStyle}" />
-                        <Button Click="PdfNextClick" Content="下一页" />
-                    </StackPanel>
                 </StackPanel>
             </ScrollViewer>
+        </Grid>
+
+        <Grid
+            x:Name="ReaderOverlay"
+            Grid.RowSpan="2"
+            Background="{ThemeResource PezBackgroundBrush}"
+            Visibility="Collapsed">
+            <reader:PdfReader x:Name="PdfHost" />
         </Grid>
     </Grid>
 </UserControl>
