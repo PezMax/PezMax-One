@@ -35,6 +35,12 @@
                         <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE716;" />
                     </muxc:NavigationViewItem.Icon>
                 </muxc:NavigationViewItem>
+                <muxc:NavigationViewItemHeader Content="我的" />
+                <muxc:NavigationViewItem Content="上传" Tag="upload">
+                    <muxc:NavigationViewItem.Icon>
+                        <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE898;" />
+                    </muxc:NavigationViewItem.Icon>
+                </muxc:NavigationViewItem>
             </muxc:NavigationView.MenuItems>
 
             <muxc:NavigationView.FooterMenuItems>

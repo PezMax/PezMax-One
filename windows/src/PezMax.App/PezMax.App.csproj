@@ -88,6 +88,10 @@
     <Compile Include="Transfer\DownloadStorage.cs" />
     <Compile Include="Transfer\DownloadService.cs" />
     <Compile Include="Transfer\DownloadItemView.cs" />
+    <Compile Include="Transfer\UploadService.cs" />
+    <Compile Include="Pages\UploadPage.xaml.cs">
+      <DependentUpon>UploadPage.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Pages\CommunityPage.xaml.cs">
       <DependentUpon>CommunityPage.xaml</DependentUpon>
     </Compile>
@@ -146,6 +150,10 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="Pages\CommunityPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Pages\UploadPage.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>

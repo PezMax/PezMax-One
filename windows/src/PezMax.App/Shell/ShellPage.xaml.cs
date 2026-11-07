@@ -322,6 +322,9 @@ namespace PezMax.Shell
                 case "community":
                     Navigate(typeof(CommunityPage), null);
                     break;
+                case "upload":
+                    Navigate(typeof(UploadPage), null);
+                    break;
                 case "account":
                     Navigate(typeof(ProfilePage), "profile");
                     break;
