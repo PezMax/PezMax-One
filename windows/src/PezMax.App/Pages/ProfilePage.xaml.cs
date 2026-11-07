@@ -9,6 +9,7 @@ using PezMax.Core.Models;
 using PezMax.Core.Net;
 using PezMax.Core.Urls;
 using PezMax.Login;
+using PezMax.Core.Transfer;
 using PezMax.Transfer;
 using Windows.Storage;
 using Windows.Storage.Pickers;
@@ -24,7 +25,7 @@ namespace PezMax.Pages
     public sealed partial class ProfilePage : Page
     {
         private readonly ObservableCollection<NotificationItem> _notices = new();
-        private readonly ObservableCollection<DownloadEntry> _downloads = new();
+        private readonly ObservableCollection<DownloadItemView> _downloads = new();
         private bool _loaded;
 
         public ProfilePage()
@@ -341,9 +342,10 @@ namespace PezMax.Pages
             DownloadProgress.Visibility = Visibility.Visible;
             try
             {
-                var page = await AppServices.Downloads.GetMyDownloadsAsync(AppServices.UserId, 1, 100);
+                // 服务端记录只有「下载过」，本地记录才有「下到哪儿了」；合并规则在 Core（download 夹具）。
+                var rows = await DownloadService.GetMergedDownloadsAsync(AppServices.UserId, 1, 100);
                 _downloads.Clear();
-                foreach (var item in page.Rows) _downloads.Add(item);
+                foreach (var item in DownloadItemView.FromRows(rows)) _downloads.Add(item);
             }
             catch (Exception ex)
             {
@@ -358,13 +360,56 @@ namespace PezMax.Pages
 
         private async void RefreshDownloadsClick(object sender, RoutedEventArgs e) => await LoadDownloadsAsync();
 
-        private async void RemoveDownloadClick(object sender, RoutedEventArgs e)
+        private async void OpenDownloadClick(object sender, RoutedEventArgs e)
         {
-            if (DownloadList.SelectedItem is not DownloadEntry entry) return;
+            if (DownloadList.SelectedItem is not DownloadItemView item) return;
+
             try
             {
-                await AppServices.Downloads.RemoveAsync(AppServices.UserId, entry.File.FileId);
-                _downloads.Remove(entry);
+                if (!item.CanOpenFile)
+                {
+                    ShowProfileError(item.IsPartial ? "这个文件还没下载完，先「继续下载」" : "本地没有这个文件，先下载一次");
+                    return;
+                }
+
+                var file = await StorageFile.GetFileFromPathAsync(item.LocalPath);
+                await Launcher.LaunchFileAsync(file);
+            }
+            catch (Exception)
+            {
+                ShowProfileError("打开失败：文件可能已被移动或删除");
+            }
+        }
+
+        private async void OpenDownloadFolderClick(object sender, RoutedEventArgs e)
+        {
+            if (DownloadList.SelectedItem is not DownloadItemView item) return;
+
+            try
+            {
+                if (!item.CanShowInFolder)
+                {
+                    ShowProfileError("这条只有云端记录，本地还没有文件");
+                    return;
+                }
+
+                var folder = await StorageFolder.GetFolderFromPathAsync(Path.GetDirectoryName(item.LocalPath));
+                await Launcher.LaunchFolderAsync(folder);
+            }
+            catch (Exception)
+            {
+                ShowProfileError("打开所在文件夹失败");
+            }
+        }
+
+        private async void RemoveDownloadClick(object sender, RoutedEventArgs e)
+        {
+            if (DownloadList.SelectedItem is not DownloadItemView item) return;
+            try
+            {
+                await AppServices.Downloads.RemoveAsync(AppServices.UserId, item.FileId);
+                await DownloadService.RemoveRecordAsync(DownloadKinds.File, item.FileId);
+                _downloads.Remove(item);
             }
             catch (Exception ex)
             {
@@ -374,15 +419,31 @@ namespace PezMax.Pages
 
         private async void RedownloadClick(object sender, RoutedEventArgs e)
         {
-            if (DownloadList.SelectedItem is not DownloadEntry entry) return;
+            if (DownloadList.SelectedItem is not DownloadItemView item) return;
+
+            DownloadProgress.IsActive = true;
+            DownloadProgress.Visibility = Visibility.Visible;
             try
             {
-                var file = await DownloadService.DownloadFileAsync(entry.File);
+                var fileItem = new FileItem { FileId = item.FileId, FileName = item.Title, Label = item.Title };
+                var progress = new Progress<DownloadProgress>(report =>
+                {
+                    DownloadProgress.IsActive = true;
+                    DownloadProgress.Visibility = Visibility.Visible;
+                });
+
+                var file = await DownloadService.DownloadFileAsync(fileItem, progress);
                 await Launcher.LaunchFileAsync(file);
+                await LoadDownloadsAsync();
             }
             catch (Exception ex)
             {
                 ShowProfileError(ex is DatumException datum ? datum.Message : "下载失败");
+            }
+            finally
+            {
+                DownloadProgress.IsActive = false;
+                DownloadProgress.Visibility = Visibility.Collapsed;
             }
         }
 

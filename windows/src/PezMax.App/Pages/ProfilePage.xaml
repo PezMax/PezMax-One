@@ -4,6 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
     xmlns:models="using:PezMax.Core.Models"
+    xmlns:transfer="using:PezMax.Transfer"
     Background="{ThemeResource PezBackgroundBrush}">
 
     <Grid Margin="32,28,32,24">
@@ -117,8 +118,10 @@
                     </Grid.RowDefinitions>
                     <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
                         <Button Click="RefreshDownloadsClick" Content="刷新" />
+                        <Button Click="OpenDownloadClick" Content="打开" />
+                        <Button Click="OpenDownloadFolderClick" Content="在文件夹中显示" />
+                        <Button Click="RedownloadClick" Content="继续 / 重新下载" />
                         <Button Click="RemoveDownloadClick" Content="删除记录" />
-                        <Button Click="RedownloadClick" Content="重新下载" />
                         <ProgressRing
                             x:Name="DownloadProgress"
                             Width="20"
@@ -128,11 +131,23 @@
                     </StackPanel>
                     <ListView x:Name="DownloadList" Grid.Row="1" SelectionMode="Single">
                         <ListView.ItemTemplate>
-                            <DataTemplate x:DataType="models:DownloadEntry">
-                                <StackPanel Padding="2,8" Spacing="3">
-                                    <TextBlock Style="{StaticResource PezBodyStyle}" Text="{x:Bind DisplayName}" />
-                                    <TextBlock Style="{StaticResource PezCaptionStyle}" Text="{x:Bind MetaText}" />
-                                </StackPanel>
+                            <DataTemplate x:DataType="transfer:DownloadItemView">
+                                <Grid Padding="2,8" ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Spacing="3">
+                                        <TextBlock Style="{StaticResource PezBodyStyle}" Text="{x:Bind Title}" />
+                                        <TextBlock Style="{StaticResource PezCaptionStyle}" Text="{x:Bind Meta}" />
+                                        <TextBlock Style="{StaticResource PezCaptionStyle}" Text="{x:Bind LocalPath}" />
+                                    </StackPanel>
+                                    <TextBlock
+                                        Grid.Column="1"
+                                        VerticalAlignment="Center"
+                                        Style="{StaticResource PezCaptionStyle}"
+                                        Text="{x:Bind Status}" />
+                                </Grid>
                             </DataTemplate>
                         </ListView.ItemTemplate>
                     </ListView>

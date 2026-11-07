@@ -79,6 +79,7 @@
       <DependentUpon>FavoritesView.xaml</DependentUpon>
     </Compile>
     <Compile Include="Transfer\DownloadService.cs" />
+    <Compile Include="Transfer\DownloadItemView.cs" />
     <Compile Include="Pages\CommunityPage.xaml.cs">
       <DependentUpon>CommunityPage.xaml</DependentUpon>
     </Compile>
