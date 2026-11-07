@@ -7,11 +7,12 @@ Release|x64 用 .NET Native 构建通过。已接入登录、注册（三步）�
 外壳（含铃铛 / 滚动提醒 / 弹窗队列）、首页、资料（树 / 列表 / 搜索 / 详情 / PDF / 图片 / 文本预览）、
 电子书、书签、收藏、社区排行 / 上传 / 举报、个人中心（含「我的下载」合并与本地状态）、设置（含检查更新、镜像前缀、阅读默认视图 / 缩放）。
 PDF 阅读器有**网格 / 连续两种视图**，页缓存落 `LocalCache/pdf/{fileId}/`，渲染窗口与缩放规则在 Core。
+上传页接批量与文件夹上传，逐文件校验与结果都在 Core 的 `UploadValidation` / `Utf8Check`。
 Core 的判定表已按夹具落地：账户表单（`auth/` 25 例）、URL 归一（`url/` 21 例）、续传（`download/` 26 例）、
 通知（`notification/` 29 例）、树导航（`file-tree/` 15 例）、哈希缓存（`state-cache/` 17 例）、
-更新检查（`update/` 23 例）、上传校验（`upload/` 28 例）、阅读器几何（`reading/` 48 例）——Core 测试 35 个用例全绿。
+更新检查（`update/` 23 例）、上传校验与文本编码（`upload/` 38 例）、阅读器几何（`reading/` 48 例）——Core 测试 41 个用例全绿。
 视觉使用 WinUI 2 平台控件 + `Themes/PezMax.xaml`（`ControlsResourcesVersion="Version1"`）；Kanesumi.Xaml 尚未抽仓，暂未引用。
-下一步：EPUB 阅读器（W3）、上传页接线，以及 W1 / W2 / W4 实机验证。
+下一步：EPUB 阅读器（W3），以及 W1 / W2 / W4 实机验证。
 
 > 样板是兄弟仓库 Ncrust 的 Windows 端（`../../Ncrust/windows/AGENTS.md`）：**凡本文没写的工程细节，按 Ncrust 的做法办**，
 > 尤其是它的「已知的坑」一节——那 40 条大多来自 arc-deck 与 Ncrust 的本机实测，在这里同样成立，不再复抄。
@@ -72,7 +73,7 @@ windows/
 | `Shell/` | `ShellPage`：`NavigationView` + 内容 Frame + 自定义标题栏（含铃铛 + `InfoBadge` 未读）+ 滚动提醒条 + 下载浮层 + 登录层；`NotificationCenter` 管两条 feed 的取数与本地状态；全局快捷键；`AppTheme` |
 | `Pages/` | 首页、资料（树 + 列表 + 搜索）、电子书、书签、收藏、社区（排行）、我的上传 / 下载 / 举报、个人中心、设置 |
 | `Reader/` | `PdfReader`（网格 / 连续两种视图 + `PdfPageCache` 页缓存）、`ImageViewer`、`TextViewer`、`MarkdownViewer`、`EpubReader` |
-| `Transfer/` | `DownloadService`：`.part` 半成品 + `Range` / `If-Range` 续传 + 串行队列 + `downloads.json` 本地记录（判定在 Core 的 `DownloadPlanner`）；`UploadService` 待做 |
+| `Transfer/` | `DownloadService`：`.part` 半成品 + `Range` / `If-Range` 续传 + 串行队列 + `downloads.json` 本地记录（判定在 Core 的 `DownloadPlanner`）；`UploadService`：多选 / 文件夹递归 + 逐文件校验结果 + 串行上传 |
 | `Login/` | 登录、注册（三步：账号 → 密保 → 完成）、找回密码（两步）独立覆盖层 |
 | `Platform/` | Core 平台接口实现：`LocalSettings`、`LocalFolder`、`PasswordVault` |
 | `Update/` | `UpdateService`：`ReleaseFeed` 取 GitHub releases → Core 的 `UpdateChecker` 挑版本 → `.appinstaller` 交给 App Installer（无该资产时退回 Release 页） |
@@ -138,10 +139,24 @@ windows/
 
 ## 上传
 
-- `FileOpenPicker`（多选）与 `FolderPicker`（文件夹上传，递归枚举）；上传前由 Core 校验扩展名、大小、编码要求，给出逐个文件的结果。
-- `Windows.Web.Http.HttpClient` + `HttpMultipartFormDataContent`，`IProgress<HttpProgress>` 驱动进度；串行上传，单个失败不影响其余。
-- 元信息（科目、学校、类型、年份）表单：科目 / 学校来自 `/datum/file/subjects`、`/schools`，学校用 `AutoSuggestBox` + `/schools/check`。
-- 上传成功提示「已提交，审核通过后公开」。
+**当前实现**：`Transfer/UploadService` + `Pages/UploadPage`（外壳「我的 → 上传」）。
+
+- `FileOpenPicker`（多选）与 `FolderPicker`（递归）；文件夹的相对路径作为 `remark`，
+  服务端按 `/` 分段清理后变成树里的自定义目录。
+- 挑进来就**先判一遍**：`UploadValidation.ValidateFile`（体积 → 文件名 rune → 扩展名 → 转档体积），
+  不过的不入队、不发请求，理由写在那一行；`txt / md` 在上传前用 Core 的 `Utf8Check` 扫一遍字节
+  （UTF-8 BOM 合法、UTF-16 BOM 与 GBK 不合法，结尾不完整的三字节序列也算不合法）。
+- 串行上传：经 edge 时并发只会互抢；单个失败不影响其余，结果逐行呈现（成功 / 失败 / 未通过校验）。
+- 进度靠 `ProgressStream` 包住文件流：`StreamContent` 是边读边发的，包一层流是唯一不动架构的做法。
+  **没有用 `Windows.Web.Http` 的 `IProgress<HttpProgress>`**——用它就得让 App 自己拼 multipart、自己带
+  Bearer，协议与鉴权会飘出 Core；本节原来那句「用 `Windows.Web.Http`」按此作废。
+- 超时**按请求设**（`DatumHttp.RequestTimeout` 30 s / `UploadTimeout` 15 min）：转档走 LibreOffice，
+  默认 2 分钟 + 2 并发，30 秒就判失败会把大文件冤枉掉。用户点「取消」仍是 `OperationCanceledException`，
+  不会被说成超时（两者的处理方式差一个数量级）。
+- 转档（`doc/docx/ppt/pptx`）在那一行提示「可能需要 1–2 分钟」，失败可单独重试。
+- 元信息：科目（`/datum/file/subjects` 建议）、学校（`AutoSuggestBox` + `/schools` 建议）、年份、类型；
+  表单同样过 Core 的 `ValidateFileMeta`，`fileType=7` 会提醒「只会进资料库，电子书走电子书上传」。
+- 未做：「我的上传」列表（`GET /datum/file/list?userId=` 可见待审 / 未通过）、拖放上传、`/schools/check`。
 
 ## 设置
 
