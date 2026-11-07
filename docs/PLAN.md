@@ -37,8 +37,9 @@ Linux 与 Android 随后照 spec 实现，少走弯路。（D14 已定为 Window
    要在真机确认虚拟主机映射、离线、CJK 排版、以及 .NET Native + WebView2 下不崩；这台机器上没有 WebView2 运行时的表现也要看一眼。
 3. **上传的对账**：上传页已接（批量 / 文件夹 / 逐文件结果），剩下真机上传一轮（含 docx 转档排队、200MB 边界）；
    W1 的「应用挂起后继续下载」也在这一轮一并比较 `BackgroundDownloader`。
-4. **接入真实后端**：`spec/tools/probe.ps1` 只读探针已就绪，本机 Postgres 已有、Redis 缺；先起一个真实的
-   PezMax-Go（`docs/ENVIRONMENT.md` 有步骤），再用探针把匿名端点的形状核对一遍，随后才谈只读测试账号与 W1/W2/W4。
+4. **接入真实后端**：`spec/tools/devserver/`（Go，零依赖）已能按 spec 的形状提供最小 `/datum/*`，
+   还现场生成 120 页 PDF 与三章 EPUB，可先把 W2 / W3 的界面路径跑通；`spec/tools/probe.ps1` 用来核对形状。
+   真后端本机跑仍需 Redis（Postgres 已有），或者等负责人给测试服务器地址与只读账号。
    Kanesumi.Xaml 抽仓（D3）已完成，两端都按相对路径引用并编过。
 5. **发布工具 `windows/tools/release/`**：签名证书、`.appinstaller`、`.cer`、`manifest.json`。
    没有它连「装包冒烟」都做不了——.NET Native 的 IL 布局注册上去会在激活期崩溃（见 `windows/AGENTS.md`）。

@@ -82,10 +82,23 @@ Kanesumi harness 只在 Linux（Wayland）上编译与运行。
 | Gradle | 随 wrapper，与 Ncrust 同版本（9.3.1） |
 | release 签名 `keystore.properties` | ⏳ 发布前准备，不入库 |
 
-## 本机跑 PezMax-Go（接入真实后端）
+## 本机跑后端（两条路）
 
-客户端的契约只能对着**真的后端**核对，夹具里的形状是从 Go 源码读出来的推断。
-本机能跑起一个真实实例，条件是三件（2026-11-07 查过）：
+**快路：本地开发服务器**（不需要 Postgres / Redis / MinIO，只要 Go）：
+
+```powershell
+cd spec\tools\devserver
+go run . -addr 127.0.0.1:9033
+# 客户端「设置 → 高级 → 服务器地址」填 http://127.0.0.1:9033
+# 登录：任意用户名 / 密码 / 验证码（token 固定 pezmax-dev-token）
+```
+
+它按 `spec/api/endpoints.md` 的形状提供最小实现，并且**现场生成**一份 120 页 PDF
+（`/datum/download/file?fileId=101&pages=120`，验 W2）和一份三章 EPUB
+（`/datum/ebook/content?ebookId=202`，验 W3）。细节与已知差别见 `spec/tools/devserver/README.md`。
+它**不是**后端：不鉴权、内存态、通知与收藏恒为空——契约核对到哪一步算哪一步。
+
+**真路：跑 PezMax-Go 本体**（契约的最后一道核对）。条件见下表，注意缺 Redis 起不来：
 
 | 需要 | 本机 | 说明 |
 |---|---|---|
@@ -94,23 +107,12 @@ Kanesumi harness 只在 Linux（Wayland）上编译与运行。
 | 对象存储 | ✅ 可选 | 配 `KADMIN_FILE_LOCAL_ROOT` 走本地目录，不需要 MinIO |
 | Go | ✅ 1.26.5 | `go run .` 直接跑 |
 
-步骤：
-
 ```powershell
-# 1. 建库（本地 Postgres 的超级用户口令自己填）
 psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE kadmin;"
-
-# 2. Redis（任选其一：自己装 / 便携版 / 让负责人给测试服务器地址）
-#    没有 Redis 这一步就先停在这里——后端会在缓存初始化处失败。
-
-# 3. 配置并启动（在 PezMax-Go/k_admin 下，.env 不入库）
-#    KADMIN_DB_HOST/PORT/USER/PASSWORD/NAME、KADMIN_REDIS_*、KADMIN_FILE_LOCAL_ROOT=data/files
+# 起 Redis（自己装 / 便携版 / 让负责人给测试服务器地址）
+# 在 PezMax-Go/k_admin 下填 .env（DB、Redis、KADMIN_FILE_LOCAL_ROOT），然后：
 go run .
-
-# 4. 用只读探针核对形状（不写任何数据，不需要账号）
 pwsh -File ..\PezMax-One\spec\tools\probe.ps1 -BaseUrl http://127.0.0.1:9033
-
-# 5. 客户端「设置 → 高级 → 服务器地址」改成同一个 base
 ```
 
 接上真实后端之后才有意义的三件事：W1（断网续传 / 每 IP 一连接）、W2（大 PDF）、W4（内网）。
