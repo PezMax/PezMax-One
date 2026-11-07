@@ -31,19 +31,24 @@ Linux 与 Android 随后照 spec 实现，少走弯路。（D14 已定为 Window
 
 ### 下一轮（新 session 从这里开始）
 
-1. **PDF 双视图的实机验证（W2）**：代码与夹具（`spec/fixtures/reading/`）已落地，剩下拿 100 页以上的真试卷跑
-   首屏 < 1 s、连续滚动无白屏、内存稳定；顺带确认 `DownloadsFolder` 在真机上不需要额外能力（下载目录已回落兜底）。
+> 2026-11-07 收工时的状态：真后端已经接通（`http://82.156.245.102:9033`，基线 `061a888`，1603 份资料），
+> 负责人已注册测试账号并登进去看过一轮；资料页从文件树改成了条件下拉；PDF 阅读器的两个致命 bug
+> （流被关掉、页图叠在一起）修完并复验。下面第 1、2、3 条都还开着，但**现在有真库可以验了**。
+
+1. **PDF 双视图的实机验证（W2）**：代码与夹具（`spec/fixtures/reading/`）已落地，剩拿真库里的扫描件试卷跑
+   首屏 < 1 s、连续滚动无白屏、内存稳定。`windows/tools/pdfcheck` 可以先离线量页数与单页渲染耗时。
 2. **EPUB 阅读器的实机验证（W3）**：代码与夹具（`spec/fixtures/epub/`）已落地——解压 → Core 解析 → WebView2 虚拟主机。
    要在真机确认虚拟主机映射、离线、CJK 排版、以及 .NET Native + WebView2 下不崩；这台机器上没有 WebView2 运行时的表现也要看一眼。
 3. **上传的对账**：上传页已接（批量 / 文件夹 / 逐文件结果），剩下真机上传一轮（含 docx 转档排队、200MB 边界）；
    W1 的「应用挂起后继续下载」也在这一轮一并比较 `BackgroundDownloader`。
-4. **接入真实后端**：`spec/tools/devserver/`（Go，零依赖）已能按 spec 的形状提供最小 `/datum/*`，
-   还现场生成 120 页 PDF 与三章 EPUB，可先把 W2 / W3 的界面路径跑通；`spec/tools/probe.ps1` 用来核对形状。
-   真后端本机跑仍需 Redis（Postgres 已有），或者等负责人给测试服务器地址与只读账号。
-   Kanesumi.Xaml 抽仓（D3）已完成，两端都按相对路径引用并编过。
+4. **批注（等后端）**：需求已提上游 `PezMax-Go#5`（表 `ptmj_annotation` + 四个端点，`payload` 不透明）。
+   接口没上之前客户端先做本地链路：`LocalCache/annotations/{fileId}/{page}`，锚点用阅读器已稳定的
+   `(fileId, pageIndex)`；接口就绪只换同步层，Scratchmark 与阅读器不动。
 5. **发布工具 `windows/tools/release/`**：签名证书、`.appinstaller`、`.cer`、`manifest.json`。
    没有它连「装包冒烟」都做不了——.NET Native 的 IL 布局注册上去会在激活期崩溃（见 `windows/AGENTS.md`）。
-6. Linux / Android spike（L1–L5、A1–A3）。
+6. **观感复核**：今天把导航阈值、字号、列表行高调过一轮，但负责人是 865 DIP 的窄窗口——
+   资料页三栏在这个尺寸下仍然紧。下一步不是继续加字号，而是在窄窗口把详情栏收成「点行弹出」。
+7. Linux / Android spike（L1–L5、A1–A3）。
 
 ### spec 首批
 
