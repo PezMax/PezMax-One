@@ -17,6 +17,11 @@ EPUB 包解析（`epub/` 13 例）——Core 测试 48 个用例全绿。
 Kanesumi.Xaml 已抽成独立仓 `../Kanesumi-xaml`（D3），本仓按相对路径引用并已接上强调色色块（W5 通过）。
 下一步：W1 / W2 / W3 / W4 实机验证（都需要测试服务器与真机）。
 
+协议怎么核对：`tools/apiwalk`（net9.0 控制台，引用 `PezMax.Core`，用 `AuthApi` / `FilesApi` / `DatumHttp`
+自己的代码对 `spec/tools/devserver` 走「注册 → 忘密码 → 重置 → 登录 → 看内容 → 下载」，断言失败即退出）。
+**它不碰 UWP**，所以不需要回环豁免与管理员；UWP 那条界面线仍要手工走查。
+核对过哪些端点、遗留哪些没走，记在 `spec/api/verified.md`。
+
 > 样板是兄弟仓库 Ncrust 的 Windows 端（`../../Ncrust/windows/AGENTS.md`）：**凡本文没写的工程细节，按 Ncrust 的做法办**，
 > 尤其是它的「已知的坑」一节——那 40 条大多来自 arc-deck 与 Ncrust 的本机实测，在这里同样成立，不再复抄。
 
@@ -45,7 +50,7 @@ windows/
 │   ├── PezMax.Core/              # netstandard2.0
 │   └── PezMax.App/               # UWP 应用
 ├── tests/PezMax.Core.Tests/      # net9.0 + xUnit，读 ../../spec/
-└── tools/{shot,release,icons}/
+└── tools/{apiwalk,shot,release,icons}/
 ```
 
 依赖方向：`PezMax.App → Kanesumi.Xaml`、`PezMax.App → PezMax.Core ← PezMax.Core.Tests → spec/`，不得反向。
