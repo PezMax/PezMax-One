@@ -90,13 +90,38 @@ Kanesumi harness 只在 Linux（Wayland）上编译与运行。
 cd spec\tools\devserver
 go run . -addr 127.0.0.1:9033
 # 客户端「设置 → 高级 → 服务器地址」填 http://127.0.0.1:9033
-# 登录：任意用户名 / 密码 / 验证码（token 固定 pezmax-dev-token）
+# 种子账号 demo / demo1234（id 7）；也可以在客户端注册新号（验证码填任意四位数）
 ```
 
 它按 `spec/api/endpoints.md` 的形状提供最小实现，并且**现场生成**一份 120 页 PDF
 （`/datum/download/file?fileId=101&pages=120`，验 W2）和一份三章 EPUB
 （`/datum/ebook/content?ebookId=202`，验 W3）。细节与已知差别见 `spec/tools/devserver/README.md`。
 它**不是**后端：不鉴权、内存态、通知与收藏恒为空——契约核对到哪一步算哪一步。
+
+### 用 UWP 客户端连本机服务端：先豁免回环
+
+**这一步只有 UWP 需要，控制台不需要。** AppContainer 到**本机**地址的连接一律被挡——
+不只是 `127.0.0.1`，填本机的局域网地址（如 `10.173.79.224:8080`）同样被挡，
+因为报文在本机内部绕回来，还是回环。症状是登录页显示「验证码获取失败」，
+而服务端日志里**一条请求都没有**（不是 404、不是 500，是根本没发出去），
+异常是传输层的，所以走不到 `DatumException` 的文案分支。
+
+```powershell
+# 一次就够，重启后仍在；需要**管理员**终端（UAC 提权那条命令）
+CheckNetIsolation LoopbackExempt -a -n=PezMax.One_0say9r0m9v83e
+CheckNetIsolation LoopbackExempt -s          # 看它在不在名单里
+```
+
+包全名用 `Get-AppxPackage PezMax.One | Select-Object PackageFamilyName` 现取，重新注册后若
+`PackageFamilyName` 变了要重加。豁免是**本地联调手段**，不进产品要求、不写进发布说明；
+发布环境是真实后端地址，不涉及回环。
+
+不需要改清单：`privateNetworkClientServer` 已在 `Package.appxmanifest` 里（W4 需要它连内网 10.x）。
+把 devserver 绑到局域网地址并不会绕过上面那条限制，也不该这么做——它没有鉴权，
+`spec/tools/devserver/README.md` 明确要求只绑 `127.0.0.1`。
+
+不装 UWP 也能核对协议：`dotnet run --project windows\tools\apiwalk -- http://127.0.0.1:9033`
+用 `PezMax.Core` 自己的协议代码走一遍注册到下载，不需要打包也不需要豁免。
 
 **真路：跑 PezMax-Go 本体**（契约的最后一道核对）。条件见下表，注意缺 Redis 起不来：
 
