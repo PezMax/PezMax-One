@@ -44,6 +44,7 @@
       <DependentUpon>App.xaml</DependentUpon>
     </Compile>
     <Compile Include="AppServices.cs" />
+    <Compile Include="Compat\IsExternalInit.cs" />
     <Compile Include="Controls\PezDialog.cs" />
     <Compile Include="Preview\PreviewData.cs" />
     <Compile Include="Shell\ShellPage.xaml.cs">

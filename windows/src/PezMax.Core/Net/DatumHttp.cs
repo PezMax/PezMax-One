@@ -83,12 +83,24 @@ public sealed class DatumHttp : IDisposable
     /// <summary>
     /// 文件流请求。成功时返回原始响应，调用方负责 Dispose；失败时按信封解析并抛 <see cref="DatumException"/>。
     /// </summary>
-    public async Task<HttpResponseMessage> GetStreamAsync(
+    public Task<HttpResponseMessage> GetStreamAsync(
         string path,
         IEnumerable<KeyValuePair<string, string?>>? query = null,
+        CancellationToken cancellationToken = default) =>
+        GetStreamAsync(path, query, null, cancellationToken);
+
+    /// <summary>
+    /// 带附加请求头的文件流请求（续传要 <c>Range</c> / <c>If-Range</c> / <c>Accept-Encoding: identity</c>）。
+    /// 非 2xx 仍然抛 <see cref="DatumException"/>：**416 也走这里**，调用方按 <see cref="DatumException.HttpStatus"/>
+    /// 交给 <c>DownloadPlanner</c> 判断要不要丢弃半成品重下。
+    /// </summary>
+    public async Task<HttpResponseMessage> GetStreamAsync(
+        string path,
+        IEnumerable<KeyValuePair<string, string?>>? query,
+        IEnumerable<KeyValuePair<string, string>>? headers,
         CancellationToken cancellationToken = default)
     {
-        using var request = CreateRequest(HttpMethod.Get, path, query, null);
+        using var request = CreateRequest(HttpMethod.Get, path, query, null, headers);
         var response = await _client
             .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
             .ConfigureAwait(false);
@@ -148,10 +160,15 @@ public sealed class DatumHttp : IDisposable
         HttpMethod method,
         string path,
         IEnumerable<KeyValuePair<string, string?>>? query,
-        HttpContent? content)
+        HttpContent? content,
+        IEnumerable<KeyValuePair<string, string>>? headers = null)
     {
         var request = new HttpRequestMessage(method, BuildUri(path, query)) { Content = content };
         ApplyHeaders(request);
+        if (headers != null)
+        {
+            foreach (var header in headers) request.Headers.TryAddWithoutValidation(header.Key, header.Value);
+        }
         return request;
     }
 
