@@ -156,7 +156,13 @@ windows/
 - 转档（`doc/docx/ppt/pptx`）在那一行提示「可能需要 1–2 分钟」，失败可单独重试。
 - 元信息：科目（`/datum/file/subjects` 建议）、学校（`AutoSuggestBox` + `/schools` 建议）、年份、类型；
   表单同样过 Core 的 `ValidateFileMeta`，`fileType=7` 会提醒「只会进资料库，电子书走电子书上传」。
-- 未做：「我的上传」列表（`GET /datum/file/list?userId=` 可见待审 / 未通过）、拖放上传、`/schools/check`。
+- 「我的上传」页签：`GET /datum/file/list?userId=`（**带 userId 才看得见待审 / 未通过**，不然只有已通过的），
+  每行可预览（PDF，属主能取待审件的流）、编辑、删除（软删 + 二次确认）。
+  - 编辑是 `PUT /datum/file`，上游**整组覆盖**：`FileUpdateRequest.From(item)` 先回填再改，
+    漏掉 `remark` 就等于把树里那条自定义目录清空。
+  - 编辑**不会重新送审**（`file_status` 不在 SET 里），也不判科目字节数 / 年份；
+    客户端仍沿用上传那套 `ValidateFileMeta`——更松会造出「客户端放行、服务端 400」。
+- 未做：拖放上传、`/schools/check` 联动、批量删除。
 
 ## 设置
 
