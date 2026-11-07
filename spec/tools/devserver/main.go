@@ -198,6 +198,11 @@ func (s *store) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /system/notification/user/scroll", s.guard(func(w http.ResponseWriter, r *http.Request) { ok(w, []any{}) }))
 	mux.HandleFunc("GET /datum/desktop/download/list/{userId}", s.guard(emptyList))
 	mux.HandleFunc("GET /datum/desktop/favorite/list/{userId}", s.guard(emptyList))
+	// 资料收藏状态：详情面板一打开就问。少了它就是 404，客户端按「未收藏」显示，
+	// 界面对但日志脏——而且真收藏过的人会看到错的按钮文案。
+	mux.HandleFunc("GET /datum/favorite/{fileId}", s.guard(func(w http.ResponseWriter, r *http.Request) {
+		ok(w, map[string]any{"favorited": false})
+	}))
 	mux.HandleFunc("GET /datum/ebook/favorite/list", s.guard(emptyList))
 	mux.HandleFunc("GET /datum/report/list", s.guard(emptyList))
 	mux.HandleFunc("GET /datum/ebook/report/list", s.guard(emptyList))
