@@ -47,6 +47,21 @@ public sealed class FileUpdateRequest
     public string FileSchool { get; set; } = "";
     public string FileSubject { get; set; } = "";
     public string Remark { get; set; } = "";
+
+    /// <summary>
+    /// 从当前行回填。<c>PUT /datum/file</c> 是**整组覆盖**：少发一个字段就等于把它清空，
+    /// 尤其 <c>remark</c>——那是树里的自定义目录，不带就把目录抹了。
+    /// </summary>
+    public static FileUpdateRequest From(FileItem item) => new()
+    {
+        FileId = item.FileId,
+        FileName = item.DisplayName,
+        FileYear = item.FileYear,
+        FileType = item.FileType,
+        FileSchool = item.FileSchool,
+        FileSubject = item.FileSubject,
+        Remark = item.Remark,
+    };
 }
 
 public sealed class FileQuery
