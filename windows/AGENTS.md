@@ -4,13 +4,13 @@
 
 **状态**（2026-11-06）：已建立 `PezMax.Windows.sln` / `PezMax.Core` / `PezMax.Core.Tests` / `PezMax.App`，
 Release|x64 用 .NET Native 构建通过。已接入登录、注册（三步）、找回密码（两步：验证码换密保 → 答案 + 新密码）、
-外壳、首页、资料（树 / 列表 / 搜索 / 详情 / PDF / 图片 / 文本预览）、电子书、书签、收藏、
-社区排行 / 上传 / 举报、个人中心 / 通知 / 下载记录 / 设置。
-Core 的判定表已按夹具落地：账户表单（`auth/` 25 例）、URL 归一（`url/` 21 例）、续传（`download/` 20 例）、
-通知（`notification/` 25 例）、树导航（`file-tree/` 15 例）、哈希缓存（`state-cache/` 17 例）、
-更新检查（`update/` 23 例）、上传校验（`upload/` 28 例）——Core 测试 30 个用例全绿。
+外壳（含铃铛 / 滚动提醒 / 弹窗队列）、首页、资料（树 / 列表 / 搜索 / 详情 / PDF / 图片 / 文本预览）、
+电子书、书签、收藏、社区排行 / 上传 / 举报、个人中心（含「我的下载」合并与本地状态）、设置（含检查更新与镜像前缀）。
+Core 的判定表已按夹具落地：账户表单（`auth/` 25 例）、URL 归一（`url/` 21 例）、续传（`download/` 26 例）、
+通知（`notification/` 29 例）、树导航（`file-tree/` 15 例）、哈希缓存（`state-cache/` 17 例）、
+更新检查（`update/` 23 例）、上传校验（`upload/` 28 例）——Core 测试 31 个用例全绿。
 视觉使用 WinUI 2 平台控件 + `Themes/PezMax.xaml`（`ControlsResourcesVersion="Version1"`）；Kanesumi.Xaml 尚未抽仓，暂未引用。
-下一步：把 Core 判定接到界面上——通知已读与铃铛、下载续传与串行队列（`.part`）、检查更新入口、PDF 网格 / 连续、EPUB。
+下一步：下载浮层（进度 / 取消）与「下载到 Downloads 目录」的目录授权、PDF 网格 / 连续两种视图、EPUB，以及 W1–W5 实机验证。
 
 > 样板是兄弟仓库 Ncrust 的 Windows 端（`../../Ncrust/windows/AGENTS.md`）：**凡本文没写的工程细节，按 Ncrust 的做法办**，
 > 尤其是它的「已知的坑」一节——那 40 条大多来自 arc-deck 与 Ncrust 的本机实测，在这里同样成立，不再复抄。
@@ -68,13 +68,13 @@ windows/
 
 | 目录 | 内容 |
 |---|---|
-| `Shell/` | `ShellPage`：`NavigationView` + 内容 Frame + 自定义标题栏 + 滚动提醒条 + 下载浮层 + 登录层；全局快捷键；`AppTheme` |
+| `Shell/` | `ShellPage`：`NavigationView` + 内容 Frame + 自定义标题栏（含铃铛 + `InfoBadge` 未读）+ 滚动提醒条 + 下载浮层 + 登录层；`NotificationCenter` 管两条 feed 的取数与本地状态；全局快捷键；`AppTheme` |
 | `Pages/` | 首页、资料（树 + 列表 + 搜索）、电子书、书签、收藏、社区（排行）、我的上传 / 下载 / 举报、个人中心、设置 |
 | `Reader/` | `PdfReader`（网格 / 连续两种视图）、`ImageViewer`、`TextViewer`、`MarkdownViewer`、`EpubReader` |
 | `Transfer/` | `DownloadService`：`.part` 半成品 + `Range` / `If-Range` 续传 + 串行队列 + `downloads.json` 本地记录（判定在 Core 的 `DownloadPlanner`）；`UploadService` 待做 |
 | `Login/` | 登录、注册（三步：账号 → 密保 → 完成）、找回密码（两步）独立覆盖层 |
 | `Platform/` | Core 平台接口实现：`LocalSettings`、`LocalFolder`、`PasswordVault` |
-| `Update/` | `UpdateService`：下载 `.appinstaller` 交给 App Installer |
+| `Update/` | `UpdateService`：`ReleaseFeed` 取 GitHub releases → Core 的 `UpdateChecker` 挑版本 → `.appinstaller` 交给 App Installer（无该资产时退回 Release 页） |
 | `I18n/` | `Strings` 类；界面文字一律不许写死。M1 只做 zh-CN |
 
 ## 外壳与导航
@@ -85,6 +85,13 @@ windows/
 - 内容延伸进标题栏（`ExtendViewIntoTitleBar`），覆盖层让出标题栏高度（Ncrust `ApplyTitleBarHeight` 同款坑）。
 - 滚动提醒（`scroll` 通知）是外壳顶部一条可关闭的窄条；弹窗通知（`popup`）在首次进入首页时用 `ContentDialog` 逐条显示，
   铃铛入口在标题栏右侧，未读计数用 `InfoBadge`。
+- 通知的具体行为（**已实现**，判定在 Core 的 `NotificationPolicy`）：
+  - 滚动条只展示 `NotificationPolicy.ShouldShow(…, Scroll)` 通过的条目——上游 `scroll` 通道没做 type 4 定向，
+    别人的「资料下架」要客户端自己挡；
+  - 弹窗按队列逐条来：type 1/4 确认过就记进「已弹过」（下次不再弹），type 2/3/5 每次都弹；
+    维护窗口内（`maintenanceStartTime` 之后）不可关闭，只留「我知道了」；
+  - 未读 = 两条 feed 里没被点过的条目数；点开铃铛即全部已读（未读表达「有没有看过」，不是「逐条点」）；
+  - 「已读」与「已弹过」存 `LocalFolder/notice_reads.json`，键是 `(userId, notifyId)`，换账号不串。
 - 会话失效（401）：关闭所有覆盖层，打开登录层，登录成功后回到原页面。
 
 ## 列表与浏览
@@ -143,7 +150,7 @@ windows/
 | 启动 | 开机启动（`StartupTask` 扩展，需在清单声明） |
 | 存储与缓存 | 占用大小；清除缓存（不动登录态与下载记录） |
 | 高级 | 服务器地址（D13），改后清会话 |
-| 关于 | 版本号（`Package.Current.Id.Version`）、检查更新、GitHub、开源许可 |
+| 关于 | 版本号（`Package.Current.Id.Version`）、检查更新、更新镜像前缀（D12，默认关闭）、GitHub、开源许可 |
 
 ## 快捷键
 
