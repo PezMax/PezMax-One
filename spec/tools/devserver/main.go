@@ -146,8 +146,8 @@ func (s *store) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /datum/desktop/user/profile", s.guard(s.profile))
 	mux.HandleFunc("GET /datum/desktop/user/profile/stats", s.guard(func(w http.ResponseWriter, r *http.Request) {
 		ok(w, map[string]any{
-			"uploadCount": 0, "downloadCount": 0, "favoriteCount": 0, "fileFavoriteCount": 0,
-			"bookmarkFavoriteCount": 0,
+			"uploadCount": s.uploadCount(s.ownerID()), "downloadCount": 0, "favoriteCount": 0,
+			"fileFavoriteCount": 0, "bookmarkFavoriteCount": 0,
 		})
 	}))
 
@@ -193,6 +193,9 @@ func (s *store) routes(mux *http.ServeMux) {
 	emptyList := func(w http.ResponseWriter, r *http.Request) { rows(w, []any{}, 0) }
 	mux.HandleFunc("GET /datum/notification/list", s.guard(emptyList))
 	mux.HandleFunc("GET /system/notification/user/popup", s.guard(func(w http.ResponseWriter, r *http.Request) { ok(w, []any{}) }))
+	// 客户端两条 feed 都拉：popup（弹窗）与 scroll（顶部滚动条）。少一条就是 404，
+	// 客户端会当成「这条通道挂了」，虽然界面看不出来。
+	mux.HandleFunc("GET /system/notification/user/scroll", s.guard(func(w http.ResponseWriter, r *http.Request) { ok(w, []any{}) }))
 	mux.HandleFunc("GET /datum/desktop/download/list/{userId}", s.guard(emptyList))
 	mux.HandleFunc("GET /datum/desktop/favorite/list/{userId}", s.guard(emptyList))
 	mux.HandleFunc("GET /datum/ebook/favorite/list", s.guard(emptyList))
@@ -450,7 +453,7 @@ func (s *store) getInfo(w http.ResponseWriter, r *http.Request) {
 	ok(w, map[string]any{
 		"user": map[string]any{
 			"userId": account.userID, "userName": account.userName, "nickName": account.nickName,
-			"avatar": "", "count": 3, "status": "1",
+			"avatar": "", "count": s.uploadCount(account.userID), "status": "1",
 		},
 		"roles": []string{"dev"}, "permissions": []string{},
 	})
@@ -465,8 +468,22 @@ func (s *store) profile(w http.ResponseWriter, r *http.Request) {
 
 	ok(w, map[string]any{
 		"userId": account.userID, "userName": account.userName, "nickName": account.nickName,
-		"avatar": "", "count": 3, "status": "1",
+		"avatar": "", "count": s.uploadCount(account.userID), "status": "1",
 	})
+}
+
+// uploadCount 是「我的上传」的条数，与 /desktop/user/profile/stats 的 uploadCount
+// 用同一个口径：首页那句「已上传 N 份资料」和指标卡不能互相对不上。
+func (s *store) uploadCount(userID int64) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	total := 0
+	for _, f := range s.files {
+		if f.UserID == userID && f.DelFlag == 0 {
+			total++
+		}
+	}
+	return total
 }
 
 // ---------------------------------------------------------------- 资料
@@ -512,30 +529,50 @@ func (s *store) tree(w http.ResponseWriter, r *http.Request) {
 
 		schoolNodes := make([]any, 0, len(schoolNames))
 		for _, school := range schoolNames {
-			years := map[int64][]File{}
+			// 层级是 科目 → 学校 → 类型 → 年份（spec/fixtures/file-tree/）。
+			// 少了类型这一层，客户端会把年份当类型读。
+			types := map[int64][]File{}
 			for _, f := range schools[school] {
-				years[f.FileYear] = append(years[f.FileYear], f)
+				types[f.FileType] = append(types[f.FileType], f)
 			}
-			yearValues := make([]int64, 0, len(years))
-			for year := range years {
-				yearValues = append(yearValues, year)
+			typeValues := make([]int64, 0, len(types))
+			for typeID := range types {
+				typeValues = append(typeValues, typeID)
 			}
-			sort.Slice(yearValues, func(i, j int) bool { return yearValues[i] > yearValues[j] })
+			sort.Slice(typeValues, func(i, j int) bool { return typeValues[i] < typeValues[j] })
 
-			yearNodes := make([]any, 0, len(yearValues))
-			for _, year := range yearValues {
-				leaves := make([]any, 0, len(years[year]))
-				for _, f := range years[year] {
-					leaves = append(leaves, leaf(f))
+			typeNodes := make([]any, 0, len(typeValues))
+			for _, typeID := range typeValues {
+				years := map[int64][]File{}
+				for _, f := range types[typeID] {
+					years[f.FileYear] = append(years[f.FileYear], f)
 				}
-				yearNodes = append(yearNodes, map[string]any{
-					"id":    "folder-" + school + "-" + strconv.FormatInt(year, 10),
-					"label": strconv.FormatInt(year, 10), "type": "folder", "children": leaves,
+				yearValues := make([]int64, 0, len(years))
+				for year := range years {
+					yearValues = append(yearValues, year)
+				}
+				sort.Slice(yearValues, func(i, j int) bool { return yearValues[i] > yearValues[j] })
+
+				yearNodes := make([]any, 0, len(yearValues))
+				for _, year := range yearValues {
+					leaves := make([]any, 0, len(years[year]))
+					for _, f := range years[year] {
+						leaves = append(leaves, leaf(f))
+					}
+					yearNodes = append(yearNodes, map[string]any{
+						"id":    "folder-" + school + "-" + typeName(typeID) + "-" + strconv.FormatInt(year, 10),
+						"label": strconv.FormatInt(year, 10), "type": "folder", "children": leaves,
+					})
+				}
+
+				typeNodes = append(typeNodes, map[string]any{
+					"id":    "folder-" + school + "-" + typeName(typeID),
+					"label": typeName(typeID), "type": "folder", "children": yearNodes,
 				})
 			}
 
 			schoolNodes = append(schoolNodes, map[string]any{
-				"id": "folder-" + school, "label": school, "type": "folder", "children": yearNodes,
+				"id": "folder-" + school, "label": school, "type": "folder", "children": typeNodes,
 			})
 		}
 
@@ -558,6 +595,29 @@ func leaf(f File) map[string]any {
 		node[key] = value
 	}
 	return node
+}
+
+// typeName 与客户端 PezMax.Core 的 FileTypes.Name 同表；类型名来自服务端字典，
+// 未知值兜底成「其他」（datum_file.go:429-434）。
+func typeName(id int64) string {
+	switch id {
+	case 1:
+		return "期末"
+	case 2:
+		return "期中"
+	case 3:
+		return "补考"
+	case 4:
+		return "资料"
+	case 5:
+		return "其他学校"
+	case 6:
+		return "神秘文件"
+	case 7:
+		return "电子书"
+	default:
+		return "其他"
+	}
 }
 
 func (s *store) listFiles(w http.ResponseWriter, r *http.Request) {
