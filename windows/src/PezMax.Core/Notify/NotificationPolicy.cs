@@ -36,6 +36,9 @@ public sealed class NoticeKeySet
 
     public int Count => _keys.Count;
 
+    /// <summary>序列化与统计用；调用方不要直接改。</summary>
+    public IReadOnlyCollection<NotifyKey> Items => _keys;
+
     public bool Contains(long userId, long notifyId) => _keys.Contains(new NotifyKey(userId, notifyId));
 
     public void Mark(long userId, long notifyId) => _keys.Add(new NotifyKey(userId, notifyId));

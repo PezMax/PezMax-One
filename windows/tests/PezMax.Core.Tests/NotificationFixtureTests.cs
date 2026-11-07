@@ -101,6 +101,39 @@ public class NotificationFixtureTests
                     break;
                 }
 
+                case "storage":
+                {
+                    var raw = input.TryGetProperty("raw", out var value) && value.ValueKind == JsonValueKind.String
+                        ? value.GetString()
+                        : null;
+                    var state = NoticeStorage.Parse(raw);
+
+                    Assert.True(expect.GetProperty("reads").GetInt32() == state.Read.Count,
+                        $"{id}: reads = {state.Read.Count}");
+                    Assert.True(expect.GetProperty("popups").GetInt32() == state.Popped.Count,
+                        $"{id}: popups = {state.Popped.Count}");
+
+                    if (expect.TryGetProperty("hasRead", out var hasRead))
+                    {
+                        var key = hasRead.EnumerateArray().Select(e => e.GetInt64()).ToArray();
+                        Assert.True(state.IsRead(key[0], key[1]), $"{id}: 期望 ({key[0]},{key[1]}) 已读");
+                    }
+
+                    if (expect.TryGetProperty("notRead", out var notRead))
+                    {
+                        var key = notRead.EnumerateArray().Select(e => e.GetInt64()).ToArray();
+                        Assert.False(state.IsRead(key[0], key[1]), $"{id}: 期望 ({key[0]},{key[1]}) 未读");
+                    }
+
+                    if (expect.TryGetProperty("hasPopped", out var hasPopped))
+                    {
+                        var key = hasPopped.EnumerateArray().Select(e => e.GetInt64()).ToArray();
+                        Assert.True(state.WasPopped(key[0], key[1]), $"{id}: 期望 ({key[0]},{key[1]}) 弹过");
+                    }
+
+                    break;
+                }
+
                 default:
                     throw new Xunit.Sdk.XunitException($"{id}: 未知 kind {kind}");
             }
@@ -108,7 +141,7 @@ public class NotificationFixtureTests
             checkedCases++;
         }
 
-        Assert.True(checkedCases >= 25, $"通知夹具跑到的用例太少：{checkedCases}");
+        Assert.True(checkedCases >= 29, $"通知夹具跑到的用例太少：{checkedCases}");
     }
 
     [Fact]
