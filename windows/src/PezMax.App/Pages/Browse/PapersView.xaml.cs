@@ -99,7 +99,11 @@ namespace PezMax.Pages.Browse
 
         private async void TreeItemInvoked(muxc.TreeView sender, muxc.TreeViewItemInvokedEventArgs args)
         {
-            if (args.InvokedItem is not TreeEntry entry) return;
+            // node 模式的 TreeView 里，InvokedItem 是 TreeViewNode（不是节点的 Content）；
+            // 原来直接拿 TreeEntry 去判类型，永远不成立，点树等于没反应。两种都给过。
+            var entry = args.InvokedItem as TreeEntry
+                        ?? (args.InvokedItem as muxc.TreeViewNode)?.Content as TreeEntry;
+            if (entry == null) return;
             var data = entry.Data;
             var node = entry.View;
 
@@ -119,22 +123,32 @@ namespace PezMax.Pages.Browse
         {
             var labels = new List<string>();
             var current = node;
-            while (current?.Content is FileTreeNode data)
+            // 节点的 Content 是 TreeEntry，不是 FileTreeNode：原来判 Content is FileTreeNode，
+            // 循环一次都不进，query 一条过滤条件都没有，点哪个节点都是全表。
+            while (current != null)
             {
-                labels.Add(data.Label);
+                if (current.Content is TreeEntry entry) labels.Add(entry.Label);
+                else if (current.Content is FileTreeNode raw) labels.Add(raw.Label);
+                else break;
                 current = current.Parent;
             }
             labels.Reverse();
 
+            // 层级：科目 → 学校 → 类型 → 年份（spec/fixtures/file-tree/）。
+            // 类型与年份都按内容认，不按位置：树里缺某一层时不会把年份当类型用。
             var query = new FileQuery { PageNum = 1, PageSize = 100 };
             if (labels.Count > 0) query.FileSubject = labels[0];
             if (labels.Count > 1) query.FileSchool = labels[1];
-            if (labels.Count > 2)
+            foreach (var label in labels.Skip(2))
             {
-                var type = FileTypes.IdFromName(labels[2]);
-                if (type > 0) query.FileType = type;
+                if (query.FileYear == null && int.TryParse(label, out var year) && year >= 1900 && year <= 2100)
+                {
+                    query.FileYear = year;
+                    continue;
+                }
+                var type = FileTypes.IdFromName(label);
+                if (query.FileType == null && type > 0) query.FileType = type;
             }
-            if (labels.Count > 3 && int.TryParse(labels[3], out var year)) query.FileYear = year;
             return query;
         }
 
