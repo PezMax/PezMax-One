@@ -93,6 +93,18 @@
                         </DataTemplate>
                     </ListView.ItemTemplate>
                 </ListView>
+                <!-- 空态：没选分类、选了但这类没资料，都要有话说。
+                     这块占着列表那一行，不抢点击（IsHitTestVisible=False）。 -->
+                <TextBlock
+                    x:Name="ListEmpty"
+                    Grid.Row="1"
+                    Margin="4,14,0,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Top"
+                    IsHitTestVisible="False"
+                    Style="{StaticResource PezCaptionStyle}"
+                    Text="点左边任一节点，这里会列出该分类下的资料"
+                    TextWrapping="Wrap" />
             </Grid>
 
             <!-- 详情栏的 ScrollViewer 必须关掉横向滚动：默认允许横滚时内容是按无限宽测量的，

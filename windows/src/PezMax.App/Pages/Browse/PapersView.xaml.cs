@@ -28,6 +28,7 @@ namespace PezMax.Pages.Browse
         private readonly Dictionary<FileTreeNode, muxc.TreeViewNode> _nodeMap = new();
         private FileItem? _selected;
         private string? _treeHash;
+        private string _listEmptyText = "";
 
         public PapersView()
         {
@@ -154,6 +155,7 @@ namespace PezMax.Pages.Browse
 
         private async Task LoadListAsync(FileQuery query, string caption)
         {
+            _listEmptyText = $"「{caption}」下还没有资料";
             SetListBusy(true);
             try
             {
@@ -194,6 +196,7 @@ namespace PezMax.Pages.Browse
             }
 
             SetListBusy(true);
+            _listEmptyText = $"没有匹配「{keyword.Trim()}」的资料";
             try
             {
                 if (AppServices.PreviewMode)
@@ -479,6 +482,24 @@ namespace PezMax.Pages.Browse
         {
             ListProgress.IsActive = busy;
             ListProgress.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+            // 忙的时候别在同一个位置讲空态：两个都说「这里没东西」很容易被读成加载失败。
+            if (busy) ListEmpty.Visibility = Visibility.Collapsed;
+            else UpdateListEmpty();
+        }
+
+        /// <summary>列表空着时给一句为什么空：没选分类 / 这一类还没有资料 / 搜不到。</summary>
+        private void UpdateListEmpty()
+        {
+            if (_files.Count > 0)
+            {
+                ListEmpty.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            ListEmpty.Visibility = Visibility.Visible;
+            ListEmpty.Text = string.IsNullOrEmpty(_listEmptyText)
+                ? "点左边任一节点，这里会列出该分类下的资料"
+                : _listEmptyText;
         }
 
         private void SetPreviewBusy(bool busy)
