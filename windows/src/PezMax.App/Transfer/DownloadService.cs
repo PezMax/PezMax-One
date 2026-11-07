@@ -119,7 +119,13 @@ namespace PezMax.Transfer
             using var response = await open(cancellationToken).ConfigureAwait(false);
             var source = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
             var memory = new InMemoryRandomAccessStream();
-            using var output = memory.AsStreamForWrite();
+
+            // 不要 using 这个写包装：AsStreamForWrite 的 Dispose 会把底下的
+            // InMemoryRandomAccessStream 一起关掉，返回出去的流就是死的
+            // （PdfDocument.LoadFromStreamAsync 只会报「文件可能损坏」，
+            // 看着像文件坏了，其实是 ObjectDisposedException）。
+            // 只需要刷进底层流，包装本身交给 GC。
+            var output = memory.AsStreamForWrite();
             await source.CopyToAsync(output, 81920, cancellationToken).ConfigureAwait(false);
             await output.FlushAsync(cancellationToken).ConfigureAwait(false);
             memory.Seek(0);
