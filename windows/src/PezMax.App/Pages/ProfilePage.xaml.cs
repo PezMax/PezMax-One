@@ -448,6 +448,20 @@ namespace PezMax.Pages
             }
         }
 
+        /// <summary>PDF 默认缩放的档位；0 表示适应宽度（与 <see cref="AppSettings.PdfScale"/> 同义）。</summary>
+        private static readonly double[] PdfZoomSteps = { 0, 0.75, 1.0, 1.25, 1.5, 2.0 };
+
+        private static int PdfZoomIndex(double scale)
+        {
+            if (scale <= 0) return 0;
+            for (var i = 1; i < PdfZoomSteps.Length; i++)
+            {
+                if (Math.Abs(PdfZoomSteps[i] - scale) < 0.01) return i;
+            }
+
+            return 2;
+        }
+
         private void PopulateSettings()
         {
             var settings = AppServices.Settings;
@@ -459,6 +473,8 @@ namespace PezMax.Pages
             };
             DownloadDirText.Text = "下载目录：" + DownloadStorage.Describe();
             SilentDownloadSwitch.IsOn = settings.SilentDownload;
+            PdfViewBox.SelectedIndex = AppSettings.NormalizeView(settings.PdfView) == "grid" ? 1 : 0;
+            PdfZoomBox.SelectedIndex = PdfZoomIndex(settings.PdfScale);
             AutoUpdateSwitch.IsOn = settings.AutoCheckUpdate;
             MirrorBox.Text = settings.UpdateMirrorBase ?? "";
             ServerBox.Text = settings.ServerUrl;
@@ -485,7 +501,10 @@ namespace PezMax.Pages
                 _ => ThemeMode.System,
             };
             // 目录本身由「选择目录…」负责授权与保存，保存设置时不再读输入框。
-            settings.SilentDownload = SilentDownloadSwitch.IsOn;            settings.AutoCheckUpdate = AutoUpdateSwitch.IsOn;
+            settings.SilentDownload = SilentDownloadSwitch.IsOn;
+            settings.PdfView = PdfViewBox.SelectedIndex == 1 ? "grid" : "continuous";
+            settings.PdfScale = PdfZoomSteps[Math.Clamp(PdfZoomBox.SelectedIndex, 0, PdfZoomSteps.Length - 1)];
+            settings.AutoCheckUpdate = AutoUpdateSwitch.IsOn;
             settings.UpdateMirrorBase = string.IsNullOrWhiteSpace(MirrorBox.Text) ? null : MirrorBox.Text.Trim();
             settings.ServerUrl = DatumHttp.NormalizeBaseUrl(server);
             await AppServices.SaveSettingsAsync();

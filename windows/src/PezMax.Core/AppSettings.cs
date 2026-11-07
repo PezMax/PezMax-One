@@ -15,7 +15,10 @@ public sealed class AppSettings
     public int AccentIndex { get; set; }
     public bool AutoLaunch { get; set; }
     public bool SilentDownload { get; set; }
-    public double PdfScale { get; set; } = 1.0;
+    /// <summary>PDF 默认视图：<c>continuous</c> / <c>grid</c>；其它值按连续处理。</summary>
+    public string PdfView { get; set; } = "continuous";
+    /// <summary>PDF 默认缩放；0 表示「适应宽度」。</summary>
+    public double PdfScale { get; set; }
     public string? DownloadDirectory { get; set; }
     /// <summary>下载目录的 FutureAccessList token；UWP 靠它跨启动访问用户选的目录。</summary>
     public string? DownloadFolderToken { get; set; }
@@ -44,7 +47,8 @@ public sealed class AppSettings
             settings.AccentIndex = root.GetInt("accentIndex");
             settings.AutoLaunch = root.GetBool("autoLaunch");
             settings.SilentDownload = root.GetBool("silentDownload");
-            settings.PdfScale = root.GetDouble("pdfScale", 1.0);
+            settings.PdfView = NormalizeView(root.GetString("pdfView"));
+            settings.PdfScale = root.GetDouble("pdfScale", 0);
             settings.DownloadDirectory = root.GetString("downloadDirectory");
             var folderToken = root.GetString("downloadFolderToken");
             if (!string.IsNullOrWhiteSpace(folderToken)) settings.DownloadFolderToken = folderToken;
@@ -74,6 +78,7 @@ public sealed class AppSettings
             .Number("accentIndex", AccentIndex)
             .Bool("autoLaunch", AutoLaunch)
             .Bool("silentDownload", SilentDownload)
+            .String("pdfView", PdfView)
             .Raw("pdfScale", PdfScale.ToString(System.Globalization.CultureInfo.InvariantCulture))
             .String("serverUrl", ServerUrl)
             .Bool("autoCheckUpdate", AutoCheckUpdate);
@@ -91,4 +96,8 @@ public sealed class AppSettings
 
         return builder.ToString();
     }
+
+    /// <summary>只认 <c>grid</c> 与 <c>continuous</c>；手改坏的配置回落到连续视图。</summary>
+    public static string NormalizeView(string? value) =>
+        string.Equals(value, "grid", System.StringComparison.OrdinalIgnoreCase) ? "grid" : "continuous";
 }

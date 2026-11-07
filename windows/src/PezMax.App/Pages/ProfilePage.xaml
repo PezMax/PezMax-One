@@ -175,6 +175,20 @@
                         </StackPanel>
                         <ToggleSwitch x:Name="SilentDownloadSwitch" Header="静默下载（完成时不弹系统通知）" />
 
+                        <TextBlock Style="{StaticResource PezSectionTitleStyle}" Text="阅读" Margin="0,8,0,0" />
+                        <ComboBox x:Name="PdfViewBox" Header="PDF 默认视图" Width="240" CornerRadius="0">
+                            <ComboBoxItem Content="连续（纵向滚动）" />
+                            <ComboBoxItem Content="网格（缩略图挑页）" />
+                        </ComboBox>
+                        <ComboBox x:Name="PdfZoomBox" Header="PDF 默认缩放" Width="240" CornerRadius="0">
+                            <ComboBoxItem Content="适应宽度" />
+                            <ComboBoxItem Content="75%" />
+                            <ComboBoxItem Content="100%" />
+                            <ComboBoxItem Content="125%" />
+                            <ComboBoxItem Content="150%" />
+                            <ComboBoxItem Content="200%" />
+                        </ComboBox>
+
                         <TextBlock Style="{StaticResource PezSectionTitleStyle}" Text="启动与更新" Margin="0,8,0,0" />
                         <ToggleSwitch x:Name="AutoUpdateSwitch" Header="启动时检查更新（每 24 小时最多一次）" />
                         <TextBox
