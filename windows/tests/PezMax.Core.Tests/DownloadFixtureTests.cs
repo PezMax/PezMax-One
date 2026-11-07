@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Linq;
+using PezMax.Core.Models;
 using PezMax.Core.Transfer;
 using Xunit;
 
@@ -24,6 +26,13 @@ public class DownloadFixtureTests
             var input = item.GetProperty("input");
             var kind = input.GetProperty("kind").GetString();
             var expect = item.GetProperty("expect");
+
+            if (kind == "merge")
+            {
+                AssertMerge(id, input, expect);
+                checkedCases++;
+                continue;
+            }
 
             var decision = kind switch
             {
@@ -58,7 +67,7 @@ public class DownloadFixtureTests
             checkedCases++;
         }
 
-        Assert.True(checkedCases >= 20, $"续传夹具跑到的用例太少：{checkedCases}");
+        Assert.True(checkedCases >= 26, $"续传夹具跑到的用例太少：{checkedCases}");
     }
 
     [Fact]
@@ -71,6 +80,50 @@ public class DownloadFixtureTests
         Assert.Equal(DownloadAction.Fail, decision.Action);
         Assert.False(decision.DiscardPart);
     }
+
+    private static void AssertMerge(string id, JsonElement input, JsonElement expect)
+    {
+        var server = input.GetProperty("server").EnumerateArray()
+            .Select(e => new DownloadEntry
+            {
+                File = new FileItem { FileId = e.GetProperty("fileId").GetInt64(), FileName = Str(e, "fileName") },
+                FirstDownloadTime = Str(e, "firstDownloadTime"),
+            })
+            .ToList();
+
+        var records = input.GetProperty("records").EnumerateArray().Select(e => new DownloadRecord
+        {
+            Kind = Str(e, "kind") is { Length: > 0 } kind ? kind : DownloadKinds.File,
+            Id = e.GetProperty("id").GetInt64(),
+            FileName = Str(e, "fileName"),
+            LocalPath = Str(e, "localPath"),
+            Status = Str(e, "status"),
+            BytesReceived = e.TryGetProperty("bytesReceived", out var received) ? received.GetInt64() : 0,
+            Size = e.TryGetProperty("size", out var size) ? size.GetInt64() : 0,
+            UpdatedAt = Str(e, "updatedAt"),
+        }).ToList();
+
+        var rows = DownloadRecords.Merge(server, records);
+        var expectedOrder = expect.GetProperty("order").EnumerateArray().Select(e => e.GetInt64()).ToList();
+        Assert.True(expectedOrder.SequenceEqual(rows.Select(r => r.FileId)),
+            $"{id}: 期望 [{string.Join(",", expectedOrder)}]，实际 [{string.Join(",", rows.Select(r => r.FileId))}]");
+
+        var states = expect.GetProperty("states").EnumerateArray().ToList();
+        for (var i = 0; i < states.Count; i++)
+        {
+            var state = states[i];
+            var row = rows.First(r => r.FileId == state.GetProperty("fileId").GetInt64());
+            Assert.True(Str(state, "statusText") == row.StatusText, $"{id}: statusText = {row.StatusText}");
+            if (state.TryGetProperty("hasLocalPath", out var hasPath))
+                Assert.True(hasPath.GetBoolean() == row.HasLocalPath, $"{id}: hasLocalPath = {row.HasLocalPath}");
+        }
+
+        if (expect.TryGetProperty("localPathOf", out var localPath))
+            Assert.True(localPath.GetString() == rows[0].Local?.LocalPath, $"{id}: localPath = {rows[0].Local?.LocalPath}");
+    }
+
+    private static string Str(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString()! : "";
 
     private static DownloadPartState? ReadPart(JsonElement input)
     {
