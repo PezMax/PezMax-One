@@ -212,6 +212,14 @@
     </PackageReference>
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Kanesumi 的 XAML 扇区按相对路径引用（D3）：与 Ncrust 共用同一份 token 与控件，不复制。 -->
+    <ProjectReference Include="..\..\..\..\Kanesumi-xaml\Kanesumi.Xaml.csproj">
+      <Project>{3F1B6C2E-8A47-4D05-9E3B-5C7A2D8F41E6}</Project>
+      <Name>Kanesumi.Xaml</Name>
+    </ProjectReference>
+  </ItemGroup>
+
   <PropertyGroup>
     <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
   </PropertyGroup>

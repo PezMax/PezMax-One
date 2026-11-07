@@ -163,9 +163,19 @@
                             <ComboBoxItem Content="浅色" />
                             <ComboBoxItem Content="深色" />
                         </ComboBox>
-                        <TextBlock
-                            Style="{StaticResource PezCaptionStyle}"
-                            Text="强调色跟随 Windows 系统设置（设置 → 个性化 → 颜色）。" />
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Border
+                                x:Name="AccentSwatch"
+                                Width="24"
+                                Height="24"
+                                VerticalAlignment="Center"
+                                BorderBrush="{ThemeResource PezBorderBrush}"
+                                BorderThickness="1" />
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                Style="{StaticResource PezCaptionStyle}"
+                                Text="强调色跟随 Windows 系统设置（设置 → 个性化 → 颜色）。" />
+                        </StackPanel>
 
                         <TextBlock Style="{StaticResource PezSectionTitleStyle}" Text="下载" Margin="0,8,0,0" />
                         <TextBlock x:Name="DownloadDirText" Style="{StaticResource PezCaptionStyle}" />

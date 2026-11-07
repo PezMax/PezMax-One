@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Kanesumi.Xaml;
 using PezMax.Core;
 using PezMax.Core.Models;
 using PezMax.Core.Net;
@@ -15,7 +16,9 @@ using PezMax.Transfer;
 using Windows.Storage;
 using Windows.Storage.Pickers;
 using Windows.System;
+using Windows.UI;
 using Windows.UI.Xaml;
+using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Media.Imaging;
 using Windows.UI.Xaml.Navigation;
@@ -478,6 +481,18 @@ namespace PezMax.Pages
             AutoUpdateSwitch.IsOn = settings.AutoCheckUpdate;
             MirrorBox.Text = settings.UpdateMirrorBase ?? "";
             ServerBox.Text = settings.ServerUrl;
+
+            try
+            {
+                // D11：强调色跟随系统。取色与明暗判定用 Kanesumi 的实现，不在这里另抄一套。
+                var accent = KanesumiAccent.ReadSystemAccent();
+                AccentSwatch.Background = new SolidColorBrush(accent);
+                AccentSwatch.BorderBrush = new SolidColorBrush(KanesumiAccent.IsLight(accent) ? Colors.Black : Colors.White);
+            }
+            catch (Exception)
+            {
+                // 读不到系统强调色就不显示色块，不影响其它设置。
+            }
         }
 
         private async void SaveSettingsClick(object sender, RoutedEventArgs e)
