@@ -84,6 +84,9 @@
     <Compile Include="Reader\PdfReader.xaml.cs">
       <DependentUpon>PdfReader.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Reader\EpubReader.xaml.cs">
+      <DependentUpon>EpubReader.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Transfer\DownloadCenter.cs" />
     <Compile Include="Transfer\DownloadStorage.cs" />
     <Compile Include="Transfer\DownloadService.cs" />
@@ -165,6 +168,10 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="Reader\EpubReader.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Page Include="Themes\PezMax.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
@@ -198,6 +205,10 @@
     </PackageReference>
     <PackageReference Include="Microsoft.UI.Xaml">
       <Version>2.8.6</Version>
+    </PackageReference>
+    <!-- EPUB 阅读器：1.0.1774.30 是最后一个带 UAP10.0 资产的版本，再往上是 Win32 / WPF / WinForms 专用。 -->
+    <PackageReference Include="Microsoft.Web.WebView2">
+      <Version>1.0.1774.30</Version>
     </PackageReference>
   </ItemGroup>
 

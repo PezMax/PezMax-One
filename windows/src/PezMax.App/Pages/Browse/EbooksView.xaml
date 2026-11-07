@@ -116,5 +116,13 @@
             Visibility="Collapsed">
             <reader:PdfReader x:Name="PdfHost" />
         </Grid>
+
+        <Grid
+            x:Name="EpubOverlay"
+            Grid.RowSpan="2"
+            Background="{ThemeResource PezBackgroundBrush}"
+            Visibility="Collapsed">
+            <reader:EpubReader x:Name="EpubHost" />
+        </Grid>
     </Grid>
 </UserControl>

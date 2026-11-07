@@ -33,6 +33,7 @@ namespace PezMax.Pages.Browse
             InitializeComponent();
             BookList.ItemsSource = _items;
             PdfHost.CloseRequested += (_, __) => CloseReader();
+            EpubHost.CloseRequested += (_, __) => CloseReader();
             Loaded += async (_, __) => await LoadAsync();
         }
 
@@ -143,7 +144,15 @@ namespace PezMax.Pages.Browse
                     return;
                 }
 
-                PreviewHint.Text = "该格式暂不支持内置预览；请下载后使用系统阅读器打开。";
+                if (string.Equals(_selected.EbookFormat, "epub", StringComparison.OrdinalIgnoreCase))
+                {
+                    await OpenEpubAsync(_selected);
+                    return;
+                }
+
+                PreviewHint.Text = _selected.EbookFormat is "mobi" or "azw3"
+                    ? "MOBI / AZW3 请下载后用系统阅读器打开。"
+                    : "该格式暂不支持内置预览；请下载后使用系统阅读器打开。";
                 PreviewHost.Visibility = Visibility.Collapsed;
             }
             catch (Exception ex)
@@ -182,7 +191,26 @@ namespace PezMax.Pages.Browse
         private void CloseReader()
         {
             PdfHost.Unload();
+            EpubHost.Unload();
             ReaderOverlay.Visibility = Visibility.Collapsed;
+            EpubOverlay.Visibility = Visibility.Collapsed;
+        }
+
+        private async Task OpenEpubAsync(EbookItem item)
+        {
+            try
+            {
+                var stream = await DownloadService.ReadStreamAsync(
+                    ct => AppServices.Ebooks.OpenContentAsync(item.EbookId, ct));
+
+                EpubOverlay.Visibility = Visibility.Visible;
+                await EpubHost.OpenAsync(stream, item.EbookId, item.DisplayName);
+            }
+            catch (Exception ex)
+            {
+                CloseReader();
+                ShowError(ex is DatumException datum ? datum.Message : "EPUB 打开失败");
+            }
         }
 
         private async void DownloadClick(object sender, RoutedEventArgs e)
