@@ -10,7 +10,7 @@ Core 的判定表已按夹具落地：账户表单（`auth/` 25 例）、URL 归
 通知（`notification/` 29 例）、树导航（`file-tree/` 15 例）、哈希缓存（`state-cache/` 17 例）、
 更新检查（`update/` 23 例）、上传校验（`upload/` 28 例）——Core 测试 31 个用例全绿。
 视觉使用 WinUI 2 平台控件 + `Themes/PezMax.xaml`（`ControlsResourcesVersion="Version1"`）；Kanesumi.Xaml 尚未抽仓，暂未引用。
-下一步：「下载到 Downloads 目录」的目录授权（`FolderPicker` + `FutureAccessList`）、PDF 网格 / 连续两种视图、EPUB，以及 W1–W5 实机验证。
+下一步：PDF 网格 / 连续两种视图（W2）、EPUB 阅读器（W3），以及 W1 / W4 实机验证。
 
 > 样板是兄弟仓库 Ncrust 的 Windows 端（`../../Ncrust/windows/AGENTS.md`）：**凡本文没写的工程细节，按 Ncrust 的做法办**，
 > 尤其是它的「已知的坑」一节——那 40 条大多来自 arc-deck 与 Ncrust 的本机实测，在这里同样成立，不再复抄。
@@ -119,13 +119,18 @@ windows/
 
 **当前实现**：自管 `HttpClient` 流式下载 + `.part` 半成品 + `Range` / `If-Range`（egui 版同款路线），
 判定交给 Core 的 `DownloadPlanner`（`spec/fixtures/download/`），队列 `SemaphoreSlim(1,1)` 串行。
-半成品落 `LocalCacheFolder`，ETag 与进度记在 `LocalFolder/downloads.json`。
+半成品与成品同目录（默认「下载\PezMax」），ETag 与进度记在 `LocalFolder/downloads.json`。
 
 - `Windows.Networking.BackgroundTransfer.BackgroundDownloader` 仍是**待验证的更优解**：应用挂起后继续、系统级续传。
   W1 里对比过再决定要不要换；换的话 Core 的决策表不用动，只换搬字节的那一层。
-- 下载目录：默认 `下载\PezMax`（`DownloadsFolder`）；用户可用 `FolderPicker` 改目录，授权存进 `FutureAccessList`。
-  **不申请 `broadFileSystemAccess`**（受限能力，且 UWP 设置里默认关闭，用户体验差）。
-  当前落在 `LocalCacheFolder`，是因为「我的下载」要能按 `fileId` 找到文件；迁到用户目录时同步改记录里的 `localPath`。
+- 下载目录：默认 `下载\PezMax`（`Windows.Storage.DownloadsFolder` 建子目录，不需要用户授权）；
+  用户可在「设置 → 下载」用 `FolderPicker` 改目录，**授权 token 存 `FutureAccessList` 并写进设置**
+  （UWP 的 AppContainer 不能凭路径访问任意目录，只有 token 能跨启动）。
+  - 授权失效（目录被删 / 权限被撤）→ 自动回落默认目录并清掉 token，不弹错；
+  - `DownloadsFolder` 在某些环境会抛 `UnauthorizedAccessException`（能力或组策略）→ 回落应用缓存目录，
+    设置页显示的是**真实解析出来的路径**，不做假象；
+  - **不申请 `broadFileSystemAccess`**（受限能力，且系统设置里默认关闭，用户体验差）；
+  - 半成品 `.part` 与成品**同目录**，改名才是原子的；记录里的 `localPath` 存绝对路径。
 - 队列默认串行：经 edge 时每 IP 只允许 1 个下载连接；下载与封面 / 头像共用同一个 bulk 令牌桶，并发只会互抢。
 - 完成后系统 Toast（可在设置关闭，对应「静默下载」）；浮层在内容区底部显示文件名与进度、可取消（`DownloadCenter` 广播）。
 - 本地记录按 `spec/fixtures/download/` 的合并规则接「我的下载」：服务端行是骨架，本地补路径与状态。
