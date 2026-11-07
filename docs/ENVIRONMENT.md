@@ -9,7 +9,7 @@
 | 目录 | 用途 | 本机 |
 |---|---|---|
 | `../Kanesumi-sec-a` | Android 端 composite build | ✅ |
-| `../Kanesumi-xaml` | Windows 端视觉底座（D3，待从 Ncrust 抽出） | ⏳ 尚未建立；当前在 `../Ncrust/windows/src/Kanesumi.Xaml` |
+| `../Kanesumi-xaml` | Windows 端视觉底座（D3）：从 Ncrust 抽出，两仓都按相对路径引用 | ✅ 已建立（`git filter-repo` 导出，保留历史） |
 | `../Ether/shared/kanesumi` | Linux 端本机开发时的 `[patch]` 目标（正式构建用 git rev） | ✅ |
 | `../PezMax-Go` | 上游后端，契约来源（只读） | ✅ 基线 `061a888` |
 | `../Ncrust` | 样板工程（Windows 端做法、CrateStack、spec 约定） | ✅ |
@@ -81,6 +81,40 @@ Kanesumi harness 只在 Linux（Wayland）上编译与运行。
 | Android SDK，platform 36，build-tools 36 | ✅ `D:\Applications\AndroidSDK`（`android/local.properties` 写 `sdk.dir`，该文件不入库） |
 | Gradle | 随 wrapper，与 Ncrust 同版本（9.3.1） |
 | release 签名 `keystore.properties` | ⏳ 发布前准备，不入库 |
+
+## 本机跑 PezMax-Go（接入真实后端）
+
+客户端的契约只能对着**真的后端**核对，夹具里的形状是从 Go 源码读出来的推断。
+本机能跑起一个真实实例，条件是三件（2026-11-07 查过）：
+
+| 需要 | 本机 | 说明 |
+|---|---|---|
+| PostgreSQL | ✅ 18，`postgresql-x64-18` 服务在 5432 | 建一个空库即可，schema 由后端启动时自建 |
+| Redis | ❌ 没有运行中的实例 | 会话、文件树 / 排行缓存都用它；**缺它后端起不来** |
+| 对象存储 | ✅ 可选 | 配 `KADMIN_FILE_LOCAL_ROOT` 走本地目录，不需要 MinIO |
+| Go | ✅ 1.26.5 | `go run .` 直接跑 |
+
+步骤：
+
+```powershell
+# 1. 建库（本地 Postgres 的超级用户口令自己填）
+psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE kadmin;"
+
+# 2. Redis（任选其一：自己装 / 便携版 / 让负责人给测试服务器地址）
+#    没有 Redis 这一步就先停在这里——后端会在缓存初始化处失败。
+
+# 3. 配置并启动（在 PezMax-Go/k_admin 下，.env 不入库）
+#    KADMIN_DB_HOST/PORT/USER/PASSWORD/NAME、KADMIN_REDIS_*、KADMIN_FILE_LOCAL_ROOT=data/files
+go run .
+
+# 4. 用只读探针核对形状（不写任何数据，不需要账号）
+pwsh -File ..\PezMax-One\spec\tools\probe.ps1 -BaseUrl http://127.0.0.1:9033
+
+# 5. 客户端「设置 → 高级 → 服务器地址」改成同一个 base
+```
+
+接上真实后端之后才有意义的三件事：W1（断网续传 / 每 IP 一连接）、W2（大 PDF）、W4（内网）。
+会话类端点还要一个**只读测试账号**——注册一个即可，但别用真人的账号。
 
 ## 通用
 

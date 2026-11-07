@@ -13,7 +13,8 @@ Core 的判定表已按夹具落地：账户表单（`auth/` 25 例）、URL 归
 通知（`notification/` 29 例）、树导航（`file-tree/` 15 例）、哈希缓存（`state-cache/` 17 例）、
 更新检查（`update/` 23 例）、上传校验与文本编码（`upload/` 38 例）、阅读器几何（`reading/` 48 例）、
 EPUB 包解析（`epub/` 13 例）——Core 测试 48 个用例全绿。
-视觉使用 WinUI 2 平台控件 + `Themes/PezMax.xaml`（`ControlsResourcesVersion="Version1"`）；Kanesumi.Xaml 尚未抽仓，暂未引用。
+视觉使用 WinUI 2 平台控件 + `Themes/PezMax.xaml`（`ControlsResourcesVersion="Version1"`）；
+Kanesumi.Xaml 已抽成独立仓 `../Kanesumi-xaml`（D3），本仓按相对路径引用并已接上强调色色块（W5 通过）。
 下一步：W1 / W2 / W3 / W4 实机验证（都需要测试服务器与真机）。
 
 > 样板是兄弟仓库 Ncrust 的 Windows 端（`../../Ncrust/windows/AGENTS.md`）：**凡本文没写的工程细节，按 Ncrust 的做法办**，
@@ -220,4 +221,4 @@ windows/
 | W2 | `Windows.Data.Pdf` 大文件 | 100 页以上试卷 PDF：首屏 < 1 s，连续视图滚动无白屏、内存稳定 |
 | W3 | WebView2 EPUB 阅读器 | 离线打开 EPUB，翻页 / 目录 / CJK 排版正常；Release + .NET Native 下运行 |
 | W4 | 内网后端访问 | 带 `privateNetworkClientServer` 时能连内网测试服务器 |
-| W5 | Kanesumi.Xaml 引用 | 抽仓后按相对路径的 ProjectReference 能在 MSBuild Release 下编过 |
+| W5 | Kanesumi.Xaml 引用 | 抽仓后按相对路径的 ProjectReference 能在 MSBuild Release 下编过 | ✅ 本仓与 Ncrust 都编过（2026-11-07） |

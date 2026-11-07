@@ -180,7 +180,7 @@ PDF 视图沿用 egui 版的两种模式：**网格**（缩略图）与**连续*
 | D0 | 客户端定位 | 原生客户端家族，与 Electron 官方端并存，消费同一 `/datum/*` | 后端由上游维护，本仓不分叉契约 |
 | D1 | 技术栈 | Windows：C# + UWP + WinUI 2；Linux：Rust + Kanesumi；Android：Kotlin + Kanesumi-sec-a；macOS 暂缓 | 负责人决定；Kanesumi 主线已足够成熟，WinUI 2 经 arc-deck / Ncrust 验证 |
 | D2 | egui 旧代码 | 主干删除；完整代码留在分支 `legacy/egui-1.x`（指向 `b83247a`）与 tag `v1.0.0` | 主干保持干净；可复用经验已记入各平台文档。✅ 已执行（`5d3e7d4`） |
-| D3 | Kanesumi.Xaml 归属 | 从 Ncrust 抽成独立仓（暂名 `../Kanesumi-xaml`），Ncrust 与本仓都按相对路径引用 | 与 Kanesumi-sec-a 的组织方式一致；复制必然漂移，直接引用 Ncrust 目录会把两仓绑死。⏳ 跨仓操作，单独排一轮（`PLAN.md` M0） |
+| D3 | Kanesumi.Xaml 归属 | 从 Ncrust 抽成独立仓 `../Kanesumi-xaml`（`git filter-repo` 保留子目录历史），Ncrust 与本仓都按相对路径引用 | 与 Kanesumi-sec-a 的组织方式一致；复制必然漂移，直接引用 Ncrust 目录会把两仓绑死。✅ 已执行：两边 `Release|x64` 都编过（W5） |
 | D4 | 资产名前缀 | `pezmax-one-` | 与 1.0.0 资产连续，也和上游 Electron 端产物区分开 |
 | D5 | 代码共享 | 不共享实现，共享 `spec/` | 见「核心原则 1」 |
 | D6 | 发布 | CrateStack 班次 + `manifest.json` + 资产名扫描更新 | 延续 Ncrust 机制，三端同一套更新规则 |
