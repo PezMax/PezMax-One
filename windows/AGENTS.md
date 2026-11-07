@@ -2,15 +2,16 @@
 
 本文件是 `windows/` 目录的权威指南。仓库级约定见仓根 `AGENTS.md`，跨端架构见 `docs/ARCHITECTURE.md`。
 
-**状态**（2026-11-06）：已建立 `PezMax.Windows.sln` / `PezMax.Core` / `PezMax.Core.Tests` / `PezMax.App`，
+**状态**（2026-11-07）：已建立 `PezMax.Windows.sln` / `PezMax.Core` / `PezMax.Core.Tests` / `PezMax.App`，
 Release|x64 用 .NET Native 构建通过。已接入登录、注册（三步）、找回密码（两步：验证码换密保 → 答案 + 新密码）、
 外壳（含铃铛 / 滚动提醒 / 弹窗队列）、首页、资料（树 / 列表 / 搜索 / 详情 / PDF / 图片 / 文本预览）、
-电子书、书签、收藏、社区排行 / 上传 / 举报、个人中心（含「我的下载」合并与本地状态）、设置（含检查更新与镜像前缀）。
+电子书、书签、收藏、社区排行 / 上传 / 举报、个人中心（含「我的下载」合并与本地状态）、设置（含检查更新、镜像前缀、阅读默认视图 / 缩放）。
+PDF 阅读器有**网格 / 连续两种视图**，页缓存落 `LocalCache/pdf/{fileId}/`，渲染窗口与缩放规则在 Core。
 Core 的判定表已按夹具落地：账户表单（`auth/` 25 例）、URL 归一（`url/` 21 例）、续传（`download/` 26 例）、
 通知（`notification/` 29 例）、树导航（`file-tree/` 15 例）、哈希缓存（`state-cache/` 17 例）、
-更新检查（`update/` 23 例）、上传校验（`upload/` 28 例）——Core 测试 31 个用例全绿。
+更新检查（`update/` 23 例）、上传校验（`upload/` 28 例）、阅读器几何（`reading/` 48 例）——Core 测试 35 个用例全绿。
 视觉使用 WinUI 2 平台控件 + `Themes/PezMax.xaml`（`ControlsResourcesVersion="Version1"`）；Kanesumi.Xaml 尚未抽仓，暂未引用。
-下一步：PDF 网格 / 连续两种视图（W2）、EPUB 阅读器（W3），以及 W1 / W4 实机验证。
+下一步：EPUB 阅读器（W3）、上传页接线，以及 W1 / W2 / W4 实机验证。
 
 > 样板是兄弟仓库 Ncrust 的 Windows 端（`../../Ncrust/windows/AGENTS.md`）：**凡本文没写的工程细节，按 Ncrust 的做法办**，
 > 尤其是它的「已知的坑」一节——那 40 条大多来自 arc-deck 与 Ncrust 的本机实测，在这里同样成立，不再复抄。
@@ -70,7 +71,7 @@ windows/
 |---|---|
 | `Shell/` | `ShellPage`：`NavigationView` + 内容 Frame + 自定义标题栏（含铃铛 + `InfoBadge` 未读）+ 滚动提醒条 + 下载浮层 + 登录层；`NotificationCenter` 管两条 feed 的取数与本地状态；全局快捷键；`AppTheme` |
 | `Pages/` | 首页、资料（树 + 列表 + 搜索）、电子书、书签、收藏、社区（排行）、我的上传 / 下载 / 举报、个人中心、设置 |
-| `Reader/` | `PdfReader`（网格 / 连续两种视图）、`ImageViewer`、`TextViewer`、`MarkdownViewer`、`EpubReader` |
+| `Reader/` | `PdfReader`（网格 / 连续两种视图 + `PdfPageCache` 页缓存）、`ImageViewer`、`TextViewer`、`MarkdownViewer`、`EpubReader` |
 | `Transfer/` | `DownloadService`：`.part` 半成品 + `Range` / `If-Range` 续传 + 串行队列 + `downloads.json` 本地记录（判定在 Core 的 `DownloadPlanner`）；`UploadService` 待做 |
 | `Login/` | 登录、注册（三步：账号 → 密保 → 完成）、找回密码（两步）独立覆盖层 |
 | `Platform/` | Core 平台接口实现：`LocalSettings`、`LocalFolder`、`PasswordVault` |
@@ -106,7 +107,7 @@ windows/
 
 | 格式 | 实现 | 备注 |
 |---|---|---|
-| PDF | `Windows.Data.Pdf.PdfDocument.LoadFromStreamAsync` → `PdfPage.RenderToStreamAsync`（按显示尺寸 × DPI 渲染）→ `BitmapImage` | 两种视图沿用 egui 版：**网格**（缩略图，点击进连续视图该页）、**连续**（纵向滚动 + 左侧概览）。虚拟化：只渲染可视区 ± 2 页，限 3 并发；缩放用 Composition `Scale` 先行、松手后按新尺寸重渲染。页缓存写 `LocalCache/pdf/{fileId}/p{idx}_s{scale}.png` |
+| PDF | `Windows.Data.Pdf.PdfDocument.LoadFromStreamAsync` → `PdfPage.RenderToStreamAsync`（按显示尺寸 × DPI 渲染）→ `BitmapImage` | 两种视图沿用 egui 版：**网格**（缩略图，点击进连续视图该页）、**连续**（纵向滚动 + 左侧概览）。虚拟化：只渲染可视区 ± 2 页，限 3 并发（`PdfPageCache` 里的信号量）；页缓存写 `LocalCache/pdf/{fileId}/p{idx}_s{scale}.png`。几何与调度在 Core 的 `Reading/`（`spec/fixtures/reading/`）。M1 实现是**换缩放就按新尺寸重渲**；Composition `Scale` 先行、松手后重渲留作滚动卡顿出现后再做 |
 | 图片 | `Image` + `ScrollViewer` 缩放 | 按显示尺寸解码（`DecodePixelWidth`） |
 | TXT | `RichTextBlock`，大文件分段加载 | 后端保证 UTF-8 |
 | Markdown | M0 二选一：自研块级渲染到 `RichTextBlock`，或 WebView2 + 本地打包的渲染页 | 与 EPUB 同用 WebView2 时，两者共用一个阅读器宿主 |

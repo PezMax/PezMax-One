@@ -31,11 +31,11 @@ Linux 与 Android 随后照 spec 实现，少走弯路。（D14 已定为 Window
 
 ### 下一轮（新 session 从这里开始）
 
-1. **下载链路**：`DownloadService` 接 `BackgroundDownloader`（Bearer + `Range` 续传），本地记录 `downloads.json`，
-   与服务端「我的下载」按 `fileId` 合并；同时跑 W1。依据：`spec/api/endpoints.md` 的 `GET /datum/download/file`。
-2. **通知本地已读**：`spec/fixtures/notification/` 尚未写，先补夹具（5 类通知的可见窗口、`popup` / `scroll` 的
-   `hash` + `unchanged` 协议、已读集合按 `userId` 隔离），再做外壳铃铛与滚动条。
-3. **PDF 网格 / 连续两种视图 + W2**；随后 EPUB（W3）。
+1. **PDF 双视图的实机验证（W2）**：代码与夹具（`spec/fixtures/reading/`）已落地，剩下拿 100 页以上的真试卷跑
+   首屏 < 1 s、连续滚动无白屏、内存稳定；顺带确认 `DownloadsFolder` 在真机上不需要额外能力（下载目录已回落兜底）。
+2. **EPUB 阅读器（W3）**：WebView2 + 本地阅读器页面（`SetVirtualHostNameToFolderMapping`、离线、CJK 排版）。
+3. **上传页接线**：`UploadService`（`HttpMultipartFormDataContent` + `IProgress`）走 Core 的 `UploadValidation`，
+   批量逐文件结果；W1 的「应用挂起后继续下载」也在这一轮一并比较 `BackgroundDownloader`。
 4. **Kanesumi.Xaml 抽仓（D3）**：从 `../Ncrust/windows/src/Kanesumi.Xaml` 抽出到 `../Kanesumi-xaml`（保留历史可用
    `git filter-repo --subdirectory-filter`），Ncrust 改为相对路径引用并验证 MSBuild Release 构建通过；Ncrust 侧单独提交。
 5. **发布工具 `windows/tools/release/`**：签名证书、`.appinstaller`、`.cer`、`manifest.json`。
@@ -48,9 +48,9 @@ Linux 与 Android 随后照 spec 实现，少走弯路。（D14 已定为 Window
 |---|---|---|
 | `spec/api/endpoints.md` | 补齐 M1 范围端点的参数与响应形状（账户、资料、下载、收藏、通知、个人资料） | 🟡 读接口已补，写接口随实现 |
 | `spec/api/envelope.md` | 信封、错误、401 | ✅ |
-| `spec/fixtures/update/` | 自 Ncrust 规则移植，前缀换为 `pezmax-one-`，补 `.pkg.tar.zst` 多段扩展名、`amd64` 不算 `x86_64` 等用例 | 待写 |
+| `spec/fixtures/update/` | 自 Ncrust 规则移植，前缀换为 `pezmax-one-`，补 `.pkg.tar.zst` 多段扩展名、`amd64` 不算 `x86_64` 等用例 | ✅ 23 例 |
 | `spec/fixtures/envelope/`、`pagination/`、`auth/` | M1 必需的协议与表单夹具 | ✅ 13 + 11 + 25 例 |
-| `spec/fixtures/state-cache/`、`url/`、`download/`、`notification/` | 哈希缓存、URL 归一、续传状态机、通知可见性 | 待写（随对应实现） |
+| `spec/fixtures/state-cache/`、`url/`、`download/`、`notification/`、`file-tree/`、`upload/`、`reading/` | 哈希缓存、URL 归一、续传状态机、通知可见性、树导航、上传校验、阅读器几何 | ✅ 17 / 21 / 26 / 29 / 15 / 28 / 48 例 |
 | `spec/tools/` | 只读契约探针（登录用测试账号，不写数据），用来给夹具取 `source` | 待写；需要测试账号 |
 
 ### 风险验证（spike）
@@ -91,9 +91,9 @@ M1 之外按三档排：
 
 | 项 | 状态 |
 |---|---|
-| **Core 判定表**（账户 / URL / 续传 / 通知 / 树 / 缓存 / 更新 / 上传） | ✅ 八份夹具各有实现，Core 测试 30 个用例全绿 |
+| **Core 判定表**（账户 / URL / 续传 / 通知 / 树 / 缓存 / 更新 / 上传 / 阅读器） | ✅ 九份夹具各有实现，Core 测试 35 个用例全绿 |
 | 账户：登录（验证码）、注册（三步）、找回密码（两步）、登出、会话失效处理 | ✅ 流程与界面已接通；待测试服务器手工回归 |
-| 资料：文件树（哈希缓存）、列表、搜索、详情、PDF / 图片 / TXT 预览 | 🟡 树 / 列表 / 搜索 / 详情 / 三种预览已接；`TreeNavigator` 与 `FeedCache` 就位待接线；PDF 网格与连续两种视图未做 |
+| 资料：文件树（哈希缓存）、列表、搜索、详情、PDF / 图片 / TXT 预览 | 🟡 树 / 列表 / 搜索 / 详情 / 三种预览已接；`TreeNavigator` 与 `FeedCache` 就位待接线；PDF 阅读器（网格 / 连续 + 页缓存）已接，W2 实机验证未做 |
 | 收藏、个人中心、设置 | 🟡 页面已接；缓存清理未做 |
 | 通知：弹窗、滚动提醒、本地已读 | ✅ 外壳已接（铃铛未读 / 滚动条 / 弹窗队列 / `notice_reads.json`），判定在 Core；待真机回归 |
 | 下载：续传、串行队列、进度与取消、本地记录 +「我的下载」 | ✅ `.part` 续传 + 串行队列 + 浮层 + 目录授权（`FolderPicker` + `FutureAccessList`）+「我的下载」合并；W1 实机验证未做 |
