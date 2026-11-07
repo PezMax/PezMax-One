@@ -8,11 +8,13 @@ Release|x64 用 .NET Native 构建通过。已接入登录、注册（三步）�
 电子书、书签、收藏、社区排行 / 上传 / 举报、个人中心（含「我的下载」合并与本地状态）、设置（含检查更新、镜像前缀、阅读默认视图 / 缩放）。
 PDF 阅读器有**网格 / 连续两种视图**，页缓存落 `LocalCache/pdf/{fileId}/`，渲染窗口与缩放规则在 Core。
 上传页接批量与文件夹上传，逐文件校验与结果都在 Core 的 `UploadValidation` / `Utf8Check`。
+电子书：PDF 走阅读器，EPUB 走 WebView2（包解析在 Core 的 `EpubPackage`）——**W3 实机未验证**。
 Core 的判定表已按夹具落地：账户表单（`auth/` 25 例）、URL 归一（`url/` 21 例）、续传（`download/` 26 例）、
 通知（`notification/` 29 例）、树导航（`file-tree/` 15 例）、哈希缓存（`state-cache/` 17 例）、
-更新检查（`update/` 23 例）、上传校验与文本编码（`upload/` 38 例）、阅读器几何（`reading/` 48 例）——Core 测试 41 个用例全绿。
+更新检查（`update/` 23 例）、上传校验与文本编码（`upload/` 38 例）、阅读器几何（`reading/` 48 例）、
+EPUB 包解析（`epub/` 13 例）——Core 测试 48 个用例全绿。
 视觉使用 WinUI 2 平台控件 + `Themes/PezMax.xaml`（`ControlsResourcesVersion="Version1"`）；Kanesumi.Xaml 尚未抽仓，暂未引用。
-下一步：EPUB 阅读器（W3），以及 W1 / W2 / W4 实机验证。
+下一步：W1 / W2 / W3 / W4 实机验证（都需要测试服务器与真机）。
 
 > 样板是兄弟仓库 Ncrust 的 Windows 端（`../../Ncrust/windows/AGENTS.md`）：**凡本文没写的工程细节，按 Ncrust 的做法办**，
 > 尤其是它的「已知的坑」一节——那 40 条大多来自 arc-deck 与 Ncrust 的本机实测，在这里同样成立，不再复抄。
@@ -112,7 +114,7 @@ windows/
 | 图片 | `Image` + `ScrollViewer` 缩放 | 按显示尺寸解码（`DecodePixelWidth`） |
 | TXT | `RichTextBlock`，大文件分段加载 | 后端保证 UTF-8 |
 | Markdown | M0 二选一：自研块级渲染到 `RichTextBlock`，或 WebView2 + 本地打包的渲染页 | 与 EPUB 同用 WebView2 时，两者共用一个阅读器宿主 |
-| EPUB | WebView2（`Microsoft.UI.Xaml.Controls.WebView2`）+ 本地打包的阅读器页面（epub.js / foliate-js 二选一，查许可证）；`SetVirtualHostNameToFolderMapping` 映射本地资源，书本内容由应用下载后经虚拟主机提供 | M0 必须验证：UWP 中 WebView2 虚拟主机映射、离线运行、翻页与目录、CJK 排版 |
+| EPUB | 解压到 `LocalCache/epub/{ebookId}/` → Core 的 `EpubPackage` 解析 container / OPF / spine / 目录 → `Microsoft.UI.Xaml.Controls.WebView2` + `SetVirtualHostNameToFolderMapping("pezmax.local", …)` 打开正文 | **不引第三方 JS 库**（epub.js / foliate.js 都要先解压再在 JS 里解析，等于把包结构解析搬进 WebView）：目录与章节顺序在 Core 里算好，正文一次一章交给 Chromium 竖向滚动，样式由 `AddScriptToExecuteOnDocumentCreatedAsync` 注入。`Microsoft.Web.WebView2` 固定 **1.0.1774.30**（最后一个带 UAP10.0 资产的版本）。缺 Evergreen Runtime 时给一句「装一次 WebView2 Runtime」而不是白屏。W3 实机验证未做 |
 | MOBI / AZW3 | 下载后 `Launcher.LaunchFileAsync` 交给默认程序 | 无默认程序时提示并打开所在文件夹 |
 
 预览一律先**下载到 `LocalCache`**（电子书走 `/datum/ebook/content`，资料走下载流）再交给阅读器；阅读器不直接拿 URL。

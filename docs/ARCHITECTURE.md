@@ -155,7 +155,7 @@ URL 归一、通知可见性与已读、更新检查、表单校验。**页面�
 | PDF | `Windows.Data.Pdf.PdfDocument` 渲染到位图 | pdfium-render（继承 egui 版管线）→ Kanesumi 图像 | `android.graphics.pdf.PdfRenderer` |
 | 图片 | `BitmapImage` | `image` crate 解码 → Kanesumi 图像 | Compose 图片加载 |
 | TXT / Markdown | 原生文本 / Markdown 渲染（方案见平台文档） | `pulldown-cmark` → Kanesumi 段落 | 复用 Ncrust 的 Markdown 渲染思路 |
-| EPUB | WebView2 + 本地打包的阅读器页面（M0 验证） | M1 交给系统阅读器（`xdg-open`），原生阅读器后置 | Readium 或 WebView（M0 验证） |
+| EPUB | WebView2：包解析（container / OPF / spine / 目录）在 Core，正文与资源经虚拟主机交给 Chromium（M0 验证） | M1 交给系统阅读器（`xdg-open`），原生阅读器后置 | Readium 或 WebView（M0 验证） |
 | MOBI / AZW3 | 下载后交给系统默认程序 | 同左 | 同左 |
 
 PDF 视图沿用 egui 版的两种模式：**网格**（缩略图）与**连续**（纵向滚动 + 左侧概览），页面按需渲染、限并发、磁盘缓存。

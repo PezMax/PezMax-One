@@ -33,7 +33,8 @@ Linux 与 Android 随后照 spec 实现，少走弯路。（D14 已定为 Window
 
 1. **PDF 双视图的实机验证（W2）**：代码与夹具（`spec/fixtures/reading/`）已落地，剩下拿 100 页以上的真试卷跑
    首屏 < 1 s、连续滚动无白屏、内存稳定；顺带确认 `DownloadsFolder` 在真机上不需要额外能力（下载目录已回落兜底）。
-2. **EPUB 阅读器（W3）**：WebView2 + 本地阅读器页面（`SetVirtualHostNameToFolderMapping`、离线、CJK 排版）。
+2. **EPUB 阅读器的实机验证（W3）**：代码与夹具（`spec/fixtures/epub/`）已落地——解压 → Core 解析 → WebView2 虚拟主机。
+   要在真机确认虚拟主机映射、离线、CJK 排版、以及 .NET Native + WebView2 下不崩；这台机器上没有 WebView2 运行时的表现也要看一眼。
 3. **上传的对账**：上传页已接（批量 / 文件夹 / 逐文件结果），剩下真机上传一轮（含 docx 转档排队、200MB 边界）；
    W1 的「应用挂起后继续下载」也在这一轮一并比较 `BackgroundDownloader`。
 4. **Kanesumi.Xaml 抽仓（D3）**：从 `../Ncrust/windows/src/Kanesumi.Xaml` 抽出到 `../Kanesumi-xaml`（保留历史可用
@@ -50,7 +51,7 @@ Linux 与 Android 随后照 spec 实现，少走弯路。（D14 已定为 Window
 | `spec/api/envelope.md` | 信封、错误、401 | ✅ |
 | `spec/fixtures/update/` | 自 Ncrust 规则移植，前缀换为 `pezmax-one-`，补 `.pkg.tar.zst` 多段扩展名、`amd64` 不算 `x86_64` 等用例 | ✅ 23 例 |
 | `spec/fixtures/envelope/`、`pagination/`、`auth/` | M1 必需的协议与表单夹具 | ✅ 13 + 11 + 25 例 |
-| `spec/fixtures/state-cache/`、`url/`、`download/`、`notification/`、`file-tree/`、`upload/`、`reading/` | 哈希缓存、URL 归一、续传状态机、通知可见性、树导航、上传校验与文本编码、阅读器几何 | ✅ 17 / 21 / 26 / 29 / 15 / 38 / 48 例 |
+| `spec/fixtures/state-cache/`、`url/`、`download/`、`notification/`、`file-tree/`、`upload/`、`reading/`、`epub/` | 哈希缓存、URL 归一、续传状态机、通知可见性、树导航、上传校验与文本编码、阅读器几何、EPUB 包解析 | ✅ 17 / 21 / 26 / 29 / 15 / 38 / 48 / 13 例 |
 | `spec/tools/` | 只读契约探针（登录用测试账号，不写数据），用来给夹具取 `source` | 待写；需要测试账号 |
 
 ### 风险验证（spike）
