@@ -209,5 +209,94 @@
     "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_activity.go:568-573",
     "input": { "kind": "after", "written": 5000, "total": 4096 },
     "expect": { "action": "fail", "offset": 0, "total": 4096, "discardPart": true }
+  },
+  {
+    "id": "download.merge.server-only",
+    "description": "只有服务端记录：显示为「云端记录」，本地没有路径，不能「打开所在文件夹」",
+    "source": "spec/fixtures/download/README.md「本地记录与我的下载合并」",
+    "input": {
+      "kind": "merge",
+      "server": [ { "fileId": 12, "fileName": "期中.pdf", "firstDownloadTime": "2026-11-01 10:00:00" } ],
+      "records": []
+    },
+    "expect": { "order": [12], "states": [ { "fileId": 12, "statusText": "云端记录", "hasLocalPath": false } ] }
+  },
+  {
+    "id": "download.merge.both-sides",
+    "description": "两边都有：以服务端顺序为骨架，挂上本地路径与状态",
+    "source": "spec/fixtures/download/README.md「本地记录与我的下载合并」第 1–2 条",
+    "input": {
+      "kind": "merge",
+      "server": [
+        { "fileId": 12, "fileName": "期中.pdf", "firstDownloadTime": "2026-11-01 10:00:00" },
+        { "fileId": 13, "fileName": "期末.pdf", "firstDownloadTime": "2026-11-02 10:00:00" }
+      ],
+      "records": [
+        { "kind": "file", "id": 13, "fileName": "期末.pdf", "localPath": "C:\\dl\\期末.pdf", "status": "done", "bytesReceived": 4096, "size": 4096, "updatedAt": "2026-11-06T21:00:00Z" }
+      ]
+    },
+    "expect": {
+      "order": [12, 13],
+      "states": [
+        { "fileId": 12, "statusText": "云端记录", "hasLocalPath": false },
+        { "fileId": 13, "statusText": "已下载", "hasLocalPath": true }
+      ]
+    }
+  },
+  {
+    "id": "download.merge.local-only-appended",
+    "description": "本地有、服务端没有（记录被清过）：也要显示，追加在服务端行之后",
+    "source": "spec/fixtures/download/README.md「本地记录与我的下载合并」第 3 条",
+    "input": {
+      "kind": "merge",
+      "server": [ { "fileId": 12, "fileName": "期中.pdf", "firstDownloadTime": "2026-11-01 10:00:00" } ],
+      "records": [
+        { "kind": "file", "id": 20, "fileName": "刚下的.pdf", "localPath": "C:\\dl\\刚下的.pdf", "status": "done", "bytesReceived": 1024, "size": 1024, "updatedAt": "2026-11-06T21:10:00Z" }
+      ]
+    },
+    "expect": {
+      "order": [12, 20],
+      "states": [
+        { "fileId": 12, "statusText": "云端记录", "hasLocalPath": false },
+        { "fileId": 20, "statusText": "已下载", "hasLocalPath": true }
+      ]
+    }
+  },
+  {
+    "id": "download.merge.partial-visible",
+    "description": "半成品记录：显示「未完成」，用户可以接着续",
+    "source": "spec/fixtures/download/README.md「本地记录与我的下载合并」",
+    "input": {
+      "kind": "merge",
+      "server": [ { "fileId": 12, "fileName": "期中.pdf", "firstDownloadTime": "2026-11-01 10:00:00" } ],
+      "records": [
+        { "kind": "file", "id": 12, "fileName": "期中.pdf", "localPath": "C:\\dl\\期中.pdf.part", "status": "part", "bytesReceived": 1024, "size": 4096, "updatedAt": "2026-11-06T21:00:00Z" }
+      ]
+    },
+    "expect": {
+      "order": [12],
+      "states": [ { "fileId": 12, "statusText": "未完成", "hasLocalPath": true } ]
+    }
+  },
+  {
+    "id": "download.merge.newest-record-wins",
+    "description": "同一文件多条本地记录：取 updatedAt 最新的那条（旧记录不能盖住新的）",
+    "source": "spec/fixtures/download/README.md「本地记录与我的下载合并」第 4 条",
+    "input": {
+      "kind": "merge",
+      "server": [ { "fileId": 12, "fileName": "期中.pdf", "firstDownloadTime": "2026-11-01 10:00:00" } ],
+      "records": [
+        { "kind": "file", "id": 12, "fileName": "期中.pdf", "localPath": "C:\\dl\\old\\期中.pdf", "status": "done", "bytesReceived": 4096, "size": 4096, "updatedAt": "2026-11-02T21:00:00Z" },
+        { "kind": "file", "id": 12, "fileName": "期中.pdf", "localPath": "C:\\dl\\new\\期中.pdf", "status": "done", "bytesReceived": 4096, "size": 4096, "updatedAt": "2026-11-06T21:00:00Z" }
+      ]
+    },
+    "expect": { "order": [12], "states": [ { "fileId": 12, "statusText": "已下载", "hasLocalPath": true } ], "localPathOf": "C:\\dl\\new\\期中.pdf" }
+  },
+  {
+    "id": "download.merge.empty",
+    "description": "两边都没有：空列表，界面出空态",
+    "source": "spec/fixtures/download/README.md「本地记录与我的下载合并」",
+    "input": { "kind": "merge", "server": [], "records": [] },
+    "expect": { "order": [], "states": [] }
   }
 ]

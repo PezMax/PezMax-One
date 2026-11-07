@@ -77,6 +77,37 @@
   并发 2 个会被拒，错误看起来像「下载失败」，所以队列必须在 Core 里就是串行的。
 - **「我的下载」按 `fileId` 去重**：服务端记录是「请求次数」口径，客户端展示是「文件」口径。
 
+## 本地记录与「我的下载」合并
+
+本地记录写在 `downloads.json`（`ARCHITECTURE.md` 核心原则 5），形状：
+
+```json
+{
+  "records": [
+    {
+      "kind": "file", "id": 12, "fileName": "期中试卷.pdf",
+      "localPath": "C:\\Users\\me\\Downloads\\PezMax\\期中试卷.pdf",
+      "size": 4096, "bytesReceived": 4096, "etag": "\"datum-12-4096\"",
+      "status": "done", "updatedAt": "2026-11-06T21:30:00+08:00"
+    }
+  ]
+}
+```
+
+- `kind`：`file` / `ebook`（两者 `id` 的命名空间独立，同一个 12 不冲突）。
+- `status`：`part`（有半成品，可续）、`done`（已落盘改名）、`failed`（失败但保留半成品）。
+- `etag` 与 `bytesReceived` 是续传的依据；`done` 之后保留它们无害。
+- `localPath` 只对本机有意义，跨设备不同步（服务端也没有这个字段）。
+
+**合并规则**（服务端 `/datum/desktop/download/list/{userId}` + 本地记录）：
+
+1. 以服务端行为骨架（它有题目 / 科目 / 类型等元信息），顺序沿用服务端。
+2. 按 `fileId`（电子书按 `ebookId`）把本地记录挂上去：有本地路径的行才能「打开 / 在文件夹中显示」。
+3. 本地有、服务端没有的（服务端记录被清过、或那次请求没落库）**也要显示**，追加在服务端行之后，
+   按 `updatedAt` 倒序——否则用户刚下完的东西会凭空消失。
+4. 同一 `fileId` 有多条本地记录时取 `updatedAt` 最新的那条。
+5. 服务端 `total` 与 `rows` 口径不一致（见 `spec/api/endpoints.md`），分页只看 `rows` 条数。
+
 ## 不覆盖的
 
 - 多段 `Range`（`multipart/byteranges`）：`ServeContent` 不产生，客户端也不必支持。
