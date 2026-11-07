@@ -10,6 +10,7 @@ using PezMax.Core.Net;
 using PezMax.Core.Urls;
 using PezMax.Login;
 using PezMax.Core.Transfer;
+using PezMax.Update;
 using PezMax.Transfer;
 using Windows.Storage;
 using Windows.Storage.Pickers;
@@ -459,6 +460,7 @@ namespace PezMax.Pages
             DownloadDirBox.Text = settings.DownloadDirectory ?? "";
             SilentDownloadSwitch.IsOn = settings.SilentDownload;
             AutoUpdateSwitch.IsOn = settings.AutoCheckUpdate;
+            MirrorBox.Text = settings.UpdateMirrorBase ?? "";
             ServerBox.Text = settings.ServerUrl;
         }
 
@@ -485,6 +487,7 @@ namespace PezMax.Pages
             settings.DownloadDirectory = string.IsNullOrWhiteSpace(DownloadDirBox.Text) ? null : DownloadDirBox.Text.Trim();
             settings.SilentDownload = SilentDownloadSwitch.IsOn;
             settings.AutoCheckUpdate = AutoUpdateSwitch.IsOn;
+            settings.UpdateMirrorBase = string.IsNullOrWhiteSpace(MirrorBox.Text) ? null : MirrorBox.Text.Trim();
             settings.ServerUrl = DatumHttp.NormalizeBaseUrl(server);
             await AppServices.SaveSettingsAsync();
 
@@ -501,6 +504,46 @@ namespace PezMax.Pages
             SettingsBar.Severity = muxc.InfoBarSeverity.Success;
             SettingsBar.Message = "设置已保存";
             SettingsBar.IsOpen = true;
+        }
+
+        private async void CheckUpdateClick(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var choice = await UpdateService.CheckAsync(AppServices.Settings.UpdateMirrorBase);
+                if (choice == null)
+                {
+                    await new PezDialog
+                    {
+                        Title = "检查更新",
+                        Content = "当前已是最新版本（" + UpdateService.CurrentVersion + "）。",
+                        CloseButtonText = "好",
+                    }.ShowAsync();
+                    return;
+                }
+
+                var dialog = new PezDialog
+                {
+                    Title = "发现新版本",
+                    Content = UpdateService.Describe(choice) + "\n\n" +
+                              "将交给系统 App Installer 安装；也可以到 Release 页面手动下载。",
+                    PrimaryButtonText = "去安装",
+                    CloseButtonText = "稍后",
+                    DefaultButton = ContentDialogButton.Primary,
+                };
+
+                if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+                {
+                    await UpdateService.InstallAsync(choice);
+                }
+            }
+            catch (Exception ex)
+            {
+                SettingsBar.Severity = muxc.InfoBarSeverity.Error;
+                SettingsBar.Message = "检查更新失败：网络或 GitHub 不可达";
+                SettingsBar.IsOpen = true;
+                App.WriteCrashLog(ex);
+            }
         }
 
         private async void ClearCacheClick(object sender, RoutedEventArgs e)

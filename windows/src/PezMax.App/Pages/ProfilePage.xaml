@@ -172,7 +172,13 @@
                         <ToggleSwitch x:Name="SilentDownloadSwitch" Header="静默下载（完成时不弹系统通知）" />
 
                         <TextBlock Style="{StaticResource PezSectionTitleStyle}" Text="启动与更新" Margin="0,8,0,0" />
-                        <ToggleSwitch x:Name="AutoUpdateSwitch" Header="启动时检查更新" />
+                        <ToggleSwitch x:Name="AutoUpdateSwitch" Header="启动时检查更新（每 24 小时最多一次）" />
+                        <TextBox
+                            x:Name="MirrorBox"
+                            Header="更新镜像前缀（留空直连 GitHub）"
+                            PlaceholderText="https://mirror.example.net/gh"
+                            Width="480"
+                            CornerRadius="0" />
 
                         <TextBlock Style="{StaticResource PezSectionTitleStyle}" Text="高级" Margin="0,8,0,0" />
                         <TextBox x:Name="ServerBox" Header="服务器地址" Width="480" CornerRadius="0" />
@@ -187,6 +193,7 @@
                         <TextBlock Style="{StaticResource PezSectionTitleStyle}" Text="关于" Margin="0,8,0,0" />
                         <TextBlock x:Name="AboutText" Style="{StaticResource PezCaptionStyle}" />
                         <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Click="CheckUpdateClick" Content="检查更新" />
                             <HyperlinkButton Click="GitHubClick" Content="GitHub 仓库" />
                             <HyperlinkButton Click="OpenThemeSettingsClick" Content="打开 Windows 颜色设置" />
                         </StackPanel>

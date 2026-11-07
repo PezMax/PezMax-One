@@ -1,4 +1,4 @@
-﻿using PezMax.Core.Json;
+using PezMax.Core.Json;
 
 namespace PezMax.Core;
 
@@ -19,6 +19,8 @@ public sealed class AppSettings
     public string? DownloadDirectory { get; set; }
     public string ServerUrl { get; set; } = Net.DatumHttp.DefaultBaseUrl;
     public bool AutoCheckUpdate { get; set; } = true;
+    /// <summary>更新下载的镜像前缀（D12，默认关闭）；空表示直连 GitHub。</summary>
+    public string? UpdateMirrorBase { get; set; }
 
     public static AppSettings Load(string? json)
     {
@@ -43,6 +45,8 @@ public sealed class AppSettings
             var server = root.GetString("serverUrl");
             if (!string.IsNullOrWhiteSpace(server)) settings.ServerUrl = server!;
             settings.AutoCheckUpdate = root.GetBool("autoCheckUpdate", true);
+            var mirror = root.GetString("updateMirrorBase");
+            if (!string.IsNullOrWhiteSpace(mirror)) settings.UpdateMirrorBase = mirror;
         }
         catch (JsonParseException)
         {
@@ -66,6 +70,9 @@ public sealed class AppSettings
             .Raw("pdfScale", PdfScale.ToString(System.Globalization.CultureInfo.InvariantCulture))
             .String("serverUrl", ServerUrl)
             .Bool("autoCheckUpdate", AutoCheckUpdate);
+
+        if (UpdateMirrorBase == null) builder.Null("updateMirrorBase");
+        else builder.String("updateMirrorBase", UpdateMirrorBase);
 
         if (DownloadDirectory == null) builder.Null("downloadDirectory");
         else builder.String("downloadDirectory", DownloadDirectory);
