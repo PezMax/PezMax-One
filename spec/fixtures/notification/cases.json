@@ -304,5 +304,39 @@
       "notification": { "notifyId": 11, "notifyType": "1" }
     },
     "expect": { "dismissible": true }
+  },
+  {
+    "id": "notification.storage.roundtrip",
+    "description": "本地状态文件：reads 与 popups 各自按 (userId, notifyId) 解析，两个集合互不影响",
+    "source": "spec/fixtures/notification/README.md「本地存储」",
+    "input": {
+      "kind": "storage",
+      "raw": "{\"reads\":[{\"userId\":7,\"notifyId\":10},{\"userId\":7,\"notifyId\":11}],\"popups\":[{\"userId\":7,\"notifyId\":11}]}"
+    },
+    "expect": { "reads": 2, "popups": 1, "hasRead": [7, 10], "hasPopped": [7, 11] }
+  },
+  {
+    "id": "notification.storage.corrupt",
+    "description": "文件坏了当空集合：通知状态丢了顶多再弹一次，不该挡住界面",
+    "source": "spec/fixtures/notification/README.md「本地存储」",
+    "input": { "kind": "storage", "raw": "{\"reads\":[{\"userId\":" },
+    "expect": { "reads": 0, "popups": 0 }
+  },
+  {
+    "id": "notification.storage.empty",
+    "description": "没有文件：空集合，首次启动就是这个状态",
+    "source": "spec/fixtures/notification/README.md「本地存储」",
+    "input": { "kind": "storage", "raw": null },
+    "expect": { "reads": 0, "popups": 0 }
+  },
+  {
+    "id": "notification.storage.other-user-isolated",
+    "description": "别的账号的已读不影响我：文件里两条都属 42，我（7）仍然未读",
+    "source": "spec/fixtures/notification/README.md「本地存储」",
+    "input": {
+      "kind": "storage",
+      "raw": "{\"reads\":[{\"userId\":42,\"notifyId\":10},{\"userId\":42,\"notifyId\":11}],\"popups\":[]}"
+    },
+    "expect": { "reads": 2, "popups": 0, "notRead": [7, 10] }
   }
 ]

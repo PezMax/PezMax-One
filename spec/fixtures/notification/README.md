@@ -74,7 +74,26 @@
 
 - 通知对象只用与判定相关的字段，其余字段（`title` / `content` / 时间）不参与判定。
 - `expect` 里的字段按 kind 取：`channel`→`show`；`popup-plan`→`notifyIds`；`read-set`→`read`；
-  `feed-cache`→`action`（可带 `hash`）；`dismissible`→`dismissible`。
+  `feed-cache`→`action`（可带 `hash`）；`dismissible`→`dismissible`；
+  `storage`→`reads` / `popups`（解析出来的条数）。
+
+## 本地存储
+
+「已读」与「已弹过」都存在本地一个文件里（Windows 为 `LocalFolder/notice_reads.json`），形状：
+
+```json
+{
+  "reads":  [ { "userId": 7, "notifyId": 10 } ],
+  "popups": [ { "userId": 7, "notifyId": 11 } ]
+}
+```
+
+- `reads`：用户点开过的（铃铛未读计数靠它）。
+- `popups`：弹窗确认过的（type 1 / 4 的一次性语义靠它，见 `popup-plan`）。
+- 两个集合的键都是 `(userId, notifyId)`；换账号不串。
+- 文件读不出来（丢了 / 手工改坏 / 旧版本写的）→ **当空集合**，不要因此挡住界面：
+  通知状态丢了顶多再弹一次，比「一打开就报错」轻。
+- 写入整体重写，不做增量；文件很小，冲突不值得设计。
 
 ## 撤除条件
 
