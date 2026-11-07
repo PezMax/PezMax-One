@@ -4,7 +4,7 @@
 
 **状态**（2026-11-07）：已建立 `PezMax.Windows.sln` / `PezMax.Core` / `PezMax.Core.Tests` / `PezMax.App`，
 Release|x64 用 .NET Native 构建通过。已接入登录、注册（三步）、找回密码（两步：验证码换密保 → 答案 + 新密码）、
-外壳（含铃铛 / 滚动提醒 / 弹窗队列）、首页、资料（树 / 列表 / 搜索 / 详情 / PDF / 图片 / 文本预览）、
+外壳（含铃铛 / 滚动提醒 / 弹窗队列）、首页、资料（条件下拉 / 列表 / 搜索 / 详情 / PDF / 图片 / 文本预览）、
 电子书、书签、收藏、社区排行 / 上传 / 举报、个人中心（含「我的下载」合并与本地状态）、设置（含检查更新、镜像前缀、阅读默认视图 / 缩放）。
 PDF 阅读器有**网格 / 连续两种视图**，页缓存落 `LocalCache/pdf/{fileId}/`，渲染窗口与缩放规则在 Core。
 上传页接批量与文件夹上传，逐文件校验与结果都在 Core 的 `UploadValidation` / `Utf8Check`。
@@ -22,7 +22,7 @@ Kanesumi.Xaml 已抽成独立仓 `../Kanesumi-xaml`（D3），本仓按相对路
 **它不碰 UWP**，所以不需要回环豁免与管理员；UWP 那条界面线要手工走查（豁免命令见 `docs/ENVIRONMENT.md`）。
 核对过哪些端点、遗留哪些没走，记在 `spec/api/verified.md`。
 
-2026-11-07 用打包后的客户端真点过一遍（注册 → 忘密码 → 登录 → 资料树逐级下钻 → 详情面板），
+2026-11-07 用打包后的客户端真点过一遍（注册 → 忘密码 → 登录 → 资料页筛选与详情；当时还是文件树，后来按负责人判断换成了条件下拉），
 查出六处缺陷并修掉，其中「点树节点没反应」是夹具测不出来的那一类：判定全对，事件没接上。
 界面走查的要点：**列表模板必须写 `AutomationProperties.Name`**，否则读屏念的是
 `PezMax.Core.Models.FileItem` 这种类型全名——界面上看不出来，只有 UIA 树里看得见。
@@ -84,7 +84,7 @@ windows/
 | 目录 | 内容 |
 |---|---|
 | `Shell/` | `ShellPage`：`NavigationView` + 内容 Frame + 自定义标题栏（含铃铛 + `InfoBadge` 未读）+ 滚动提醒条 + 下载浮层 + 登录层；`NotificationCenter` 管两条 feed 的取数与本地状态；全局快捷键；`AppTheme` |
-| `Pages/` | 首页、资料（树 + 列表 + 搜索）、电子书、书签、收藏、社区（排行）、我的上传 / 下载 / 举报、个人中心、设置 |
+| `Pages/` | 首页、资料（条件下拉 + 列表 + 搜索）、电子书、书签、收藏、社区（排行）、我的上传 / 下载 / 举报、个人中心、设置 |
 | `Reader/` | `PdfReader`（网格 / 连续两种视图 + `PdfPageCache` 页缓存）、`ImageViewer`、`TextViewer`、`MarkdownViewer`、`EpubReader` |
 | `Transfer/` | `DownloadService`：`.part` 半成品 + `Range` / `If-Range` 续传 + 串行队列 + `downloads.json` 本地记录（判定在 Core 的 `DownloadPlanner`）；`UploadService`：多选 / 文件夹递归 + 逐文件校验结果 + 串行上传 |
 | `Login/` | 登录、注册（三步：账号 → 密保 → 完成）、找回密码（两步）独立覆盖层 |
@@ -111,8 +111,9 @@ windows/
 
 ## 列表与浏览
 
-- 资料页左侧 `TreeView`（文件树，来自哈希缓存）+ 右侧 `ListView` 详情列（文件名、科目、学校、年份、大小、格式），
-  窄窗口退化为面包屑（`BreadcrumbBar`）+ 单列。
+- 资料页**不用文件树**：条件是四个下拉（科目 / 学校 / 年份 / 类型）+ 关键词搜索 + 结果列 + 详情栏。
+  理由写在 `PapersView.xaml` 头上——用户是来找某一份卷子的，不是来逛目录；树是「后端有这个端点」的产物，
+  不是设计结论。`TreeNavigator` 与 `fixtures/file-tree/` 仍在 Core 里，但不再驱动首屏。
 - 列表全部用平台 `ListView` / `GridView` 的虚拟化，**不重写 `ListViewItem` 模板的交互部分**，只换视觉资源。
 - 详情：右侧 `SplitView` 面板或独立详情页（宽窗口面板、窄窗口页面），含预览、下载、收藏、举报、举报时间线。
 - 右键菜单 `MenuFlyout`：打开、下载、收藏 / 取消收藏、复制链接、举报；属主另有编辑、删除。
@@ -232,3 +233,4 @@ windows/
 | W3 | WebView2 EPUB 阅读器 | 离线打开 EPUB，翻页 / 目录 / CJK 排版正常；Release + .NET Native 下运行 |
 | W4 | 内网后端访问 | 带 `privateNetworkClientServer` 时能连内网测试服务器 |
 | W5 | Kanesumi.Xaml 引用 | 抽仓后按相对路径的 ProjectReference 能在 MSBuild Release 下编过 | ✅ 本仓与 Ncrust 都编过（2026-11-07） |
+
