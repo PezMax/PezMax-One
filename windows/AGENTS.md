@@ -71,7 +71,7 @@ windows/
 | `Shell/` | `ShellPage`：`NavigationView` + 内容 Frame + 自定义标题栏 + 滚动提醒条 + 下载浮层 + 登录层；全局快捷键；`AppTheme` |
 | `Pages/` | 首页、资料（树 + 列表 + 搜索）、电子书、书签、收藏、社区（排行）、我的上传 / 下载 / 举报、个人中心、设置 |
 | `Reader/` | `PdfReader`（网格 / 连续两种视图）、`ImageViewer`、`TextViewer`、`MarkdownViewer`、`EpubReader` |
-| `Transfer/` | `DownloadService`（`BackgroundDownloader`）、`UploadService`（`HttpMultipartFormDataContent` + 进度） |
+| `Transfer/` | `DownloadService`：`.part` 半成品 + `Range` / `If-Range` 续传 + 串行队列 + `downloads.json` 本地记录（判定在 Core 的 `DownloadPlanner`）；`UploadService` 待做 |
 | `Login/` | 登录、注册（三步：账号 → 密保 → 完成）、找回密码（两步）独立覆盖层 |
 | `Platform/` | Core 平台接口实现：`LocalSettings`、`LocalFolder`、`PasswordVault` |
 | `Update/` | `UpdateService`：下载 `.appinstaller` 交给 App Installer |
@@ -110,13 +110,18 @@ windows/
 
 ## 下载
 
-- `Windows.Networking.BackgroundTransfer.BackgroundDownloader`：应用挂起后继续、系统级续传；`SetRequestHeader("Authorization", …)`。
-  M0 验证：带 Bearer 的 Range 续传、ETag 变化后的行为、与 edge 每 IP 1 连接限制的配合。
-- 不满足时回退到自管 `HttpClient` 流式下载 + `.part` 文件 + `Range`（egui 版的做法），状态机仍在 Core。
+**当前实现**：自管 `HttpClient` 流式下载 + `.part` 半成品 + `Range` / `If-Range`（egui 版同款路线），
+判定交给 Core 的 `DownloadPlanner`（`spec/fixtures/download/`），队列 `SemaphoreSlim(1,1)` 串行。
+半成品落 `LocalCacheFolder`，ETag 与进度记在 `LocalFolder/downloads.json`。
+
+- `Windows.Networking.BackgroundTransfer.BackgroundDownloader` 仍是**待验证的更优解**：应用挂起后继续、系统级续传。
+  W1 里对比过再决定要不要换；换的话 Core 的决策表不用动，只换搬字节的那一层。
 - 下载目录：默认 `下载\PezMax`（`DownloadsFolder`）；用户可用 `FolderPicker` 改目录，授权存进 `FutureAccessList`。
   **不申请 `broadFileSystemAccess`**（受限能力，且 UWP 设置里默认关闭，用户体验差）。
-- 队列默认串行；下载浮层显示进度、速度、取消；完成后系统 Toast（可在设置关闭，对应「静默下载」）。
-- 本地记录写 `LocalFolder/downloads.json`；服务端记录由下载流端点自动落库，「我的下载」页读服务端列表并与本地记录按 `fileId` 合并（本地有路径则可「打开 / 在文件夹中显示」）。
+  当前落在 `LocalCacheFolder`，是因为「我的下载」要能按 `fileId` 找到文件；迁到用户目录时同步改记录里的 `localPath`。
+- 队列默认串行：经 edge 时每 IP 只允许 1 个下载连接；下载与封面 / 头像共用同一个 bulk 令牌桶，并发只会互抢。
+- 完成后系统 Toast（可在设置关闭，对应「静默下载」）；下载浮层的进度 / 取消尚未接到界面上。
+- 本地记录按 `spec/fixtures/download/` 的合并规则接「我的下载」：服务端行是骨架，本地补路径与状态。
 
 ## 上传
 
