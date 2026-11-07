@@ -50,7 +50,7 @@ PezMax-One 的三个端（Windows `windows/`、Linux `linux/`、Android `android
 | `fixtures/file-tree/` | 树响应 → 导航模型（层级、文件夹在前、面包屑、`fileId` 不从 `id` 解析、服务端兜底值原样显示） | ✅ 初版 15 例 |
 | `fixtures/url/` | 文件 URL 归一：相对路径、内网 host 改写、`minio://`、`data:` / `blob:` 原样。**过渡规则**，上游 ETL 后按条撤除 | ✅ 初版 21 例 |
 | `fixtures/download/` | 断点续传决策表：`before` / `response` / `after` 三个决策点，`Range`、`If-Range`、`206`、`416`、ETag 失效 | ✅ 初版 20 例 |
-| `fixtures/upload/` | 两套上传规则（资料 / 电子书）、字节 vs rune 的边界、转档与 200MB 硬上限、批量逐个结果 | ✅ 初版 28 例 |
+| `fixtures/upload/` | 两套上传规则（资料 / 电子书）、字节 vs rune 的边界、转档与 200MB 硬上限、批量逐个结果、文本文件的 UTF-8 判定 | ✅ 初版 38 例 |
 | `fixtures/notification/` | 通道判定、弹窗队列与一次性语义、本地已读按用户隔离、`hash` + `unchanged` 缓存 | ✅ 初版 25 例 |
 | `fixtures/update/` | CrateStack 资产解析与版本比较（前缀 `pezmax-one-`，多段扩展名，`amd64` 不算 `x86_64`，镜像前缀） | ✅ 初版 23 例 |
 | `fixtures/reading/` | PDF 阅读器的视图几何与渲染调度：连续视图的页顶偏移 / 可见范围 / 当前页，±2 页渲染窗口与渲染顺序，缩放步进与适应宽度，页缓存键，网格列数，缓存释放顺序 | ✅ 初版 48 例 |

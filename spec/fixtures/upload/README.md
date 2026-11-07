@@ -33,6 +33,23 @@
    只·有 `doc/docx/ppt/pptx` 超过 200MB 才回 **413**「转档文件不能超过 200MB」，
    其它格式超限回 **400**「文件过大：不能超过 {max}MB」。
 
+## 文本编码（`kind: encoding`）
+
+`txt` / `md` 服务端要求 UTF-8（`datum_file.go:790-799`），否则 400「文本文件仅支持 UTF-8 编码」。
+这一组用例直接喂字节：`input.bytesBase64` 是文件内容，`expect.utf8` 是判定结果。
+**判定必须在读到末尾时收尾**——最后几个字节可能是一个被截断的多字节序列，只看「每块内部能否解码」会放过它。
+
+| 情况 | 判定 | 为什么列它 |
+|---|---|---|
+| ASCII | 合法 | UTF-8 是 ASCII 的超集，别把纯英文当「不是 UTF-8」 |
+| 中文三字节 / emoji 四字节 | 合法 | 最常见的误判来源 |
+| UTF-8 BOM（`EF BB BF`） | 合法，跳过 BOM | Windows 记事本的「UTF-8 带 BOM」 |
+| UTF-16LE / BE 的 BOM | 非法 | `FF FE` / `FE FF`：那不是 UTF-8，等客户端拦下 |
+| `0xFF` | 非法 | 不属于任何合法首字节 |
+| GBK 的「中文」 | 非法 | 老记事本的默认编码，中文环境最可能踩 |
+| 截断的三字节序列 | 非法 | 服务端解码时才报，客户端要提前拦 |
+| 空文件 | 合法 | 空文件没有坏字节；体积是另一条规则 |
+
 ## 形状
 
 ```json
@@ -45,8 +62,8 @@
 }
 ```
 
-- `kind`：`file` / `meta` / `ebook` / `batch`。
-- `expect`：`accept` 必有；`reason` 是**必须逐字相等**的文案；`convertsToPdf` / `needsUtf8Check`
+- `kind`：`file` / `meta` / `ebook` / `batch` / `encoding`。
+- `expect`：`accept` 必有（`encoding` 用 `utf8`）；`reason` 是**必须逐字相等**的文案；`convertsToPdf` / `needsUtf8Check`
   可选（只对 `file` 有意义）；`batch` 用 `results`（逐文件 `{name, accept}`）。
 - `input.maxUploadMb` 缺省 200（服务端默认），用来覆盖「管理员调大了上限」的情况。
 

@@ -214,5 +214,75 @@
         { "name": "期末.docx", "accept": true }
       ]
     }
+  },
+  {
+    "id": "upload.encoding.ascii",
+    "description": "纯 ASCII 的 txt 就是合法 UTF-8（UTF-8 是 ASCII 的超集）",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:807-825「文本文件仅支持 UTF-8 编码」",
+    "input": { "kind": "encoding", "bytesBase64": "aGVsbG8sIHBlem1heA==" },
+    "expect": { "utf8": true }
+  },
+  {
+    "id": "upload.encoding.cjk",
+    "description": "中文 UTF-8 三字节序列要判为合法，别把多字节当成坏字节",
+    "source": "spec/fixtures/upload/README.md「字节 vs rune」+ 服务端 UTF-8 校验",
+    "input": { "kind": "encoding", "bytesBase64": "5Lit5paH6LWE5paZ" },
+    "expect": { "utf8": true }
+  },
+  {
+    "id": "upload.encoding.emoji",
+    "description": "四字节 emoji 也是合法 UTF-8（不是代理对，也不是坏字节）",
+    "source": "spec/fixtures/upload/README.md「字节 vs rune」",
+    "input": { "kind": "encoding", "bytesBase64": "8J+TmiDotYTmlpk=" },
+    "expect": { "utf8": true }
+  },
+  {
+    "id": "upload.encoding.utf8-bom",
+    "description": "带 UTF-8 BOM 的文件是合法 UTF-8：BOM 要跳过再解码，不能当坏字节",
+    "source": "Windows 记事本的「UTF-8 带 BOM」是常见来源",
+    "input": { "kind": "encoding", "bytesBase64": "77u/YWJj" },
+    "expect": { "utf8": true }
+  },
+  {
+    "id": "upload.encoding.utf16le-bom",
+    "description": "UTF-16LE 的 BOM（FF FE）说明这不是 UTF-8：客户端要拦下，别等服务端 400",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:807-825",
+    "input": { "kind": "encoding", "bytesBase64": "//5hAGIAYwA=" },
+    "expect": { "utf8": false }
+  },
+  {
+    "id": "upload.encoding.utf16be-bom",
+    "description": "UTF-16BE 的 BOM（FE FF）同理",
+    "source": "PezMax-Go@061a888 k_admin/internal/kadmin/datum_file.go:807-825",
+    "input": { "kind": "encoding", "bytesBase64": "/v8AYQBiAGM=" },
+    "expect": { "utf8": false }
+  },
+  {
+    "id": "upload.encoding.invalid-byte",
+    "description": "0xFF 在 UTF-8 里永远非法：这是最容易被漏掉的一类坏文件",
+    "source": "UTF-8 编码规范（0xFF 不属于任何合法首字节）",
+    "input": { "kind": "encoding", "bytesBase64": "YWJj/w==" },
+    "expect": { "utf8": false }
+  },
+  {
+    "id": "upload.encoding.gbk",
+    "description": "GBK 的「中文」（D6 D0 CE C4）在 UTF-8 下非法：老 Windows 记事本的默认编码",
+    "source": "中文环境的常见非 UTF-8 编码",
+    "input": { "kind": "encoding", "bytesBase64": "1tDOxA==" },
+    "expect": { "utf8": false }
+  },
+  {
+    "id": "upload.encoding.truncated",
+    "description": "被截断的多字节序列（「中」只剩前两字节）不能放过，否则要到服务端解码才发现",
+    "source": "UTF-8 编码规范（序列不完整即非法）",
+    "input": { "kind": "encoding", "bytesBase64": "5Lg=" },
+    "expect": { "utf8": false }
+  },
+  {
+    "id": "upload.encoding.empty",
+    "description": "空文件按合法处理：编码判定的对象是「有没有坏字节」，体积是另一条规则",
+    "source": "spec/fixtures/upload/README.md「三个容易踩的点」",
+    "input": { "kind": "encoding", "bytesBase64": "" },
+    "expect": { "utf8": true }
   }
 ]
