@@ -9,8 +9,8 @@
         <muxc:NavigationView
             x:Name="Nav"
             AlwaysShowHeader="False"
-            CompactModeThresholdWidth="600"
-            ExpandedModeThresholdWidth="1008"
+            CompactModeThresholdWidth="420"
+            ExpandedModeThresholdWidth="640"
             IsBackButtonVisible="Collapsed"
             IsSettingsVisible="True"
             IsTitleBarAutoPaddingEnabled="True"

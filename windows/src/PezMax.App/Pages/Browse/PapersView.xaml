@@ -31,46 +31,56 @@
             <Button Grid.Column="2" Click="RefreshClick" Content="刷新" />
         </Grid>
 
-        <StackPanel
-            Grid.Row="1"
-            Margin="0,0,0,12"
-            Orientation="Horizontal"
-            Spacing="8">
+        <!-- 条件是四个等分下拉 + 一个清除；用 Grid 而不是固定宽度的 StackPanel，
+             窗口一窄不会把「清除筛选」挤出右边缘。 -->
+        <Grid Grid.Row="1" Margin="0,0,0,12" ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" MinWidth="120" />
+                <ColumnDefinition Width="*" MinWidth="130" />
+                <ColumnDefinition Width="*" MinWidth="96" />
+                <ColumnDefinition Width="*" MinWidth="104" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
             <ComboBox
                 x:Name="SubjectFilter"
-                Width="150"
+                Grid.Column="0"
+                HorizontalAlignment="Stretch"
                 Header="科目"
                 PlaceholderText="全部科目"
                 SelectionChanged="FilterChanged" />
             <ComboBox
                 x:Name="SchoolFilter"
-                Width="170"
+                Grid.Column="1"
+                HorizontalAlignment="Stretch"
                 Header="学校"
                 PlaceholderText="全部学校"
                 SelectionChanged="FilterChanged" />
             <ComboBox
                 x:Name="YearFilter"
-                Width="110"
+                Grid.Column="2"
+                HorizontalAlignment="Stretch"
                 Header="年份"
                 PlaceholderText="全部年份"
                 SelectionChanged="FilterChanged" />
             <ComboBox
                 x:Name="TypeFilter"
-                Width="120"
+                Grid.Column="3"
+                HorizontalAlignment="Stretch"
                 Header="类型"
                 PlaceholderText="全部类型"
                 SelectionChanged="FilterChanged" />
             <Button
+                Grid.Column="4"
                 Margin="0,24,0,0"
                 VerticalAlignment="Top"
                 Click="ClearFiltersClick"
                 Content="清除筛选" />
-        </StackPanel>
+        </Grid>
 
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" MinWidth="320" />
-                <ColumnDefinition Width="300" />
+                <ColumnDefinition Width="*" MinWidth="260" />
+                <ColumnDefinition Width="320" MinWidth="280" />
             </Grid.ColumnDefinitions>
 
             <Grid Grid.Column="0" Margin="0,0,12,0">
@@ -98,7 +108,7 @@
                             <!-- 列表项的自动化名字：不写的话读屏念的是类型全名
                                  （PezMax.Core.Models.FileItem），看不出来但听得出来。 -->
                             <StackPanel
-                                Padding="2,6"
+                                Padding="6,10"
                                 Spacing="2"
                                 AutomationProperties.Name="{x:Bind DisplayName}">
                                 <TextBlock Style="{StaticResource PezBodyStyle}" Text="{x:Bind DisplayName}" />

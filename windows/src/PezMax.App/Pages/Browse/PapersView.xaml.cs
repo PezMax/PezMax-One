@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -31,17 +31,41 @@ namespace PezMax.Pages.Browse
         /// <summary>填下拉项时不要把 SelectionChanged 当成用户在筛选。</summary>
         private bool _fillingFilters;
 
+        /// <summary>首次 Loaded 之前来的搜索（外壳搜索框回车 → 导航到本页带参数），先记下来。</summary>
+        private string _pendingSearch = "";
+        private bool _loaded;
+
         public PapersView()
         {
             InitializeComponent();
             FileList.ItemsSource = _files;
             PdfHost.CloseRequested += (_, __) => CloseReader();
-            Loaded += async (_, __) => await LoadAllAsync();
+            Loaded += async (_, __) =>
+            {
+                _loaded = true;
+                // 从外壳搜索框回车进来时，OnNavigatedTo 已经把关键词递过来了；
+                // 这时候再去 LoadAllAsync 会把结果冲掉，看起来就是「回车没用」。
+                if (!string.IsNullOrWhiteSpace(_pendingSearch))
+                {
+                    var pending = _pendingSearch;
+                    _pendingSearch = "";
+                    await SearchAsync(pending);
+                    return;
+                }
+
+                await LoadAllAsync();
+            };
         }
 
         public void ApplySearch(string keyword)
         {
             SearchBox.Text = keyword;
+            if (!_loaded)
+            {
+                _pendingSearch = keyword ?? "";
+                return;
+            }
+
             _ = SearchAsync(keyword);
         }
 
