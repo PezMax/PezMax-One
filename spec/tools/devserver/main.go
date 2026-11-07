@@ -12,11 +12,16 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"image"
+	"image/color"
+	"image/jpeg"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -74,11 +79,24 @@ type Ebook struct {
 	Remark       string `json:"remark"`
 }
 
+// account 是本地账户：只存在内存里，重启即空。
+type account struct {
+	userID    int64
+	userName  string
+	password  string
+	nickName  string
+	questions [3]string
+	answers   [3]string
+}
+
 type store struct {
-	mu     sync.Mutex
-	files  []File
-	ebooks []Ebook
-	token  string
+	mu       sync.Mutex
+	files    []File
+	ebooks   []Ebook
+	token    string
+	accounts map[string]*account // key: 小写用户名
+	session  *account            // 当前会话（本地调试只保留一个）
+	nextID   int64
 }
 
 func main() {
@@ -87,7 +105,7 @@ func main() {
 	upstream := flag.String("ref", "", "（可选）把未实现的路径转发到这个真后端，例如 http://127.0.0.1:8080")
 	flag.Parse()
 
-	s := &store{token: *token}
+	s := &store{token: *token, accounts: map[string]*account{}, nextID: 7}
 	s.seed()
 
 	mux := http.NewServeMux()
@@ -120,9 +138,9 @@ func (s *store) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /datum/user/login", s.login)
 	mux.HandleFunc("POST /datum/user/logout", s.logout)
 	mux.HandleFunc("GET /datum/user/getInfo", s.guard(s.getInfo))
-	mux.HandleFunc("GET /datum/user/securityQuestions", func(w http.ResponseWriter, r *http.Request) {
-		ok(w, []string{"你的学号是？", "你的班主任姓？", "你的出生城市？"})
-	})
+	mux.HandleFunc("POST /datum/user/register", s.register)
+	mux.HandleFunc("POST /datum/user/resetPasswordBySecurity", s.resetBySecurity)
+	mux.HandleFunc("GET /datum/user/securityQuestions", s.securityQuestions)
 
 	// 个人资料
 	mux.HandleFunc("GET /datum/desktop/user/profile", s.guard(s.profile))
@@ -191,23 +209,247 @@ func (s *store) routes(mux *http.ServeMux) {
 // ---------------------------------------------------------------- 账户
 
 func (s *store) captcha(w http.ResponseWriter, r *http.Request) {
-	// captchaEnabled=false：本地调试不该被验证码挡住；客户端仍会让用户抄一个验证码，服务端忽略它。
-	ok(w, map[string]any{"captchaEnabled": false, "uuid": "dev-uuid", "img": ""})
+	// 真的画一张验证码：客户端会把它 base64 解成 BitmapImage。服务端**不校验**这个码
+	// （本地调试不该被它挡住），所以抄错也能登录——这是 devserver 与上游的已知差别。
+	code := fmt.Sprintf("%04d", rand.Intn(10000))
+	ok(w, map[string]any{
+		"captchaEnabled": true,
+		"uuid":           fmt.Sprintf("dev-%d", time.Now().UnixNano()),
+		"img":            base64.StdEncoding.EncodeToString(buildCaptcha(code)),
+	})
+}
+
+// 5×7 点阵数字：每列一个 byte，bit0 是最上面一行。没有字体依赖，纯手写。
+var digitFont = [10][5]byte{
+	{0x3E, 0x51, 0x49, 0x45, 0x3E},
+	{0x00, 0x42, 0x7F, 0x40, 0x00},
+	{0x42, 0x61, 0x51, 0x49, 0x46},
+	{0x21, 0x41, 0x45, 0x4B, 0x31},
+	{0x18, 0x14, 0x12, 0x7F, 0x10},
+	{0x27, 0x45, 0x45, 0x45, 0x39},
+	{0x3C, 0x4A, 0x49, 0x49, 0x30},
+	{0x01, 0x71, 0x09, 0x05, 0x03},
+	{0x36, 0x49, 0x49, 0x49, 0x36},
+	{0x06, 0x49, 0x49, 0x29, 0x1E},
+}
+
+func buildCaptcha(code string) []byte {
+	const width, height, scale = 120, 44, 4
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			img.Set(x, y, color.RGBA{R: 0xF2, G: 0xF4, B: 0xF7, A: 0xFF})
+		}
+	}
+
+	// 干扰：几条浅色斜线 + 噪点，看起来像验证码而不是一排印刷体。
+	for i := 0; i < 3; i++ {
+		y := rand.Intn(height)
+		for x := 0; x < width; x++ {
+			yy := y + (x*(rand.Intn(3)-1))/8
+			if yy >= 0 && yy < height {
+				img.Set(x, yy, color.RGBA{R: 0xC8, G: 0xD2, B: 0xE0, A: 0xFF})
+			}
+		}
+	}
+	for i := 0; i < 90; i++ {
+		img.Set(rand.Intn(width), rand.Intn(height), color.RGBA{R: 0xB0, G: 0xBC, B: 0xCC, A: 0xFF})
+	}
+
+	ink := color.RGBA{R: 0x1F, G: 0x35, B: 0x5A, A: 0xFF}
+	for i, ch := range code {
+		digit := int(ch - '0')
+		if digit < 0 || digit > 9 {
+			continue
+		}
+		originX := 10 + i*27
+		originY := 8 + rand.Intn(5)
+		for col := 0; col < 5; col++ {
+			column := digitFont[digit][col]
+			for row := 0; row < 7; row++ {
+				if column&(1<<uint(row)) == 0 {
+					continue
+				}
+				for dy := 0; dy < scale; dy++ {
+					for dx := 0; dx < scale; dx++ {
+						img.Set(originX+col*scale+dx, originY+row*scale+dy, ink)
+					}
+				}
+			}
+		}
+	}
+
+	var buffer bytes.Buffer
+	_ = jpeg.Encode(&buffer, img, &jpeg.Options{Quality: 90})
+	return buffer.Bytes()
 }
 
 func (s *store) login(w http.ResponseWriter, r *http.Request) {
-	var body map[string]any
+	var body struct {
+		UserName string `json:"username"`
+		Password string `json:"password"`
+	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
+
+	s.mu.Lock()
+	account, found := s.accounts[strings.ToLower(strings.TrimSpace(body.UserName))]
+	if !found || account.password != body.Password {
+		s.mu.Unlock()
+		// 与上游一致：凭据错是 400，不是 401（401 留给「会话失效」）。
+		fail(w, http.StatusBadRequest, "用户名或密码错误")
+		return
+	}
+	s.session = account
+	s.mu.Unlock()
+
 	expires := time.Now().Add(120 * time.Hour).UnixMilli()
 	ok(w, map[string]any{"token": s.token, "expiresAt": expires})
 }
 
-func (s *store) logout(w http.ResponseWriter, r *http.Request) { ok(w, true) }
+func (s *store) register(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		UserName          string `json:"username"`
+		Password          string `json:"password"`
+		SecurityQuestion1 string `json:"securityQuestionOne"`
+		SecurityAnswer1   string `json:"securityAnswerOne"`
+		SecurityQuestion2 string `json:"securityQuestionTwo"`
+		SecurityAnswer2   string `json:"securityAnswerTwo"`
+		SecurityQuestion3 string `json:"securityQuestionThree"`
+		SecurityAnswer3   string `json:"securityAnswerThree"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		fail(w, http.StatusBadRequest, "请求体不是合法 JSON")
+		return
+	}
+
+	name := strings.TrimSpace(body.UserName)
+	if name == "" || strings.TrimSpace(body.Password) == "" {
+		fail(w, http.StatusBadRequest, "用户名与密码不能为空")
+		return
+	}
+
+	s.mu.Lock()
+	key := strings.ToLower(name)
+	if _, exists := s.accounts[key]; exists {
+		s.mu.Unlock()
+		fail(w, http.StatusConflict, "用户名已存在，请更换后重试")
+		return
+	}
+	s.nextID++
+	account := &account{
+		userID: s.nextID, userName: name, password: body.Password, nickName: name,
+		questions: [3]string{body.SecurityQuestion1, body.SecurityQuestion2, body.SecurityQuestion3},
+		answers:   [3]string{strings.TrimSpace(body.SecurityAnswer1), strings.TrimSpace(body.SecurityAnswer2), strings.TrimSpace(body.SecurityAnswer3)},
+	}
+	s.accounts[key] = account
+	s.mu.Unlock()
+
+	// 上游返回 data = {"userId": n}（spec/api/auth.md：「成功：data = { "userId": 7 }」），
+	// 不是一个裸数字——裸数字会被客户端读成 0。
+	ok(w, map[string]any{"userId": account.userID})
+}
+
+func (s *store) securityQuestions(w http.ResponseWriter, r *http.Request) {
+	name := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("userName")))
+
+	s.mu.Lock()
+	account, found := s.accounts[name]
+	var payload []map[string]any
+	if found {
+		payload = make([]map[string]any, 0, 3)
+		for _, question := range account.questions {
+			payload = append(payload, map[string]any{"question": question})
+		}
+	}
+	s.mu.Unlock()
+
+	if !found {
+		fail(w, http.StatusBadRequest, "用户不存在")
+		return
+	}
+	ok(w, payload)
+}
+
+func (s *store) resetBySecurity(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		UserName string `json:"username"`
+		Answer1  string `json:"securityAnswerOne"`
+		Answer2  string `json:"securityAnswerTwo"`
+		Answer3  string `json:"securityAnswerThree"`
+		Password string `json:"newPassword"`
+		Confirm  string `json:"confirmPassword"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		fail(w, http.StatusBadRequest, "请求体不是合法 JSON")
+		return
+	}
+	if body.Password != body.Confirm {
+		fail(w, http.StatusBadRequest, "两次输入的密码不一致")
+		return
+	}
+	if strings.TrimSpace(body.Password) == "" {
+		fail(w, http.StatusBadRequest, "新密码不能为空")
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	account, found := s.accounts[strings.ToLower(strings.TrimSpace(body.UserName))]
+	if !found {
+		fail(w, http.StatusBadRequest, "用户不存在")
+		return
+	}
+	answers := [3]string{strings.TrimSpace(body.Answer1), strings.TrimSpace(body.Answer2), strings.TrimSpace(body.Answer3)}
+	if account.answers != answers {
+		fail(w, http.StatusBadRequest, "密保答案不正确")
+		return
+	}
+	account.password = body.Password
+	ok(w, true)
+}
+
+func (s *store) logout(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	s.session = nil
+	s.mu.Unlock()
+	ok(w, true)
+}
+
+// sessionName 是当前会话用户名；未登录返回 "匿名"。
+func (s *store) sessionName() string {
+	if account := s.sessionAccount(); account != nil {
+		return account.userName
+	}
+	return "匿名"
+}
+
+// ownerID 是当前会话用户 id；未登录返回 0。
+func (s *store) ownerID() int64 {
+	if account := s.sessionAccount(); account != nil {
+		return account.userID
+	}
+	return 0
+}
+
+// sessionAccount 取当前会话用户；没有会话返回 nil。
+func (s *store) sessionAccount() *account {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.session
+}
 
 func (s *store) getInfo(w http.ResponseWriter, r *http.Request) {
+	account := s.sessionAccount()
+	if account == nil {
+		// guard 已经挡过 401，这里是兜底。
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"code": 401, "message": "登录已失效，请重新登录", "msg": "登录已失效，请重新登录"})
+		return
+	}
+
 	ok(w, map[string]any{
 		"user": map[string]any{
-			"userId": devUserID, "userName": devUserName, "nickName": "本地调试",
+			"userId": account.userID, "userName": account.userName, "nickName": account.nickName,
 			"avatar": "", "count": 3, "status": "1",
 		},
 		"roles": []string{"dev"}, "permissions": []string{},
@@ -215,8 +457,14 @@ func (s *store) getInfo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *store) profile(w http.ResponseWriter, r *http.Request) {
+	account := s.sessionAccount()
+	if account == nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"code": 401, "message": "登录已失效，请重新登录", "msg": "登录已失效，请重新登录"})
+		return
+	}
+
 	ok(w, map[string]any{
-		"userId": devUserID, "userName": devUserName, "nickName": "本地调试",
+		"userId": account.userID, "userName": account.userName, "nickName": account.nickName,
 		"avatar": "", "count": 3, "status": "1",
 	})
 }
@@ -228,7 +476,7 @@ func (s *store) tree(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("hash") == hash {
 		// 形状与上游一致：unchanged 时不带 data，客户端沿用本地缓存。
 		writeJSON(w, http.StatusOK, map[string]any{
-			"code": 200, "msg": "ok", "hash": hash, "unchanged": true, "data": nil,
+			"code": 0, "msg": "ok", "hash": hash, "unchanged": true, "data": nil,
 		})
 		return
 	}
@@ -297,7 +545,7 @@ func (s *store) tree(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"code": 200, "msg": "ok", "hash": hash, "unchanged": false, "data": nodes,
+		"code": 0, "msg": "ok", "hash": hash, "unchanged": false, "data": nodes,
 	})
 }
 
@@ -314,8 +562,9 @@ func leaf(f File) map[string]any {
 
 func (s *store) listFiles(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
+	ownerID := s.ownerID()
 	wantUser := query.Get("userId")
-	if wantUser != "" && wantUser != strconv.FormatInt(devUserID, 10) {
+	if wantUser != "" && wantUser != strconv.FormatInt(ownerID, 10) {
 		// 上游：userId 必须等于会话用户，否则 403。
 		fail(w, http.StatusForbidden, "只能查看自己的上传")
 		return
@@ -331,7 +580,7 @@ func (s *store) listFiles(w http.ResponseWriter, r *http.Request) {
 			if f.FileStatus != 1 {
 				continue
 			}
-		} else if f.UserID != devUserID {
+		} else if f.UserID != ownerID {
 			continue
 		}
 		if v := query.Get("fileSubject"); v != "" && f.FileSubject != v {
@@ -354,10 +603,12 @@ func (s *store) listFiles(w http.ResponseWriter, r *http.Request) {
 		return rows[i].(map[string]any)["fileId"].(int64) > rows[j].(map[string]any)["fileId"].(int64)
 	})
 
+	// total 与 rows 同口径：待审件不进匿名列表，也不该进 total。
+	total := len(rows)
 	pageNum, pageSize := pagination(query)
 	rows = paginate(rows, pageNum, pageSize)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"code": 200, "msg": "ok", "rows": rows, "total": len(s.files),
+		"code": 0, "msg": "ok", "rows": rows, "total": total,
 	})
 }
 
@@ -449,7 +700,7 @@ func (s *store) fileDetail(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		// 待审件只有属主可见，否则 404（与上游一致）。
-		if f.FileStatus != 1 && f.UserID != devUserID {
+		if f.FileStatus != 1 && f.UserID != s.ownerID() {
 			fail(w, http.StatusNotFound, "文件不存在")
 			return
 		}
@@ -524,8 +775,8 @@ func (s *store) upload(w http.ResponseWriter, r *http.Request) {
 		ID: id, FileID: id, Label: name, FileName: name,
 		FileURL: "http://" + "local-dev/未审核/" + name, FileSize: size, FileFormat: format,
 		FileYear: year, FileType: fileType, FileSchool: school, FileSubject: subject,
-		FileStatus: 0, UserID: devUserID, CreateBy: devUserName, CreateTime: now,
-		UpdateBy: devUserName, UpdateTime: now, Remark: remark,
+		FileStatus: 0, UserID: s.ownerID(), CreateBy: s.sessionName(), CreateTime: now,
+		UpdateBy: s.sessionName(), UpdateTime: now, Remark: remark,
 	}
 	s.files = append(s.files, record)
 	s.mu.Unlock()
@@ -552,7 +803,7 @@ func (s *store) edit(w http.ResponseWriter, r *http.Request) {
 	defer s.mu.Unlock()
 	for i := range s.files {
 		f := &s.files[i]
-		if f.FileID != body.FileID || f.UserID != devUserID || f.DelFlag != 0 {
+		if f.FileID != body.FileID || f.UserID != s.ownerID() || f.DelFlag != 0 {
 			continue
 		}
 		// 整组覆盖：和上游一样的 SET 列表（remark 不在请求里就等于清空）。
@@ -573,7 +824,7 @@ func (s *store) remove(w http.ResponseWriter, r *http.Request) {
 	defer s.mu.Unlock()
 	for i := range s.files {
 		f := &s.files[i]
-		if f.FileID != id || f.UserID != devUserID || f.DelFlag != 0 {
+		if f.FileID != id || f.UserID != s.ownerID() || f.DelFlag != 0 {
 			continue
 		}
 		f.DelFlag = 1
@@ -598,7 +849,7 @@ func (s *store) listEbooks(w http.ResponseWriter, r *http.Request) {
 
 	pageNum, pageSize := pagination(r.URL.Query())
 	paged := paginate(rows, pageNum, pageSize)
-	writeJSON(w, http.StatusOK, map[string]any{"code": 200, "msg": "ok", "rows": paged, "total": len(rows)})
+	writeJSON(w, http.StatusOK, map[string]any{"code": 0, "msg": "ok", "rows": paged, "total": len(rows)})
 }
 
 func (s *store) ebookSubjects(w http.ResponseWriter, r *http.Request) {
@@ -671,7 +922,7 @@ func (s *store) downloadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// 上游：非已通过且非属主 → 404。
-	if found.FileStatus != 1 && found.UserID != devUserID {
+	if found.FileStatus != 1 && found.UserID != s.ownerID() {
 		fail(w, http.StatusNotFound, "文件不存在或已删除")
 		return
 	}
@@ -722,6 +973,13 @@ func (s *store) downloadEbook(w http.ResponseWriter, r *http.Request) {
 
 func (s *store) seed() {
 	now := time.Now().Format("2006-01-02 15:04:05")
+
+	// 种子账户：demo / demo1234，拥有下面 6 份资料（含 1 份待审）。
+	s.accounts["demo"] = &account{
+		userID: devUserID, userName: "demo", password: "demo1234", nickName: "演示账号",
+		questions: [3]string{"你的学号是？", "你的班主任姓？", "你的出生城市？"},
+		answers:   [3]string{"2025001", "张", "济南"},
+	}
 	add := func(id int64, name, subject, school string, year, fileType int64, format string, size, status int64) {
 		s.files = append(s.files, File{
 			ID: id, FileID: id, Label: name, FileName: name,
@@ -892,15 +1150,15 @@ func buildEpub(title string) []byte {
 // ---------------------------------------------------------------- HTTP 工具
 
 func ok(w http.ResponseWriter, data any) {
-	writeJSON(w, http.StatusOK, map[string]any{"code": 200, "msg": "ok", "data": data})
+	writeJSON(w, http.StatusOK, map[string]any{"code": 0, "msg": "ok", "data": data})
 }
 
 func rows(w http.ResponseWriter, items []any, total int) {
-	writeJSON(w, http.StatusOK, map[string]any{"code": 200, "msg": "ok", "rows": items, "total": total})
+	writeJSON(w, http.StatusOK, map[string]any{"code": 0, "msg": "ok", "rows": items, "total": total})
 }
 
 func fail(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]any{"code": status, "msg": message})
+	writeJSON(w, status, map[string]any{"code": status, "message": message, "msg": message})
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {
@@ -921,7 +1179,7 @@ func (s *store) guard(handler http.HandlerFunc) http.HandlerFunc {
 		header := r.Header.Get("Authorization")
 		if !strings.HasPrefix(header, "Bearer ") || strings.TrimSpace(strings.TrimPrefix(header, "Bearer ")) != s.token {
 			// 客户端靠 401 判断会话失效：这里必须回 401，不是 200 + code。
-			writeJSON(w, http.StatusUnauthorized, map[string]any{"code": 401, "msg": "登录已失效，请重新登录"})
+			writeJSON(w, http.StatusUnauthorized, map[string]any{"code": 401, "message": "登录已失效，请重新登录", "msg": "登录已失效，请重新登录"})
 			return
 		}
 		handler(w, r)
