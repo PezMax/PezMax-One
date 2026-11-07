@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
@@ -137,7 +138,8 @@ public sealed class EbooksApi
         string publisher,
         string subject,
         long ebookType,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IProgress<long>? bytesSent = null)
     {
         var fields = new List<KeyValuePair<string, string?>>
         {
@@ -147,7 +149,7 @@ public sealed class EbooksApi
             new("ebookSubject", subject),
             new("ebookType", ebookType.ToString()),
         };
-        return UploadCoreAsync(fileName, stream, contentType, fields, cancellationToken);
+        return UploadCoreAsync(fileName, stream, contentType, fields, cancellationToken, bytesSent);
     }
 
     private async Task<EbookUploadResult> UploadCoreAsync(
@@ -155,10 +157,11 @@ public sealed class EbooksApi
         Stream stream,
         string contentType,
         IEnumerable<KeyValuePair<string, string?>> fields,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IProgress<long>? bytesSent = null)
     {
         var response = await _http.UploadAsync(
-            "/datum/ebook/upload", fields, fileName, stream, contentType, cancellationToken).ConfigureAwait(false);
+            "/datum/ebook/upload", fields, fileName, stream, contentType, cancellationToken, bytesSent).ConfigureAwait(false);
         return ApiHelpers.EnsureData(response, EbookUploadResult.From);
     }
 

@@ -155,7 +155,8 @@ public sealed class FilesApi
         long fileYear,
         long fileType,
         string? folderPath = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IProgress<long>? bytesSent = null)
     {
         var fields = new List<KeyValuePair<string, string?>>
         {
@@ -166,7 +167,7 @@ public sealed class FilesApi
             new("fileType", fileType.ToString()),
             new("remark", folderPath ?? ""),
         };
-        return UploadCoreAsync(fileName, stream, contentType, fields, cancellationToken);
+        return UploadCoreAsync(fileName, stream, contentType, fields, cancellationToken, bytesSent);
     }
 
     private async Task<FileUploadResult> UploadCoreAsync(
@@ -174,10 +175,11 @@ public sealed class FilesApi
         Stream stream,
         string contentType,
         IEnumerable<KeyValuePair<string, string?>> fields,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IProgress<long>? bytesSent = null)
     {
         var response = await _http.UploadAsync(
-            "/datum/file", fields, fileName, stream, contentType, cancellationToken).ConfigureAwait(false);
+            "/datum/file", fields, fileName, stream, contentType, cancellationToken, bytesSent).ConfigureAwait(false);
         return ApiHelpers.EnsureData(response, FileUploadResult.From);
     }
 

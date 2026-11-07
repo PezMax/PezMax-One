@@ -27,11 +27,22 @@ public sealed class DatumHttp : IDisposable
         _ownsClient = handler == null;
         _client = new HttpClient(handler ?? CreateHandler(), _ownsClient)
         {
-            Timeout = TimeSpan.FromSeconds(30),
+            // 按请求设超时（下面的 RequestTimeout / UploadTimeout）：上传要跑几分钟，
+            // 而 HttpClient.Timeout 是全局的，套在转档上会把慢文件直接判死。
+            Timeout = System.Threading.Timeout.InfiniteTimeSpan,
         };
     }
 
     public string BaseUrl { get; set; }
+
+    /// <summary>普通请求的超时。</summary>
+    public TimeSpan RequestTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// 上传的超时。转档走 LibreOffice，默认 2 分钟超时 + 2 并发（`convert.go:34-47`），
+    /// 大文件排队时会超过普通请求的 30 秒，所以单独放宽；**不要**在 30 秒后判失败。
+    /// </summary>
+    public TimeSpan UploadTimeout { get; set; } = TimeSpan.FromMinutes(15);
 
     public string? Token
     {
@@ -101,9 +112,19 @@ public sealed class DatumHttp : IDisposable
         CancellationToken cancellationToken = default)
     {
         using var request = CreateRequest(HttpMethod.Get, path, query, null, headers);
-        var response = await _client
-            .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
-            .ConfigureAwait(false);
+        using var timeout = WithTimeout(RequestTimeout, cancellationToken);
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await _client
+                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw Timeout(path);
+        }
 
         var status = (int)response.StatusCode;
         if (status < 200 || status >= 300)
@@ -125,7 +146,8 @@ public sealed class DatumHttp : IDisposable
         string fileName,
         Stream fileStream,
         string contentType,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IProgress<long>? bytesSent = null)
     {
         using var form = new MultipartFormDataContent();
         foreach (var field in fields)
@@ -134,14 +156,23 @@ public sealed class DatumHttp : IDisposable
             form.Add(new StringContent(field.Value, Encoding.UTF8), field.Key);
         }
 
-        var file = new StreamContent(fileStream);
+        var content = bytesSent == null ? fileStream : new ProgressStream(fileStream, bytesSent);
+        var file = new StreamContent(content);
         file.Headers.ContentType = MediaTypeHeaderValue.Parse(contentType);
         form.Add(file, "file", fileName);
 
         using var request = new HttpRequestMessage(HttpMethod.Post, BuildUri(path, null)) { Content = form };
         ApplyHeaders(request);
-        using var response = await _client.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        return await ReadResponseAsync(response).ConfigureAwait(false);
+        using var timeout = WithTimeout(UploadTimeout, cancellationToken);
+        try
+        {
+            using var response = await _client.SendAsync(request, timeout.Token).ConfigureAwait(false);
+            return await ReadResponseAsync(response).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw Timeout(path);
+        }
     }
 
     private async Task<DatumResponse> SendAsync(
@@ -152,9 +183,34 @@ public sealed class DatumHttp : IDisposable
         CancellationToken cancellationToken)
     {
         using var request = CreateRequest(method, path, query, content);
-        using var response = await _client.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        return await ReadResponseAsync(response).ConfigureAwait(false);
+        using var timeout = WithTimeout(RequestTimeout, cancellationToken);
+        try
+        {
+            using var response = await _client.SendAsync(request, timeout.Token).ConfigureAwait(false);
+            return await ReadResponseAsync(response).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw Timeout(path);
+        }
     }
+
+    /// <summary>
+    /// 按请求限时：<see cref="HttpClient.Timeout"/> 是全局的，而上传与普通请求要的时限差一个数量级。
+    /// 调用方自己的取消（用户点「取消」）原样透传，不被误判成超时。
+    /// </summary>
+    private static CancellationTokenSource WithTimeout(TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        var source = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        if (timeout > TimeSpan.Zero && timeout != System.Threading.Timeout.InfiniteTimeSpan)
+        {
+            source.CancelAfter(timeout);
+        }
+
+        return source;
+    }
+
+    private static TimeoutException Timeout(string path) => new("请求超时：" + path);
 
     private HttpRequestMessage CreateRequest(
         HttpMethod method,

@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using PezMax.Core.Validation;
 using Xunit;
@@ -109,6 +110,14 @@ public class UploadFixtureTests
                     break;
                 }
 
+                case "encoding":
+                {
+                    var bytes = Convert.FromBase64String(Str(input, "bytesBase64"));
+                    var utf8 = Utf8Check.IsUtf8(bytes);
+                    Assert.True(expect.GetProperty("utf8").GetBoolean() == utf8, $"{id}: utf8 = {utf8}");
+                    break;
+                }
+
                 default:
                     throw new Xunit.Sdk.XunitException($"{id}: 未知 kind {kind}");
             }
@@ -116,7 +125,21 @@ public class UploadFixtureTests
             checkedCases++;
         }
 
-        Assert.True(checkedCases >= 28, $"上传夹具跑到的用例太少：{checkedCases}");
+        Assert.True(checkedCases >= 38, $"上传夹具跑到的用例太少：{checkedCases}");
+    }
+
+    [Fact]
+    public void Utf8_HandlesMultiChunkCjkAndTruncatedTail()
+    {
+        // 超过 81920 字节的中文：块边界会切开一个三字节序列，解码器要能跨块续上。
+        var bytes = Encoding.UTF8.GetBytes(string.Concat(Enumerable.Repeat("中文资料", 12000)));
+        Assert.True(bytes.Length > 81920);
+        Assert.True(Utf8Check.IsUtf8(bytes));
+
+        // 砍掉最后一个字节，「料」就只剩两字节——只有 flush 才能发现。
+        var truncated = new byte[bytes.Length - 1];
+        Array.Copy(bytes, truncated, truncated.Length);
+        Assert.False(Utf8Check.IsUtf8(truncated));
     }
 
     [Fact]
