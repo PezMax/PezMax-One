@@ -7,7 +7,9 @@
 cd spec\tools\devserver
 go run . -addr 127.0.0.1:9033
 # 客户端「设置 → 高级 → 服务器地址」填 http://127.0.0.1:9033
-# 登录：任意用户名 + 任意密码 + 任意验证码（token 固定为 pezmax-dev-token）
+# 种子账号：demo / demo1234（id 7，名下有几份资料）
+# 也可以直接在客户端注册新号：验证码填任意四位数（服务端不校验）
+# 登录成功后发回 token = -token（默认 pezmax-dev-token），之后所有请求带它
 ```
 
 参数：
@@ -32,7 +34,7 @@ go run . -addr 127.0.0.1:9033
 
 | 组 | 端点 | 说明 |
 |---|---|---|
-| 账户 | `captchaImage`、`login`、`logout`、`getInfo`、`securityQuestions` | 验证码返回 `captchaEnabled:false`；登录不校验密码 |
+| 账户 | `captchaImage`、`register`、`login`、`logout`、`getInfo`、`securityQuestions`、`resetPasswordBySecurity` | 验证码现画一张 120×44 的 JPEG（`captchaEnabled:true`，但服务端不校验，填任意四位数都过）；密码与密保三问三答**存内存、按明文比对**，注册后登录要密码对上 |
 | 资料 | `tree`（含 `hash` / `unchanged`）、`list`（含 `userId` 的「我的上传」与 403 闸门）、`search`、`subjects`、`schools`、`schools/check`、`content`（txt/md）、`{fileId}` 详情 | 待审件只有属主可见（否则 404），和上游一致 |
 | 资料写 | `POST /datum/file`（multipart）、`PUT`（**整组覆盖**）、`DELETE`（软删） | 上传进「待审」，编辑不改变状态，删除后不再出现 |
 | 下载 | `/datum/download/file`、`/datum/download/ebook` | 走 `http.ServeContent`：`Range` → 206、`ETag` 与上游同格式（`"datum-<id>-<size>"`） |
@@ -49,11 +51,25 @@ go run . -addr 127.0.0.1:9033
 - **EPUB**：`/datum/ebook/content?ebookId=202` 现写一个三章 EPUB（`mimetype` + container + OPF + nav + 三章 XHTML）。
   用来验解压、Core 的 `EpubPackage`、虚拟主机映射与中文排版——W3。
 
+## 拿它核对契约
+
+```powershell
+# 本目录：起镜像
+go run . -addr 127.0.0.1:8080
+# 另一个窗口：用客户端自己的协议代码走「注册 → 忘密码 → 重置 → 登录 → 看内容 → 下载」
+dotnet run --project windows\tools\apiwalk -- http://127.0.0.1:8080
+```
+
+`apiwalk` 断言失败会以 1 退出。核对过哪些端点、由核对发现过哪些偏差，都记在
+`spec/api/verified.md`——**它对着的是这个镜像，不是上游**：形状一致不等于行为一致，见下面一节。
+
 ## 已知差别（别拿它当上游行为）
 
 | 差别 | 原因 |
 |---|---|
-| 没有鉴权，token 固定 | 本地调试要的是「能进」，不是安全 |
+| token 固定、不失效 | 本地调试要的是「能进」，不是安全；401 会话失效这条路径在这里验不了 |
+| 密码与密保答案明文存内存 | 上游用 BCrypt；本地重启即空，不落盘就没有保护对象 |
+| 验证码不校验 | 画图是为了让客户端有东西显示，不是防机器人 |
 | 通知 / 收藏 / 我的下载恒为空 | 还没做界面验证；接了真实后端才有意义 |
 | 上传不落盘、不转档 | 转档要 LibreOffice；这里只验客户端流程与 `remark` 目录 |
 | 分页 `total` 用整表条数 | 上游「我的下载」的 `total` 与 `rows` 口径不一致是特例，这里不模拟 |
