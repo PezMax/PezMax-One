@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- 下载落到应用私有 Downloads/，安装器与外部阅读器经 FileProvider 读取。 -->
+    <files-path name="downloads" path="Downloads/" />
+    <cache-path name="cache" path="/" />
+</paths>

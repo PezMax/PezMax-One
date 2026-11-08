@@ -1,0 +1,14 @@
+# Gradle / AGP
+.gradle/
+build/
+local.properties
+*.iml
+.idea/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# 签名与私钥不入库
+*.jks
+*.keystore
+keystore.properties
